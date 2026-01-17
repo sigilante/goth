@@ -3,6 +3,13 @@
 
 `goth` is an LLM-native programming language designed for efficient code generation by large language models.
 
+## Building
+
+```sh
+$ cargo build
+$ cargo test
+```
+
 ## Usage
 
 REPL shell:
@@ -11,7 +18,7 @@ REPL shell:
 $ goth
 ```
 
-Compiler:
+Compiler (not yet implemented):
 
 ```sh
 $ btggf

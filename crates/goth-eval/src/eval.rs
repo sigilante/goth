@@ -68,8 +68,8 @@ impl Evaluator {
             Expr::Lit(lit) => Ok(self.eval_literal(lit)),
             Expr::Prim(name) => env.get_global(name).ok_or_else(|| EvalError::not_implemented(format!("primitive: {}", name))),
             Expr::App(func, arg) => { let func_val = self.eval_with_env(func, env)?; let arg_val = self.eval_with_env(arg, env)?; self.apply(func_val, arg_val) }
-            Expr::Lam(body) => Ok(Value::Closure(Closure { arity: 1, body: (**body).clone(), env: env.capture() })),
-            Expr::LamN(n, body) => Ok(Value::Closure(Closure { arity: *n, body: (**body).clone(), env: env.capture() })),
+            Expr::Lam(body) => Ok(Value::Closure(Closure { arity: 1, body: (**body).clone(), env: env.capture(), preconditions: vec![], postconditions: vec![] })),
+            Expr::LamN(n, body) => Ok(Value::Closure(Closure { arity: *n, body: (**body).clone(), env: env.capture(), preconditions: vec![], postconditions: vec![] })),
             Expr::Let { pattern, value, body } => { let val = self.eval_with_env(value, env)?; let mut new_env = env.clone(); self.bind_pattern(pattern, val, &mut new_env)?; self.eval_with_env(body, &new_env) }
             Expr::LetRec { bindings, body } => {
                 let mut new_env = env.clone();
@@ -122,26 +122,116 @@ impl Evaluator {
     fn apply(&mut self, func: Value, arg: Value) -> EvalResult<Value> {
         match func {
             Value::Closure(closure) => {
-                if closure.arity == 1 { let mut new_env = closure.env.clone(); new_env.push(arg); self.eval_with_env(&closure.body, &new_env) }
-                else { 
+                if closure.arity == 1 {
+                    let mut new_env = closure.env.clone();
+                    new_env.push(arg.clone());
+                    
+                    // Check preconditions (argument bound as ₀)
+                    for (i, pre) in closure.preconditions.iter().enumerate() {
+                        let pre_result = self.eval_with_env(pre, &new_env)?;
+                        match pre_result {
+                            Value::Bool(true) => {},
+                            Value::Bool(false) => {
+                                return Err(EvalError::PreconditionViolated(
+                                    format!("precondition #{} failed", i + 1)
+                                ));
+                            }
+                            _ => {
+                                return Err(EvalError::type_error("Bool", &pre_result));
+                            }
+                        }
+                    }
+                    
+                    // Evaluate body
+                    let result = self.eval_with_env(&closure.body, &new_env)?;
+                    
+                    // Check postconditions (result bound as ₀, argument shifts to ₁)
+                    for (i, post) in closure.postconditions.iter().enumerate() {
+                        let mut post_env = new_env.clone();
+                        post_env.push(result.clone());
+                        let post_result = self.eval_with_env(post, &post_env)?;
+                        match post_result {
+                            Value::Bool(true) => {},
+                            Value::Bool(false) => {
+                                return Err(EvalError::PostconditionViolated(
+                                    format!("postcondition #{} failed", i + 1)
+                                ));
+                            }
+                            _ => {
+                                return Err(EvalError::type_error("Bool", &post_result));
+                            }
+                        }
+                    }
+                    
+                    Ok(result)
+                } else {
                     let remaining = (closure.arity - 1) as usize;
-                    Ok(Value::Partial { func: Box::new(Value::Closure(closure)), args: vec![arg], remaining }) 
+                    Ok(Value::Partial { func: Box::new(Value::Closure(closure)), args: vec![arg], remaining })
                 }
             }
             Value::Partial { func, mut args, remaining } => {
                 args.push(arg);
                 if remaining == 1 {
                     match *func {
-                        Value::Closure(closure) => { let mut new_env = closure.env.clone(); for a in args.into_iter().rev() { new_env.push(a); } self.eval_with_env(&closure.body, &new_env) }
+                        Value::Closure(closure) => {
+                            let mut new_env = closure.env.clone();
+                            for a in args.iter().rev() {
+                                new_env.push(a.clone());
+                            }
+                            
+                            // Check preconditions (all arguments bound as ₀, ₁, ...)
+                            for (i, pre) in closure.preconditions.iter().enumerate() {
+                                let pre_result = self.eval_with_env(pre, &new_env)?;
+                                match pre_result {
+                                    Value::Bool(true) => {},
+                                    Value::Bool(false) => {
+                                        return Err(EvalError::PreconditionViolated(
+                                            format!("precondition #{} failed", i + 1)
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(EvalError::type_error("Bool", &pre_result));
+                                    }
+                                }
+                            }
+                            
+                            // Evaluate body
+                            let result = self.eval_with_env(&closure.body, &new_env)?;
+                            
+                            // Check postconditions (result as ₀, args shift)
+                            for (i, post) in closure.postconditions.iter().enumerate() {
+                                let mut post_env = new_env.clone();
+                                post_env.push(result.clone());
+                                let post_result = self.eval_with_env(post, &post_env)?;
+                                match post_result {
+                                    Value::Bool(true) => {},
+                                    Value::Bool(false) => {
+                                        return Err(EvalError::PostconditionViolated(
+                                            format!("postcondition #{} failed", i + 1)
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(EvalError::type_error("Bool", &post_result));
+                                    }
+                                }
+                            }
+                            
+                            Ok(result)
+                        }
                         Value::Primitive(prim) => prim::apply_prim(prim, args),
                         _ => Err(EvalError::type_error("function", &func)),
                     }
-                } else { Ok(Value::Partial { func, args, remaining: remaining - 1 }) }
+                } else {
+                    Ok(Value::Partial { func, args, remaining: remaining - 1 })
+                }
             }
             Value::Primitive(prim) => {
                 let arity = prim_arity(prim);
-                if arity == 1 { prim::apply_prim(prim, vec![arg]) }
-                else { Ok(Value::Partial { func: Box::new(Value::Primitive(prim)), args: vec![arg], remaining: arity - 1 }) }
+                if arity == 1 {
+                    prim::apply_prim(prim, vec![arg])
+                } else {
+                    Ok(Value::Partial { func: Box::new(Value::Primitive(prim)), args: vec![arg], remaining: arity - 1 })
+                }
             }
             _ => Err(EvalError::type_error("function", &func)),
         }
@@ -241,7 +331,7 @@ impl Evaluator {
         let body = Expr::App(Box::new(Expr::Idx(2)), Box::new(Expr::App(Box::new(Expr::Idx(1)), Box::new(Expr::Idx(0)))));
         let mut env = Env::with_globals(Rc::clone(&self.globals));
         env.push(f); env.push(g);  // Push f first, then g, so g is at Idx(1) and f is at Idx(2)
-        Ok(Value::Closure(Closure { arity: 1, body, env }))
+        Ok(Value::Closure(Closure { arity: 1, body, env, preconditions: vec![], postconditions: vec![] }))
     }
 
     fn eval_do(&mut self, init: &Expr, ops: &[DoOp], env: &Env) -> EvalResult<Value> {

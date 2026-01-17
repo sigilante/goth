@@ -1,0 +1,9 @@
+[package]
+name = "goth-check"
+version = "0.1.0"
+edition = "2021"
+description = "Type checker for the Goth programming language"
+
+[dependencies]
+goth-ast = { path = "../goth-ast" }
+thiserror = "1.0"

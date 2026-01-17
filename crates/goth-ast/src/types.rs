@@ -90,8 +90,8 @@ pub enum Type {
     /// Optional/nullable: T?
     Option(Box<Type>),
 
-    /// Uncertain type (with error): T±
-    Uncertain(Box<Type>),
+    /// Uncertain type (with error): T± or T ± U (value ± uncertainty)
+    Uncertain(Box<Type>, Box<Type>),
 
     /// Hole (for inference): _
     Hole,
@@ -394,7 +394,7 @@ impl std::fmt::Display for Type {
                 write!(f, "⟩")
             }
             Type::Option(inner) => write!(f, "{}?", inner),
-            Type::Uncertain(inner) => write!(f, "{}±", inner),
+            Type::Uncertain(val, unc) => write!(f, "{} ± {}", val, unc),
             Type::Hole => write!(f, "_"),
         }
     }

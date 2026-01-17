@@ -135,6 +135,8 @@ pub enum Token {
     Caret,
     #[token("%")]
     Percent,
+    #[token("±")]
+    PlusMinus,
 
     // ============ Comparison ============
     #[token("=")]
@@ -288,11 +290,11 @@ pub enum Token {
     Char(char),
 
     // ============ Identifiers ============
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_']*", |lex| lex.slice().to_string())]
+    #[regex(r"[a-zA-Z_αβγδεζηθικμνξοπρστυφχψω][a-zA-Z0-9_'αβγδεζηθικμνξοπρστυφχψω²³]*", |lex| lex.slice().to_string())]
     Ident(String),
 
-    // ============ Type Variables (Greek) ============
-    #[regex(r"[αβγδεζηθικλμνξοπρστυφχψω]", |lex| lex.slice().to_string())]
+    // ============ Type Variables (Greek) - excludes λ (lambda keyword) ============
+    #[regex(r"[αβγδεζηθικμνξοπρστυφχψω]", priority = 4, callback = |lex| lex.slice().to_string())]
     TyVar(String),
 
     // ============ Primitive Types ============

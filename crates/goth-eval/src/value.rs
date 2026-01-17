@@ -45,6 +45,8 @@ pub struct Closure {
     pub arity: u32,
     pub body: goth_ast::expr::Expr,
     pub env: Env,
+    pub preconditions: Vec<goth_ast::expr::Expr>,
+    pub postconditions: Vec<goth_ast::expr::Expr>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -90,7 +92,10 @@ impl Value {
     }
     pub fn error(msg: impl Into<String>) -> Self { Value::Error(msg.into()) }
     pub fn closure(arity: u32, body: goth_ast::expr::Expr, env: Env) -> Self {
-        Value::Closure(Closure { arity, body, env })
+        Value::Closure(Closure { arity, body, env, preconditions: vec![], postconditions: vec![] })
+    }
+    pub fn closure_with_contracts(arity: u32, body: goth_ast::expr::Expr, env: Env, preconditions: Vec<goth_ast::expr::Expr>, postconditions: Vec<goth_ast::expr::Expr>) -> Self {
+        Value::Closure(Closure { arity, body, env, preconditions, postconditions })
     }
     pub fn primitive(prim: PrimFn) -> Self { Value::Primitive(prim) }
 

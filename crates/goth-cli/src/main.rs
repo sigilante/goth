@@ -142,7 +142,13 @@ fn run_module(module: &goth_ast::decl::Module, trace: bool) {
                 }
             }
             Decl::Fn(fn_decl) => {
-                let closure = Value::closure(1, fn_decl.body.clone(), Env::new());
+                let closure = Value::closure_with_contracts(
+                    1, 
+                    fn_decl.body.clone(), 
+                    Env::new(),
+                    fn_decl.preconditions.clone(),
+                    fn_decl.postconditions.clone()
+                );
                 evaluator.define(fn_decl.name.to_string(), closure);
                 println!("{} {} : {}", "fn".cyan(), fn_decl.name, fn_decl.signature);
             }
@@ -172,27 +178,49 @@ fn run_repl(trace: bool) -> RlResult<()> {
     }
     
     let mut line_count = 0;
+    let mut accumulated = String::new();
 
     loop {
-        let prompt = format!("{} ", format!("goth[{}]›", line_count).cyan());
+        let prompt = if accumulated.is_empty() {
+            format!("{} ", format!("goth[{}]›", line_count).cyan())
+        } else {
+            // Continuation prompt - colorize dots to distinguish from input
+            let main_prompt = format!("goth[{}]›", line_count);
+            let width = main_prompt.len();
+            let dots = format!("{}", ".".repeat(width).dimmed());
+            format!("{} ", dots)
+        };
         
         match rl.readline(&prompt) {
             Ok(line) => {
-                let line = line.trim();
-                if line.is_empty() {
+                // Accumulate the line
+                if !accumulated.is_empty() {
+                    accumulated.push('\n');
+                }
+                accumulated.push_str(&line);
+                
+                // Check if input is complete
+                if !is_complete(&accumulated) {
+                    continue; // Read more lines
+                }
+                
+                let input = accumulated.trim();
+                if input.is_empty() {
+                    accumulated.clear();
                     continue;
                 }
 
-                let _ = rl.add_history_entry(line);
+                let _ = rl.add_history_entry(input);
 
                 // Handle REPL commands
-                if line.starts_with(':') {
-                    handle_command(line, &mut evaluator, trace);
+                if input.starts_with(':') {
+                    handle_command(input, &mut evaluator, trace);
+                    accumulated.clear();
                     continue;
                 }
 
                 // Try to parse and evaluate
-                match parse_and_eval(line, &mut evaluator) {
+                match parse_and_eval(input, &mut evaluator) {
                     Ok(Some(value)) => {
                         print_value(&value);
                         // Bind result to _
@@ -202,10 +230,12 @@ fn run_repl(trace: bool) -> RlResult<()> {
                     Err(e) => eprintln!("{}: {}", "Error".red().bold(), e),
                 }
 
+                accumulated.clear();
                 line_count += 1;
             }
             Err(ReadlineError::Interrupted) => {
                 println!("{}", "^C".yellow());
+                accumulated.clear();
                 continue;
             }
             Err(ReadlineError::Eof) => {
@@ -257,7 +287,13 @@ fn parse_and_eval(input: &str, evaluator: &mut Evaluator) -> Result<Option<Value
                 let module = resolve_module(module);
                 for decl in module.decls {
                     if let goth_ast::decl::Decl::Fn(fn_decl) = decl {
-                        let closure = Value::closure(1, fn_decl.body.clone(), Env::new());
+                        let closure = Value::closure_with_contracts(
+                            1,
+                            fn_decl.body.clone(),
+                            Env::new(),
+                            fn_decl.preconditions.clone(),
+                            fn_decl.postconditions.clone()
+                        );
                         evaluator.define(fn_decl.name.to_string(), closure);
                         println!("{} {} : {}", "fn".cyan(), fn_decl.name, fn_decl.signature);
                     }
@@ -335,7 +371,13 @@ fn handle_command(cmd: &str, evaluator: &mut Evaluator, _trace: bool) {
                                             }
                                         }
                                         goth_ast::decl::Decl::Fn(fn_decl) => {
-                                            let closure = Value::closure(1, fn_decl.body.clone(), Env::new());
+                                            let closure = Value::closure_with_contracts(
+                                                1,
+                                                fn_decl.body.clone(),
+                                                Env::new(),
+                                                fn_decl.preconditions.clone(),
+                                                fn_decl.postconditions.clone()
+                                            );
                                             evaluator.define(fn_decl.name.to_string(), closure);
                                             println!("{} {}", "Loaded:".green(), fn_decl.name);
                                         }
@@ -400,6 +442,116 @@ fn print_value_inline(value: &Value) {
         Value::Tensor(t) => print!("{}", format!("{}", t).blue()),
         _ => print!("{}", value),
     }
+}
+
+/// Check if input is syntactically complete
+fn is_complete(input: &str) -> bool {
+    let input = input.trim();
+    
+    // Empty input is complete
+    if input.is_empty() {
+        return true;
+    }
+    
+    // Check balanced delimiters
+    let mut parens = 0;
+    let mut brackets = 0;
+    let mut braces = 0;
+    let mut angles = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape_next = false;
+    
+    for ch in input.chars() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        
+        if in_string {
+            if ch == '\\' {
+                escape_next = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        
+        if in_char {
+            if ch == '\\' {
+                escape_next = true;
+            } else if ch == '\'' {
+                in_char = false;
+            }
+            continue;
+        }
+        
+        match ch {
+            '"' => in_string = true,
+            '\'' => in_char = true,
+            '(' => parens += 1,
+            ')' => parens -= 1,
+            '[' => brackets += 1,
+            ']' => brackets -= 1,
+            '{' => braces += 1,
+            '}' => braces -= 1,
+            '⟨' => angles += 1,
+            '⟩' => angles -= 1,
+            _ => {}
+        }
+    }
+    
+    // If any delimiter is unbalanced, incomplete
+    if parens != 0 || brackets != 0 || braces != 0 || angles != 0 || in_string || in_char {
+        return false;
+    }
+    
+    // Check for trailing operators that expect continuation
+    let trailing_ops = [
+        "+", "-", "*", "×", "/", "^",
+        "↦", "⊗", "⊕", "▸", "⤇", "∘",
+        "-:", "*:", "+:", "|>", "=>", ".:",
+        "=", "<", ">", "≤", "≥", "≠",
+        "∧", "∨", "&&", "||",
+    ];
+    
+    for op in trailing_ops {
+        if input.ends_with(op) {
+            return false;
+        }
+    }
+    
+    // Check for incomplete let binding (let x = ... without in)
+    if input.starts_with("let ") && input.contains('=') {
+        // Check for 'in' keyword - could be " in " or "\nin " (at line start)
+        if !input.contains(" in ") && !input.contains("\nin ") {
+            return false;
+        }
+    }
+    
+    // Check for incomplete if-then (without else)
+    if (input.contains(" if ") || input.contains("\nif ")) 
+        && (input.contains(" then ") || input.contains("\nthen ")) 
+        && !input.contains(" else ") && !input.contains("\nelse ") {
+        return false;
+    }
+    
+    // Check for incomplete match (without closing brace or without any arms)
+    if input.starts_with("match ") || input.contains(" match ") {
+        // Simple heuristic: needs at least one → and proper closing
+        if !input.contains('→') && !input.contains("->") {
+            return false;
+        }
+    }
+    
+    // Check for unclosed function declaration (╭─ without ╰─)
+    if input.contains("╭─") || input.contains("/-") {
+        if !(input.contains("╰─") || input.contains("\\-")) {
+            return false;
+        }
+    }
+    
+    true
 }
 
 fn print_banner() {

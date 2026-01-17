@@ -119,6 +119,10 @@ impl<'a> Parser<'a> {
             lhs = Expr::App(Box::new(lhs), Box::new(arg));
         }
 
+        // Handle postfix operators AFTER infix and application
+        // This ensures [1,2,3] ⊗ [4,5,6] Σ parses as ([1,2,3] ⊗ [4,5,6]) Σ
+        lhs = self.parse_postfix(lhs)?;
+
         Ok(lhs)
     }
 
@@ -221,12 +225,13 @@ impl<'a> Parser<'a> {
             }),
         };
 
-        // Handle postfix: field access, indexing
-        self.parse_postfix(expr)
+        // Handle postfix access (field, indexing) - binds tightest
+        self.parse_postfix_access(expr)
     }
 
-    /// Parse postfix operations (field access, indexing)
-    fn parse_postfix(&mut self, mut expr: Expr) -> ParseResult<Expr> {
+    /// Parse postfix access operations (field access, indexing)
+    /// These bind tighter than reduction operators
+    fn parse_postfix_access(&mut self, mut expr: Expr) -> ParseResult<Expr> {
         loop {
             match self.peek() {
                 Some(Token::Dot) => {
@@ -252,6 +257,29 @@ impl<'a> Parser<'a> {
                     }
                     self.expect(Token::RBracket)?;
                     expr = Expr::Index(Box::new(expr), indices);
+                }
+                _ => break,
+            }
+        }
+        Ok(expr)
+    }
+
+    /// Parse postfix operations (field access, indexing, reduction operators)
+    fn parse_postfix(&mut self, mut expr: Expr) -> ParseResult<Expr> {
+        // Postfix reduction operators - bind loosest
+        loop {
+            match self.peek() {
+                Some(Token::Sum) => {
+                    self.next();
+                    expr = Expr::UnaryOp(UnaryOp::Sum, Box::new(expr));
+                }
+                Some(Token::Prod) => {
+                    self.next();
+                    expr = Expr::UnaryOp(UnaryOp::Prod, Box::new(expr));
+                }
+                Some(Token::Scan) => {
+                    self.next();
+                    expr = Expr::UnaryOp(UnaryOp::Scan, Box::new(expr));
                 }
                 _ => break,
             }
@@ -651,6 +679,12 @@ impl<'a> Parser<'a> {
     pub fn parse_type(&mut self) -> ParseResult<Type> {
         let ty = self.parse_type_atom()?;
 
+        // Uncertain type: T ± U
+        if self.eat(&Token::PlusMinus) {
+            let uncertainty = self.parse_type_atom()?;
+            return Ok(Type::Uncertain(Box::new(ty), Box::new(uncertainty)));
+        }
+
         // Function type
         if self.eat(&Token::Arrow) {
             let ret = self.parse_type()?;
@@ -708,6 +742,22 @@ impl<'a> Parser<'a> {
                     self.expect(Token::RParen)?;
                     Ok(first)
                 }
+            }
+
+            // Refinement type {x : T | P}
+            Some(Token::LBrace) => {
+                self.next();
+                let var = self.expect_ident()?;
+                self.expect(Token::Colon)?;
+                let base = self.parse_type()?;
+                self.expect(Token::Pipe)?;
+                let pred = self.parse_expr()?;
+                self.expect(Token::RBrace)?;
+                Ok(Type::Refinement {
+                    name: var.into(),
+                    base: Box::new(base),
+                    predicate: Box::new(pred),
+                })
             }
 
             // Forall
