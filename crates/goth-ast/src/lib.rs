@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_disabled_expr() {
-        let enabled = Expr::add(Expr::idx(0), Expr::int(1));
+        let _enabled = Expr::add(Expr::idx(0), Expr::int(1));
         let disabled = Expr::disabled(Expr::add(Expr::idx(0), Expr::int(2)));
         
         let text = format!("{}", disabled);

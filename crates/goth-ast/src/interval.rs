@@ -103,15 +103,39 @@ impl Interval {
 
     /// Check if this interval might contain zero
     pub fn may_contain_zero(&self) -> bool {
-        match (&self.lo, &self.hi) {
-            (Bound::Const(lo), Bound::Const(hi)) => {
-                let lo_ok = *lo < 0.0 || (*lo == 0.0 && self.lo_kind == BoundKind::Inclusive);
-                let hi_ok = *hi > 0.0 || (*hi == 0.0 && self.hi_kind == BoundKind::Inclusive);
-                lo_ok && hi_ok
+        // Check if 0 is >= lower bound (respecting inclusivity)
+        let above_lo = match &self.lo {
+            Bound::NegInf => true,
+            Bound::PosInf => false,
+            Bound::Const(lo) => {
+                if *lo < 0.0 {
+                    true
+                } else if *lo == 0.0 {
+                    self.lo_kind == BoundKind::Inclusive
+                } else {
+                    false
+                }
             }
-            // Symbolic or infinite bounds: conservatively assume might contain zero
-            _ => true,
-        }
+            Bound::Var(_) => true, // Conservative: symbolic bounds might allow zero
+        };
+        
+        // Check if 0 is <= upper bound (respecting inclusivity)
+        let below_hi = match &self.hi {
+            Bound::NegInf => false,
+            Bound::PosInf => true,
+            Bound::Const(hi) => {
+                if *hi > 0.0 {
+                    true
+                } else if *hi == 0.0 {
+                    self.hi_kind == BoundKind::Inclusive
+                } else {
+                    false
+                }
+            }
+            Bound::Var(_) => true, // Conservative: symbolic bounds might allow zero
+        };
+        
+        above_lo && below_hi
     }
 }
 
