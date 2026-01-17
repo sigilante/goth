@@ -7,6 +7,7 @@
 
 use clap::Parser;
 use colored::Colorize;
+use goth_check::TypeChecker;
 use goth_eval::prelude::*;
 use goth_parse::prelude::*;
 use rustyline::error::ReadlineError;
@@ -340,15 +341,15 @@ fn handle_command(cmd: &str, evaluator: &mut Evaluator, _trace: bool) {
                 match parse_expr(expr_str) {
                     Ok(expr) => {
                         let resolved = resolve_expr(expr);
-                        match evaluator.eval(&resolved) {
-                            Ok(value) => println!("{}", value.type_name().cyan()),
-                            Err(e) => eprintln!("{}: {}", "Error".red().bold(), e),
+                        let mut checker = TypeChecker::new();
+                        // Copy global bindings from evaluator
+                        match checker.infer(&resolved) {
+                            Ok(ty) => println!("{}", ty),
+                            Err(e) => eprintln!("Type error: {}", e),
                         }
                     }
-                    Err(e) => eprintln!("{}: {}", "Parse error".red().bold(), e),
+                    Err(e) => eprintln!("Parse error: {}", e),
                 }
-            } else {
-                eprintln!("Usage: :type <expression>");
             }
         }
         ":clear" => {

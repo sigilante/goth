@@ -7,13 +7,14 @@
 //! ```rust
 //! use goth_check::TypeChecker;
 //! use goth_parse::prelude::*;
+//! use goth_ast::types::PrimType;
 //!
 //! let expr = parse_expr("1 + 2").unwrap();
 //! let resolved = resolve_expr(expr);
 //!
 //! let mut checker = TypeChecker::new();
 //! let ty = checker.infer(&resolved).unwrap();
-//! println!("Type: {}", ty);  // I64
+//! // Type should be I64
 //! ```
 
 pub mod error;

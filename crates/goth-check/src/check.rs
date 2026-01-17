@@ -7,7 +7,6 @@ use crate::context::Context;
 use crate::error::{TypeError, TypeResult};
 use crate::infer::{infer, pattern_types};
 use crate::unify::unify;
-use crate::subst::apply_type;
 
 /// Check that an expression has the expected type
 pub fn check(ctx: &mut Context, expr: &Expr, expected: &Type) -> TypeResult<()> {

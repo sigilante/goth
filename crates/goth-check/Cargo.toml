@@ -7,3 +7,6 @@ description = "Type checker for the Goth programming language"
 [dependencies]
 goth-ast = { path = "../goth-ast" }
 thiserror = "1.0"
+
+[dev-dependencies]
+goth-parse = { path = "../goth-parse" }

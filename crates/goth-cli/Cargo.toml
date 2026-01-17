@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 goth-ast = { path = "../goth-ast" }
+goth-check = { path = "../goth-check" }
 goth-eval = { path = "../goth-eval" }
 goth-parse = { path = "../goth-parse" }
 rustyline = "14.0"

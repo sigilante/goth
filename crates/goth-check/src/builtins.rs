@@ -8,7 +8,6 @@ use crate::error::{TypeError, TypeResult};
 /// Get type of a binary operation
 pub fn binop_type(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
     use BinOp::*;
-    use PrimType::*;
     
     match op {
         // Arithmetic: numeric × numeric → numeric
@@ -55,6 +54,15 @@ pub fn binop_type(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
         Bind => {
             bind_type(left, right)
         }
+        
+        // Custom operators - not yet supported
+        Custom(name) => {
+            Err(TypeError::InvalidBinOp {
+                op: format!("custom({})", name),
+                left: left.clone(),
+                right: right.clone(),
+            })
+        }
     }
 }
 
@@ -98,7 +106,7 @@ fn promote_numeric(p1: PrimType, p2: PrimType) -> PrimType {
     }
 }
 
-fn comparison_op(left: &Type, right: &Type) -> TypeResult<Type> {
+fn comparison_op(_left: &Type, _right: &Type) -> TypeResult<Type> {
     // Types must be unifiable (we'll check during unification)
     // For now, just accept if both are the same primitive or same tensor
     Ok(Type::Prim(PrimType::Bool))
@@ -119,7 +127,7 @@ fn logical_op(left: &Type, right: &Type) -> TypeResult<Type> {
 
 fn map_type(arr: &Type, func: &Type) -> TypeResult<Type> {
     match (arr, func) {
-        (Type::Tensor(shape, elem), Type::Fn(arg, ret)) => {
+        (Type::Tensor(shape, _elem), Type::Fn(_arg, ret)) => {
             // elem must unify with arg (checked during unification)
             Ok(Type::Tensor(shape.clone(), ret.clone()))
         }
@@ -133,7 +141,7 @@ fn map_type(arr: &Type, func: &Type) -> TypeResult<Type> {
 
 fn filter_type(arr: &Type, pred: &Type) -> TypeResult<Type> {
     match (arr, pred) {
-        (Type::Tensor(_, elem), Type::Fn(arg, ret)) => {
+        (Type::Tensor(_, elem), Type::Fn(_arg, _ret)) => {
             // arg must unify with elem, ret must be Bool
             // Result has unknown length (dynamic)
             Ok(Type::Tensor(
@@ -151,7 +159,7 @@ fn filter_type(arr: &Type, pred: &Type) -> TypeResult<Type> {
 
 fn zip_type(left: &Type, right: &Type) -> TypeResult<Type> {
     match (left, right) {
-        (Type::Tensor(sh1, el1), Type::Tensor(sh2, el2)) => {
+        (Type::Tensor(sh1, el1), Type::Tensor(_sh2, el2)) => {
             // Shapes must match
             Ok(Type::Tensor(
                 sh1.clone(),
@@ -168,7 +176,7 @@ fn zip_type(left: &Type, right: &Type) -> TypeResult<Type> {
 
 fn compose_type(f: &Type, g: &Type) -> TypeResult<Type> {
     match (f, g) {
-        (Type::Fn(b1, c), Type::Fn(a, b2)) => {
+        (Type::Fn(_b1, c), Type::Fn(a, _b2)) => {
             // b1 must unify with b2
             Ok(Type::Fn(a.clone(), c.clone()))
         }
@@ -182,7 +190,7 @@ fn compose_type(f: &Type, g: &Type) -> TypeResult<Type> {
 
 fn concat_type(left: &Type, right: &Type) -> TypeResult<Type> {
     match (left, right) {
-        (Type::Tensor(sh1, el1), Type::Tensor(sh2, el2)) => {
+        (Type::Tensor(sh1, el1), Type::Tensor(sh2, _el2)) => {
             // Elements must unify
             // Result shape is sum of dimensions
             if sh1.rank() != 1 || sh2.rank() != 1 {
@@ -209,7 +217,7 @@ fn concat_type(left: &Type, right: &Type) -> TypeResult<Type> {
 
 fn bind_type(arr: &Type, func: &Type) -> TypeResult<Type> {
     match (arr, func) {
-        (Type::Tensor(_, elem), Type::Fn(arg, ret)) => {
+        (Type::Tensor(_, _elem), Type::Fn(_arg, ret)) => {
             match ret.as_ref() {
                 Type::Tensor(_, inner_elem) => {
                     Ok(Type::Tensor(
@@ -287,7 +295,7 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
         // Scan: [n]T → [n]T
         Scan => {
             match operand {
-                Type::Tensor(sh, elem) => {
+                Type::Tensor(_sh, elem) => {
                     if let Type::Prim(p) = elem.as_ref() {
                         if p.is_numeric() {
                             return Ok(operand.clone());

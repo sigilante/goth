@@ -48,16 +48,16 @@ impl Subst {
         }
         
         // Add all bindings from s2 (overwriting if present)
-        for (var, ty) in s2.types {
-            result.types.insert(var, ty);
+        for (var, ty) in &s2.types {
+            result.types.insert(var.clone(), ty.clone());
         }
 
         // Same for shapes
         for (var, dim) in s1.shapes {
             result.shapes.insert(var, apply_dim(&s2, &dim));
         }
-        for (var, dim) in s2.shapes {
-            result.shapes.insert(var, dim);
+        for (var, dim) in &s2.shapes {
+            result.shapes.insert(var.clone(), dim.clone());
         }
 
         result
@@ -101,8 +101,11 @@ pub fn apply_type(subst: &Subst, ty: &Type) -> Type {
         Type::Option(inner) => {
             Type::Option(Box::new(apply_type(subst, inner)))
         }
-        Type::Uncertain(inner) => {
-            Type::Uncertain(Box::new(apply_type(subst, inner)))
+        Type::Uncertain(val, unc) => {
+            Type::Uncertain(
+                Box::new(apply_type(subst, val)),
+                Box::new(apply_type(subst, unc))
+            )
         }
         Type::Refinement { name, base, predicate } => {
             Type::Refinement {

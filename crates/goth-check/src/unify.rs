@@ -1,6 +1,6 @@
 //! Type unification algorithm
 
-use goth_ast::types::{Type, PrimType};
+use goth_ast::types::Type;
 use goth_ast::shape::{Shape, Dim};
 use crate::error::{TypeError, TypeResult};
 use crate::subst::{Subst, apply_type, apply_dim};
@@ -62,9 +62,13 @@ pub fn unify(t1: &Type, t2: &Type) -> TypeResult<Subst> {
             unify(t1, t2)
         }
 
-        // Uncertain types
-        (Type::Uncertain(t1), Type::Uncertain(t2)) => {
-            unify(t1, t2)
+        // Uncertain types - unify both value and uncertainty types
+        (Type::Uncertain(val1, unc1), Type::Uncertain(val2, unc2)) => {
+            let s1 = unify(val1, val2)?;
+            let unc1_sub = apply_type(&s1, unc1);
+            let unc2_sub = apply_type(&s1, unc2);
+            let s2 = unify(&unc1_sub, &unc2_sub)?;
+            Ok(Subst::compose(s1, s2))
         }
 
         // Holes unify with anything
@@ -107,7 +111,8 @@ fn occurs_in(var: &str, ty: &Type) -> bool {
         Type::Fn(a, r) => occurs_in(var, a) || occurs_in(var, r),
         Type::Tensor(_, elem) => occurs_in(var, elem),
         Type::Tuple(fields) => fields.iter().any(|f| occurs_in(var, &f.ty)),
-        Type::Option(t) | Type::Uncertain(t) => occurs_in(var, t),
+        Type::Option(t) => occurs_in(var, t),
+        Type::Uncertain(val, unc) => occurs_in(var, val) || occurs_in(var, unc),
         Type::Forall(params, body) => {
             // Don't look through bound variables
             if params.iter().any(|p| p.name.as_ref() == var) {
@@ -192,6 +197,7 @@ fn unify_dims(d1: &Dim, d2: &Dim, position: usize) -> TypeResult<Subst> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use goth_ast::types::PrimType;
 
     #[test]
     fn test_unify_primitives() {

@@ -245,6 +245,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "goth-check"
+version = "0.1.0"
+dependencies = [
+ "goth-ast",
+ "goth-parse",
+ "thiserror",
+]
+
+[[package]]
 name = "goth-cli"
 version = "0.1.0"
 dependencies = [
@@ -252,6 +261,7 @@ dependencies = [
  "colored",
  "dirs",
  "goth-ast",
+ "goth-check",
  "goth-eval",
  "goth-parse",
  "rustyline",
@@ -826,6 +836,6 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zmij"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8f3f50b848df28f887acb68e41201b5aea6bc8a8dacc00fb40635ff9a72fea"
+checksum = "94f63c051f4fe3c1509da62131a678643c5b6fbdc9273b2b79d4378ebda003d2"

@@ -119,7 +119,7 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
         Expr::BinOp(op, left, right) => {
             let left_ty = infer(ctx, left)?;
             let right_ty = infer(ctx, right)?;
-            binop_type(*op, &left_ty, &right_ty)
+            binop_type(op.clone(), &left_ty, &right_ty)
         }
         
         Expr::UnaryOp(op, operand) => {
