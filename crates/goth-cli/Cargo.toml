@@ -1,0 +1,20 @@
+[package]
+name = "goth-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line interface and REPL for the Goth programming language"
+license = "MIT"
+repository = "https://github.com/goth-lang/goth"
+
+[[bin]]
+name = "goth"
+path = "src/main.rs"
+
+[dependencies]
+goth-ast = { path = "../goth-ast" }
+goth-eval = { path = "../goth-eval" }
+goth-parse = { path = "../goth-parse" }
+rustyline = "14.0"
+clap = { version = "4.4", features = ["derive"] }
+colored = "2.1"
+dirs = "5.0"

@@ -1,0 +1,40 @@
+# examples/prelude.goth
+# Standard library functions for Goth
+
+# Identity
+let id = λ→ ₀
+
+# Constant
+let const = λ→ λ→ ₁
+
+# Flip arguments
+let flip = λ→ λ→ λ→ ₂ ₀ ₁
+
+# Function composition
+let compose = λ→ λ→ λ→ ₂ (₁ ₀)
+
+# Basic arithmetic
+let double = λ→ ₀ * 2
+let square = λ→ ₀ * ₀
+let inc = λ→ ₀ + 1
+let dec = λ→ ₀ - 1
+
+# Boolean operations
+let not = λ→ if ₀ then false else true
+
+# List operations
+let head = λ→ ₀[0]
+let last = λ→ ₀[₀.length - 1]
+let length = λ→ Σ (₀ ↦ λ→ 1)
+
+# Numeric reductions
+let sum = λ→ Σ ₀
+let product = λ→ Π ₀
+let mean = λ→ (Σ ₀) / (length ₀)
+
+# Range generation (hacky with fill)
+let zeros = λ→ [₀; 0]
+let ones = λ→ [₀; 1]
+
+# Example usage:
+# Σ ([1,2,3,4,5] ↦ square)  # Sum of squares = 55

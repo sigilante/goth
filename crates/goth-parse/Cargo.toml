@@ -1,0 +1,15 @@
+[package]
+name = "goth-parse"
+version = "0.1.0"
+edition = "2021"
+description = "Parser for the Goth programming language"
+license = "MIT"
+repository = "https://github.com/goth-lang/goth"
+
+[dependencies]
+goth-ast = { path = "../goth-ast" }
+thiserror = "1.0"
+logos = "0.14"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
