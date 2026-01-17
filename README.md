@@ -1,7 +1,7 @@
 # 𝔊𝔬𝔱𝔥
 ### the `goth` language for machine spirits
 
-`goth` is an LLM-native programming language designed for efficient code generation by large language models.
+`goth` is an LLM-native programming language designed for efficient code generation, editing, and comprehension by large language models.
 
 ## Building
 

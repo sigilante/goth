@@ -245,14 +245,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "goth-check"
-version = "0.1.0"
-dependencies = [
- "goth-ast",
- "thiserror",
-]
-
-[[package]]
 name = "goth-cli"
 version = "0.1.0"
 dependencies = [
