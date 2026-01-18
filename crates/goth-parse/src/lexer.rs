@@ -632,4 +632,37 @@ mod tests {
         assert_eq!(lex.next(), Some(Token::TyVar("β".into())));
         assert_eq!(lex.next(), Some(Token::TyVar("γ".into())));
     }
+
+    #[test]
+    fn test_greek_in_value_context() {
+        // Greek letters are lexed as TyVar but parser accepts them as value identifiers
+        let mut lex = Lexer::new("let μ = 5");
+        assert_eq!(lex.next(), Some(Token::Let));
+        assert_eq!(lex.next(), Some(Token::TyVar("μ".into())));
+        assert_eq!(lex.next(), Some(Token::Eq));
+        assert_eq!(lex.next(), Some(Token::Int(5)));
+    }
+
+    #[test]
+    fn test_greek_with_suffix() {
+        // Greek + suffix is Ident, not TyVar
+        let mut lex = Lexer::new("μ_value σ²");
+        assert_eq!(lex.next(), Some(Token::Ident("μ_value".into())));
+        assert_eq!(lex.next(), Some(Token::Ident("σ²".into())));
+    }
+
+    #[test]
+    fn test_back_arrow() {
+        let mut lex = Lexer::new("let x ← 5");
+        assert_eq!(lex.next(), Some(Token::Let));
+        assert_eq!(lex.next(), Some(Token::Ident("x".into())));
+        assert_eq!(lex.next(), Some(Token::BackArrow));
+        assert_eq!(lex.next(), Some(Token::Int(5)));
+    }
+
+    #[test]
+    fn test_back_arrow_ascii() {
+        let mut lex = Lexer::new("<-");
+        assert_eq!(lex.next(), Some(Token::BackArrow));
+    }
 }
