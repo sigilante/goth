@@ -1,4 +1,4 @@
-# 𝔊𝔬𝔱𝔥
+# 🌸☠︎ 𝔊𝔬𝔱𝔥 𓂀🖤
 ### the `goth` language for machine spirits
 
 `goth` is an LLM-native programming language designed for efficient code generation, editing, and comprehension by large language models.
@@ -16,7 +16,13 @@ REPL shell:
 $ goth
 ```
 
-* change prompt to `𝖌𝖔𝖙𝖍[12]› `
+Examples:
+
+```sh
+cd goth/crates
+cargo run --package goth-ast --example json_ast_demo
+cargo run --package goth-ast --example roundtrip_validation
+```
 
 ## Status
 
