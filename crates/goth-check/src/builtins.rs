@@ -64,11 +64,9 @@ pub fn binop_type(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
             })
         }
 
-        // Uncertainty: numeric × numeric → Uncertain(numeric, numeric)
+        // Uncertainty: numeric × numeric → numeric
         BinOp::PlusMinus => {
-            // Both operands must be numeric
             let value_ty = numeric_binop(op, left, right)?;
-            // PlusMinus creates an Uncertain type
             Ok(Type::Uncertain(Box::new(value_ty.clone()), Box::new(value_ty)))
         }
     }

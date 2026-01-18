@@ -142,6 +142,8 @@ mod tests {
     use super::*;
     use goth_ast::types::PrimType;
     use goth_ast::literal::Literal;
+    use goth_ast::op::UnaryOp;
+    use goth_ast::op::BinOp;
 
     #[test]
     fn test_infer_int() {
@@ -253,8 +255,6 @@ mod tests {
 
     #[test]
     fn test_type_mismatch() {
-        use goth_ast::op::BinOp;
-        
         let mut checker = TypeChecker::new();
         let expr = Expr::BinOp(
             BinOp::And,  // Requires Bool operands
@@ -262,5 +262,394 @@ mod tests {
             Box::new(Expr::Lit(Literal::Int(2))),
         );
         assert!(checker.infer(&expr).is_err());
+    }
+
+    #[test]
+    fn test_infer_sqrt() {
+        let mut checker = TypeChecker::new();
+        let expr = Expr::UnaryOp(
+            UnaryOp::Sqrt,
+            Box::new(Expr::Lit(Literal::Float(16.0))),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        assert_eq!(ty, Type::Prim(PrimType::F64));
+    }
+
+    #[test]
+    fn test_infer_floor() {
+        let mut checker = TypeChecker::new();
+        let expr = Expr::UnaryOp(
+            UnaryOp::Floor,
+            Box::new(Expr::Lit(Literal::Float(3.7))),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        assert_eq!(ty, Type::Prim(PrimType::F64));
+    }
+
+    #[test]
+    fn test_infer_ceil() {
+        let mut checker = TypeChecker::new();
+        let expr = Expr::UnaryOp(
+            UnaryOp::Ceil,
+            Box::new(Expr::Lit(Literal::Float(3.2))),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        assert_eq!(ty, Type::Prim(PrimType::F64));
+    }
+
+    #[test]
+    fn test_infer_uncertain() {
+        let mut checker = TypeChecker::new();
+        let expr = Expr::BinOp(
+            BinOp::PlusMinus,
+            Box::new(Expr::Lit(Literal::Float(10.5))),
+            Box::new(Expr::Lit(Literal::Float(0.3))),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        match ty {
+            Type::Uncertain(val, unc) => {
+                assert_eq!(*val, Type::Prim(PrimType::F64));
+                assert_eq!(*unc, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected Uncertain type, got {:?}", ty),
+        }
+    }
+
+    #[test]
+    fn test_check_multi_arg_function() {
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        // Create: add : I64 → I64 → I64, body: ₀ + ₁
+        let fn_type = Type::func(
+            Type::Prim(PrimType::I64),
+            Type::func(
+                Type::Prim(PrimType::I64),
+                Type::Prim(PrimType::I64)
+            )
+        );
+        
+        let body = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Idx(0)),  // ₀
+            Box::new(Expr::Idx(1)),  // ₁
+        );
+        
+        let fn_decl = FnDecl {
+            name: "add".into(),
+            signature: fn_type.clone(),
+            body,
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        assert!(result.is_ok());
+        
+        // Verify function was added to context
+        let ty = checker.ctx.lookup_global("add").unwrap();
+        assert_eq!(ty, &fn_type);
+    }
+
+    #[test]
+    fn test_check_three_arg_function() {
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        // Create: add3 : I64 → I64 → I64 → I64, body: ₀ + ₁ + ₂
+        let fn_type = Type::func(
+            Type::Prim(PrimType::I64),
+            Type::func(
+                Type::Prim(PrimType::I64),
+                Type::func(
+                    Type::Prim(PrimType::I64),
+                    Type::Prim(PrimType::I64)
+                )
+            )
+        );
+        
+        let body = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::BinOp(
+                BinOp::Add,
+                Box::new(Expr::Idx(0)),  // ₀
+                Box::new(Expr::Idx(1)),  // ₁
+            )),
+            Box::new(Expr::Idx(2)),  // ₂
+        );
+        
+        let fn_decl = FnDecl {
+            name: "add3".into(),
+            signature: fn_type.clone(),
+            body,
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_multi_arg_with_operators() {
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        // Create: pythag : F64 → F64 → F64, body: √(₀ × ₀ + ₁ × ₁)
+        let fn_type = Type::func(
+            Type::Prim(PrimType::F64),
+            Type::func(
+                Type::Prim(PrimType::F64),
+                Type::Prim(PrimType::F64)
+            )
+        );
+        
+        let body = Expr::UnaryOp(
+            UnaryOp::Sqrt,
+            Box::new(Expr::BinOp(
+                BinOp::Add,
+                Box::new(Expr::BinOp(
+                    BinOp::Mul,
+                    Box::new(Expr::Idx(0)),  // ₀
+                    Box::new(Expr::Idx(0)),  // ₀
+                )),
+                Box::new(Expr::BinOp(
+                    BinOp::Mul,
+                    Box::new(Expr::Idx(1)),  // ₁
+                    Box::new(Expr::Idx(1)),  // ₁
+                )),
+            )),
+        );
+        
+        let fn_decl = FnDecl {
+            name: "pythag".into(),
+            signature: fn_type.clone(),
+            body,
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        assert!(result.is_ok(), "Failed: {:?}", result);
+    }
+
+    #[test]
+    fn test_multi_arg_wrong_arity() {
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        // Create: bad : I64 → I64 → I64, body: ₀ + ₂ (₂ out of bounds!)
+        let fn_type = Type::func(
+            Type::Prim(PrimType::I64),
+            Type::func(
+                Type::Prim(PrimType::I64),
+                Type::Prim(PrimType::I64)
+            )
+        );
+        
+        let body = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Idx(0)),  // ₀
+            Box::new(Expr::Idx(2)),  // ₂ - should be out of bounds!
+        );
+        
+        let fn_decl = FnDecl {
+            name: "bad".into(),
+            signature: fn_type.clone(),
+            body,
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        // This should fail - ₂ is out of bounds for 2-arg function
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_let_declaration() {
+        use goth_ast::decl::{Module, Decl, LetDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        let let_decl = LetDecl {
+            name: "x".into(),
+            type_: None,
+            value: Expr::Lit(Literal::Int(42)),
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Let(let_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, "x");
+        assert_eq!(result[0].1, Type::Prim(PrimType::I64));
+    }
+
+    #[test]
+    fn test_let_with_type_annotation() {
+        use goth_ast::decl::{Module, Decl, LetDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        let let_decl = LetDecl {
+            name: "x".into(),
+            type_: Some(Type::Prim(PrimType::I64)),
+            value: Expr::Lit(Literal::Int(42)),
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Let(let_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_let_with_wrong_type_annotation() {
+        use goth_ast::decl::{Module, Decl, LetDecl};
+        
+        let mut checker = TypeChecker::new();
+        
+        let let_decl = LetDecl {
+            name: "x".into(),
+            type_: Some(Type::Prim(PrimType::Bool)),  // Wrong!
+            value: Expr::Lit(Literal::Int(42)),       // This is I64
+        };
+        
+        let module = Module {
+            decls: vec![Decl::Let(let_decl)],
+            name: Some("test".into()),
+        };
+        
+        let result = checker.check_module(&module);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_function_partial_application() {
+        let mut checker = TypeChecker::new();
+        
+        // Define: add : I64 → I64 → I64
+        let add_type = Type::func(
+            Type::Prim(PrimType::I64),
+            Type::func(
+                Type::Prim(PrimType::I64),
+                Type::Prim(PrimType::I64)
+            )
+        );
+        checker.define("add", add_type);
+        
+        // Expression: add 5
+        let expr = Expr::App(
+            Box::new(Expr::Name("add".into())),
+            Box::new(Expr::Lit(Literal::Int(5))),
+        );
+        
+        let ty = checker.infer(&expr).unwrap();
+        
+        // Should be: I64 → I64
+        match ty {
+            Type::Fn(arg, ret) => {
+                assert_eq!(*arg, Type::Prim(PrimType::I64));
+                assert_eq!(*ret, Type::Prim(PrimType::I64));
+            }
+            _ => panic!("Expected function type, got {:?}", ty),
+        }
+    }
+
+    #[test]
+    fn test_comparison_operators() {
+        let mut checker = TypeChecker::new();
+        
+        for op in [BinOp::Lt, BinOp::Gt, BinOp::Leq, BinOp::Geq, BinOp::Eq, BinOp::Neq] {
+            let expr = Expr::BinOp(
+                op.clone(),
+                Box::new(Expr::Lit(Literal::Int(5))),
+                Box::new(Expr::Lit(Literal::Int(10))),
+            );
+            
+            let ty = checker.infer(&expr).unwrap();
+            assert_eq!(ty, Type::Prim(PrimType::Bool), "Failed for operator {:?}", op);
+        }
+    }
+
+    #[test]
+    fn test_logical_operators() {
+        let mut checker = TypeChecker::new();
+        
+        for op in [BinOp::And, BinOp::Or] {
+            let expr = Expr::BinOp(
+                op.clone(),
+                Box::new(Expr::Lit(Literal::True)),
+                Box::new(Expr::Lit(Literal::False)),
+            );
+            
+            let ty = checker.infer(&expr).unwrap();
+            assert_eq!(ty, Type::Prim(PrimType::Bool), "Failed for operator {:?}", op);
+        }
+    }
+
+    #[test]
+    fn test_negation() {
+        let mut checker = TypeChecker::new();
+        
+        let expr = Expr::UnaryOp(
+            UnaryOp::Neg,
+            Box::new(Expr::Lit(Literal::Int(5))),
+        );
+        
+        let ty = checker.infer(&expr).unwrap();
+        assert_eq!(ty, Type::Prim(PrimType::I64));
+    }
+
+    #[test]
+    fn test_not() {
+        let mut checker = TypeChecker::new();
+        
+        let expr = Expr::UnaryOp(
+            UnaryOp::Not,
+            Box::new(Expr::Lit(Literal::True)),
+        );
+        
+        let ty = checker.infer(&expr).unwrap();
+        assert_eq!(ty, Type::Prim(PrimType::Bool));
     }
 }

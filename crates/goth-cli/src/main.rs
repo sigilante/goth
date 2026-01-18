@@ -60,6 +60,10 @@ struct Args {
     /// Show AST
     #[arg(short, long)]
     ast: bool,
+
+    /// Type check expressions before evaluation
+    #[arg(long, short = 'c')]
+    check: bool,
 }
 
 fn main() {
@@ -67,7 +71,8 @@ fn main() {
 
     if let Some(expr) = args.eval {
         // Evaluate expression from command line
-        run_expr(&expr, args.trace, args.parse_only, args.ast);
+        run_expr(&expr, args.trace, args.parse_only, args.ast, args.check);
+        return;
     } else if let Some(file) = args.file {
         // Run file
         run_file(&file, args.trace, args.parse_only, args.ast);
@@ -79,33 +84,59 @@ fn main() {
     }
 }
 
-fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool) {
-    match parse_expr(source) {
-        Ok(expr) => {
-            if show_ast {
-                println!("{} {:#?}", "Parsed AST:".cyan().bold(), expr);
+fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: bool) {
+    use colored::Colorize;
+
+    // Parse
+    let parsed = match parse_expr(source) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{}: {}", "Parse error".red().bold(), e);
+            return;
+        }
+    };
+    
+    // Show AST if requested
+    if show_ast {
+        println!("{}", "AST:".cyan().bold());
+        println!("{:#?}", parsed);
+    }
+    
+    // Resolve
+    let resolved = resolve_expr(parsed);
+    
+    // Type check if --check flag is set
+    if check {
+        let mut type_checker = TypeChecker::new();
+        match type_checker.infer(&resolved) {
+            Ok(ty) => {
+                println!("{}: {}", "Type".cyan(), ty);
             }
-            if parse_only {
-                println!("{} {}", "Parsed:".green().bold(), expr);
-                return;
-            }
-            
-            // Resolve names to de Bruijn indices
-            let expr = resolve_expr(expr);
-            if show_ast {
-                println!("{} {:#?}", "Resolved AST:".cyan().bold(), expr);
-            }
-            
-            let mut evaluator = Evaluator::new();
-            if trace {
-                evaluator = evaluator.with_trace(true);
-            }
-            match evaluator.eval(&expr) {
-                Ok(value) => print_value(&value),
-                Err(e) => eprintln!("{}: {}", "Error".red().bold(), e),
+            Err(e) => {
+                eprintln!("{}: {}", "Type error".red().bold(), e);
+                return;  // Don't evaluate if type check fails
             }
         }
-        Err(e) => eprintln!("{}: {}", "Parse error".red().bold(), e),
+    }
+    
+    if parse_only {
+        return;
+    }
+
+    // Evaluate
+    let mut evaluator = if trace {
+        Evaluator::new().with_trace(true)
+    } else {
+        Evaluator::new()
+    };
+    
+    match evaluator.eval(&resolved) {
+        Ok(value) => {
+            println!("{}", value);
+        }
+        Err(e) => {
+            eprintln!("{}: {}", "Error".red().bold(), e);
+        }
     }
 }
 
