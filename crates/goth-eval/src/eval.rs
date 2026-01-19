@@ -35,14 +35,26 @@ impl Evaluator {
             ("exp", PrimFn::Exp), ("ln", PrimFn::Ln), ("sqrt", PrimFn::Sqrt), ("sin", PrimFn::Sin), ("cos", PrimFn::Cos), ("tan", PrimFn::Tan), ("pow", PrimFn::Pow), ("floor", PrimFn::Floor), ("ceil", PrimFn::Ceil), ("round", PrimFn::Round),
             ("eq", PrimFn::Eq), ("neq", PrimFn::Neq), ("lt", PrimFn::Lt), ("gt", PrimFn::Gt), ("leq", PrimFn::Leq), ("geq", PrimFn::Geq),
             ("and", PrimFn::And), ("or", PrimFn::Or), ("not", PrimFn::Not),
-            ("sum", PrimFn::Sum), ("prod", PrimFn::Prod), ("len", PrimFn::Len), ("shape", PrimFn::Shape), ("reverse", PrimFn::Reverse), ("concat", PrimFn::Concat),
-            ("iota", PrimFn::Iota), ("range", PrimFn::Range),
-            ("dot", PrimFn::Dot), ("norm", PrimFn::Norm), ("matmul", PrimFn::MatMul), ("transpose", PrimFn::Transpose),
+            ("sum", PrimFn::Sum), ("prod", PrimFn::Prod),
+            ("len", PrimFn::Len),
+            ("shape", PrimFn::Shape), ("ρ", PrimFn::Shape),  // APL rho
+            ("reverse", PrimFn::Reverse), ("⌽", PrimFn::Reverse),  // APL reverse
+            ("concat", PrimFn::Concat),
+            ("iota", PrimFn::Iota), ("ι", PrimFn::Iota), ("⍳", PrimFn::Iota),  // APL-style
+            ("range", PrimFn::Range), ("…", PrimFn::Range),
+            ("dot", PrimFn::Dot), ("·", PrimFn::Dot),  // middle dot
+            ("norm", PrimFn::Norm), ("matmul", PrimFn::MatMul),
             ("print", PrimFn::Print), ("read_line", PrimFn::ReadLine),
             ("toInt", PrimFn::ToInt), ("toFloat", PrimFn::ToFloat), ("toBool", PrimFn::ToBool), ("toChar", PrimFn::ToChar),
-            ("toString", PrimFn::ToString), ("chars", PrimFn::Chars), ("strConcat", PrimFn::StrConcat),
-            ("filter", PrimFn::Filter), ("map", PrimFn::Map), ("fold", PrimFn::Fold), ("index", PrimFn::Index),
-            ("take", PrimFn::Take), ("drop", PrimFn::Drop), ("zip", PrimFn::Zip),
+            ("toString", PrimFn::ToString), ("str", PrimFn::ToString),
+            ("chars", PrimFn::Chars),
+            ("strConcat", PrimFn::StrConcat), ("⧺", PrimFn::StrConcat),  // double plus
+            ("filter", PrimFn::Filter), ("map", PrimFn::Map), ("fold", PrimFn::Fold),
+            ("index", PrimFn::Index),
+            ("take", PrimFn::Take), ("↑", PrimFn::Take),  // APL take
+            ("drop", PrimFn::Drop), ("↓", PrimFn::Drop),  // APL drop
+            ("zip", PrimFn::Zip),
+            ("transpose", PrimFn::Transpose), ("⍉", PrimFn::Transpose),  // APL transpose
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
     }
