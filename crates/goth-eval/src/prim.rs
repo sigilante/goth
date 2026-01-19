@@ -72,6 +72,8 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
             }
             Ok(Value::string(&line))
         }
+        PrimFn::Iota => unary_args(&args, iota),
+        PrimFn::Range => binary_args(&args, range),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -341,5 +343,34 @@ fn to_char(value: Value) -> EvalResult<Value> {
         Value::Char(c) => Ok(Value::Char(c)),
         Value::Int(n) => if n >= 0 && n <= 0x10FFFF { char::from_u32(n as u32).map(Value::Char).ok_or_else(|| EvalError::type_error_msg("Invalid Unicode scalar")) } else { Err(EvalError::type_error_msg("Integer out of Unicode range")) },
         _ => Err(EvalError::type_error_msg(format!("Cannot convert {} to Char", value.type_name()))),
+    }
+}
+
+/// iota n: Generate [0, 1, 2, ..., n-1]
+fn iota(n: Value) -> EvalResult<Value> {
+    match n {
+        Value::Int(count) => {
+            if count < 0 {
+                return Err(EvalError::type_error_msg("iota requires non-negative integer"));
+            }
+            let data: Vec<i128> = (0..count).collect();
+            Ok(Value::Tensor(Tensor::from_ints(data)))
+        }
+        _ => Err(EvalError::type_error("integer", &n)),
+    }
+}
+
+/// range start end: Generate [start, start+1, ..., end-1]
+fn range(start: Value, end: Value) -> EvalResult<Value> {
+    match (&start, &end) {
+        (Value::Int(s), Value::Int(e)) => {
+            let data: Vec<i128> = (*s..*e).collect();
+            Ok(Value::Tensor(Tensor::from_ints(data)))
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "range requires two integers, got {} and {}",
+            start.type_name(),
+            end.type_name()
+        ))),
     }
 }
