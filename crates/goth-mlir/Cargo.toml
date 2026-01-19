@@ -1,0 +1,17 @@
+[package]
+name = "goth-mlir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+goth-ast = { path = "../goth-ast" }
+goth-mir = { path = "../goth-mir" }
+thiserror = "1.0"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+

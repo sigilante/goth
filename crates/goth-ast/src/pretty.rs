@@ -192,12 +192,358 @@ impl Pretty {
 
     /// Pretty print a type
     pub fn print_type(&mut self, ty: &Type) {
-        self.write(&format!("{}", ty));
+        use crate::types::PrimType;
+        
+        match ty {
+            Type::Prim(p) => self.write(&format!("{:?}", p)),
+            
+            Type::Tensor(shape, elem) => {
+                self.write("[");
+                for (i, dim) in shape.0.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    match dim {
+                        crate::shape::Dim::Const(n) => self.write(&n.to_string()),
+                        crate::shape::Dim::Var(v) => self.write(v),
+                        _ => self.write("?"),
+                    }
+                }
+                self.write("]");
+                self.print_type(elem);
+            }
+            
+            Type::Tuple(fields) if fields.is_empty() => {
+                self.write("()");
+            }
+            
+            Type::Tuple(fields) => {
+                self.write(if self.config.unicode { "⟨" } else { "(" });
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    if let Some(label) = &field.label {
+                        self.write(label);
+                        self.write(": ");
+                    }
+                    self.print_type(&field.ty);
+                }
+                self.write(if self.config.unicode { "⟩" } else { ")" });
+            }
+            
+            Type::Fn(arg, ret) => {
+                // Check if we need parens around arg
+                let needs_parens = matches!(**arg, Type::Fn(..));
+                if needs_parens { self.write("("); }
+                self.print_type(arg);
+                if needs_parens { self.write(")"); }
+                
+                self.write(if self.config.unicode { " → " } else { " -> " });
+                self.print_type(ret);
+            }
+            
+            Type::Var(v) => self.write(v),
+            
+            Type::Effectful(ty, _effects) => {
+                self.print_type(ty);
+                self.write(if self.config.unicode { "⊢ε" } else { " !! " });
+            }
+            
+            Type::Interval(ty, _interval) => {
+                self.print_type(ty);
+                self.write(if self.config.unicode { "⊢[..]" } else { " @[..] " });
+            }
+            
+            Type::Refinement { name, base, predicate: _ } => {
+                self.write("{");
+                self.write(name);
+                self.write(" : ");
+                self.print_type(base);
+                self.write(" | ... }");
+            }
+            
+            Type::Forall(params, body) => {
+                self.write(if self.config.unicode { "∀" } else { "forall " });
+                for (i, param) in params.iter().enumerate() {
+                    if i > 0 { self.write(" "); }
+                    self.write(&param.name);
+                }
+                self.write(". ");
+                self.print_type(body);
+            }
+            
+            Type::Exists(params, body) => {
+                self.write(if self.config.unicode { "∃" } else { "exists " });
+                for (i, param) in params.iter().enumerate() {
+                    if i > 0 { self.write(" "); }
+                    self.write(&param.name);
+                }
+                self.write(". ");
+                self.print_type(body);
+            }
+            
+            Type::Variant(arms) => {
+                self.write(if self.config.unicode { "⟨" } else { "<" });
+                for (i, arm) in arms.iter().enumerate() {
+                    if i > 0 { self.write(" | "); }
+                    self.write(&arm.name);
+                    if let Some(payload) = &arm.payload {
+                        self.write(" ");
+                        self.print_type(payload);
+                    }
+                }
+                self.write(if self.config.unicode { "⟩" } else { ">" });
+            }
+            
+            _ => self.write(&format!("{:?}", ty)),
+        }
     }
 
     /// Pretty print an expression
     pub fn print_expr(&mut self, expr: &Expr) {
-        self.write(&format!("{}", expr));
+        self.print_expr_prec(expr, 0);
+    }
+    
+    /// Print expression with precedence for parenthesization
+    fn print_expr_prec(&mut self, expr: &Expr, prec: u8) {
+        use crate::literal::Literal;
+        
+        match expr {
+            Expr::Lit(lit) => match lit {
+                Literal::Int(n) => self.write(&n.to_string()),
+                Literal::Float(f) => self.write(&f.to_string()),
+                Literal::True => self.write("true"),
+                Literal::False => self.write("false"),
+                Literal::String(s) => {
+                    self.write("\"");
+                    self.write(s);
+                    self.write("\"");
+                }
+                Literal::Char(c) => {
+                    self.write("'");
+                    self.write(&c.to_string());
+                    self.write("'");
+                }
+                Literal::Unit => self.write("()"),
+            }
+            
+            Expr::Name(name) => self.write(name),
+            
+            Expr::Idx(n) => {
+                self.write(if self.config.unicode { "₀₁₂₃₄₅₆₇₈₉" } else { "_" });
+                if self.config.unicode {
+                    // Convert to subscript
+                    for digit in n.to_string().chars() {
+                        let subscript = match digit {
+                            '0' => '₀', '1' => '₁', '2' => '₂', '3' => '₃', '4' => '₄',
+                            '5' => '₅', '6' => '₆', '7' => '₇', '8' => '₈', '9' => '₉',
+                            _ => digit,
+                        };
+                        self.output.push(subscript);
+                    }
+                } else {
+                    self.write(&n.to_string());
+                }
+            }
+            
+            Expr::Lam(body) => {
+                let needs_parens = prec > 0;
+                if needs_parens { self.write("("); }
+                
+                self.write(if self.config.unicode { "λ→ " } else { "\\-> " });
+                self.print_expr_prec(body, 0);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::App(f, x) => {
+                let app_prec = 10;
+                let needs_parens = prec > app_prec;
+                if needs_parens { self.write("("); }
+                
+                self.print_expr_prec(f, app_prec);
+                self.write(" ");
+                self.print_expr_prec(x, app_prec + 1);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::Let { pattern, value, body } => {
+                let needs_parens = prec > 0;
+                if needs_parens { self.write("("); }
+                
+                self.write("let ");
+                self.print_pattern(pattern);
+                self.write(if self.config.unicode { " ← " } else { " = " });
+                self.print_expr_prec(value, 0);
+                self.write(" in ");
+                self.print_expr_prec(body, 0);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::If { cond, then_, else_ } => {
+                let needs_parens = prec > 0;
+                if needs_parens { self.write("("); }
+                
+                self.write("if ");
+                self.print_expr_prec(cond, 0);
+                self.write(" then ");
+                self.print_expr_prec(then_, 0);
+                self.write(" else ");
+                self.print_expr_prec(else_, 0);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::BinOp(op, left, right) => {
+                let op_prec = binop_prec(op);
+                let needs_parens = prec > op_prec;
+                if needs_parens { self.write("("); }
+                
+                self.print_expr_prec(left, op_prec);
+                self.write(" ");
+                let op_str = binop_str(op, self.config.unicode);
+                self.write(&op_str);
+                self.write(" ");
+                self.print_expr_prec(right, op_prec + 1);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::UnaryOp(op, operand) => {
+                let un_prec = 11;
+                let needs_parens = prec > un_prec;
+                if needs_parens { self.write("("); }
+                
+                let op_str = unop_str(op, self.config.unicode);
+                self.write(&op_str);
+                self.print_expr_prec(operand, un_prec);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            Expr::Tuple(elems) => {
+                self.write(if self.config.unicode { "⟨" } else { "(" });
+                for (i, elem) in elems.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    self.print_expr_prec(elem, 0);
+                }
+                self.write(if self.config.unicode { "⟩" } else { ")" });
+            }
+            
+            Expr::Array(elems) => {
+                self.write("[");
+                for (i, elem) in elems.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    self.print_expr_prec(elem, 0);
+                }
+                self.write("]");
+            }
+            
+            Expr::Match { scrutinee, arms } => {
+                self.write("match ");
+                self.print_expr_prec(scrutinee, 0);
+                self.write(" of");
+                self.newline();
+                self.indent();
+                for arm in arms {
+                    self.write_indent();
+                    self.print_pattern(&arm.pattern);
+                    self.write(if self.config.unicode { " → " } else { " -> " });
+                    self.print_expr_prec(&arm.body, 0);
+                    self.newline();
+                }
+                self.dedent();
+            }
+            
+            Expr::Annot(e, ty) => {
+                let needs_parens = prec > 1;
+                if needs_parens { self.write("("); }
+                
+                self.print_expr_prec(e, 1);
+                self.write(" : ");
+                self.print_type(ty);
+                
+                if needs_parens { self.write(")"); }
+            }
+            
+            _ => self.write(&format!("{:?}", expr)),
+        }
+    }
+    
+    fn print_pattern(&mut self, pat: &crate::pattern::Pattern) {
+        use crate::pattern::Pattern;
+        
+        match pat {
+            Pattern::Wildcard => self.write("_"),
+            Pattern::Var(None) => self.write("_"),
+            Pattern::Var(Some(name)) => self.write(name),
+            Pattern::Lit(lit) => {
+                use crate::literal::Literal;
+                match lit {
+                    Literal::Int(n) => self.write(&n.to_string()),
+                    Literal::Float(f) => self.write(&f.to_string()),
+                    Literal::True => self.write("true"),
+                    Literal::False => self.write("false"),
+                    Literal::String(s) => {
+                        self.write("\"");
+                        self.write(s);
+                        self.write("\"");
+                    }
+                    Literal::Char(c) => {
+                        self.write("'");
+                        self.write(&c.to_string());
+                        self.write("'");
+                    }
+                    Literal::Unit => self.write("()"),
+                }
+            }
+            Pattern::Tuple(pats) => {
+                self.write(if self.config.unicode { "⟨" } else { "(" });
+                for (i, pat) in pats.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    self.print_pattern(pat);
+                }
+                self.write(if self.config.unicode { "⟩" } else { ")" });
+            }
+            Pattern::Variant { constructor, payload } => {
+                self.write(constructor);
+                if let Some(pat) = payload {
+                    self.write(" ");
+                    self.print_pattern(pat);
+                }
+            }
+            Pattern::Or(left, right) => {
+                self.print_pattern(left);
+                self.write(" | ");
+                self.print_pattern(right);
+            }
+            Pattern::Typed(pat, ty) => {
+                self.print_pattern(pat);
+                self.write(" : ");
+                self.print_type(ty);
+            }
+            Pattern::Array(pats) => {
+                self.write("[");
+                for (i, pat) in pats.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    self.print_pattern(pat);
+                }
+                self.write("]");
+            }
+            Pattern::ArraySplit { head, tail } => {
+                self.write("[");
+                for (i, pat) in head.iter().enumerate() {
+                    if i > 0 { self.write(", "); }
+                    self.print_pattern(pat);
+                }
+                self.write(" | ");
+                self.print_pattern(tail);
+                self.write("]");
+            }
+            Pattern::Guard(pat, _) => {
+                self.print_pattern(pat);
+                self.write(" if ...");
+            }
+        }
     }
 
     // ============ Helpers ============
@@ -255,10 +601,332 @@ pub fn print_fn(f: &FnDecl) -> String {
 
 /// Pretty print an expression with default config
 pub fn print_expr(expr: &Expr) -> String {
-    format!("{}", expr)
+    let mut p = Pretty::default();
+    p.print_expr(expr);
+    p.finish()
 }
 
 /// Pretty print a type with default config
 pub fn print_type(ty: &Type) -> String {
-    format!("{}", ty)
+    let mut p = Pretty::default();
+    p.print_type(ty);
+    p.finish()
+}
+
+// ============ Operator Helpers ============
+
+/// Get operator precedence (higher = tighter binding)
+fn binop_prec(op: &crate::op::BinOp) -> u8 {
+    use crate::op::BinOp;
+    match op {
+        BinOp::Or => 2,
+        BinOp::And => 3,
+        BinOp::Eq | BinOp::Neq => 4,
+        BinOp::Lt | BinOp::Gt | BinOp::Leq | BinOp::Geq => 5,
+        BinOp::Add | BinOp::Sub | BinOp::PlusMinus => 6,
+        BinOp::Mul | BinOp::Div | BinOp::Mod => 7,
+        BinOp::Pow => 8,
+        _ => 5,
+    }
+}
+
+/// Get operator string representation
+fn binop_str(op: &crate::op::BinOp, unicode: bool) -> String {
+    use crate::op::BinOp;
+    match op {
+        BinOp::Add => "+".to_string(),
+        BinOp::Sub => "-".to_string(),
+        BinOp::Mul => if unicode { "×".to_string() } else { "*".to_string() },
+        BinOp::Div => if unicode { "÷".to_string() } else { "/".to_string() },
+        BinOp::Mod => "%".to_string(),
+        BinOp::Pow => if unicode { "^".to_string() } else { "**".to_string() },
+        BinOp::Eq => "=".to_string(),
+        BinOp::Neq => if unicode { "≠".to_string() } else { "!=".to_string() },
+        BinOp::Lt => "<".to_string(),
+        BinOp::Gt => ">".to_string(),
+        BinOp::Leq => if unicode { "≤".to_string() } else { "<=".to_string() },
+        BinOp::Geq => if unicode { "≥".to_string() } else { ">=".to_string() },
+        BinOp::And => if unicode { "∧".to_string() } else { "&&".to_string() },
+        BinOp::Or => if unicode { "∨".to_string() } else { "||".to_string() },
+        BinOp::PlusMinus => if unicode { "±".to_string() } else { "+/-".to_string() },
+        BinOp::Concat => if unicode { "⊕".to_string() } else { "++".to_string() },
+        BinOp::Compose => if unicode { "∘".to_string() } else { ".".to_string() },
+        BinOp::Map => if unicode { "↦".to_string() } else { "->".to_string() },
+        BinOp::Filter => if unicode { "▸".to_string() } else { "|>".to_string() },
+        BinOp::Bind => if unicode { "⤇".to_string() } else { ">>=".to_string() },
+        BinOp::ZipWith => if unicode { "⊗".to_string() } else { "<*>".to_string() },
+        BinOp::Custom(name) => name.to_string(),
+    }
+}
+
+/// Get unary operator string
+fn unop_str(op: &crate::op::UnaryOp, unicode: bool) -> &'static str {
+    use crate::op::UnaryOp;
+    match op {
+        UnaryOp::Neg => "-",
+        UnaryOp::Not => if unicode { "¬" } else { "!" },
+        UnaryOp::Sqrt => if unicode { "√" } else { "sqrt " },
+        UnaryOp::Floor => if unicode { "⌊" } else { "floor " },
+        UnaryOp::Ceil => if unicode { "⌈" } else { "ceil " },
+        UnaryOp::Sum => if unicode { "Σ" } else { "sum " },
+        UnaryOp::Prod => if unicode { "Π" } else { "prod " },
+        UnaryOp::Scan => if unicode { "⍀" } else { "scan " },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::expr::Expr;
+    use crate::literal::Literal;
+    use crate::op::BinOp;
+    use crate::types::{Type, PrimType};
+    use crate::pattern::Pattern;
+    
+    #[test]
+    fn test_print_literal() {
+        let expr = Expr::Lit(Literal::Int(42));
+        assert_eq!(print_expr(&expr), "42");
+        
+        let expr = Expr::Lit(Literal::Float(3.14));
+        assert_eq!(print_expr(&expr), "3.14");
+        
+        let expr = Expr::Lit(Literal::True);
+        assert_eq!(print_expr(&expr), "true");
+    }
+    
+    #[test]
+    fn test_print_binop() {
+        // 1 + 2
+        let expr = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Lit(Literal::Int(1))),
+            Box::new(Expr::Lit(Literal::Int(2))),
+        );
+        assert_eq!(print_expr(&expr), "1 + 2");
+    }
+    
+    #[test]
+    fn test_print_binop_precedence() {
+        // 1 + 2 * 3 should be 1 + (2 * 3) in precedence, but print as 1 + 2 × 3
+        let expr = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Lit(Literal::Int(1))),
+            Box::new(Expr::BinOp(
+                BinOp::Mul,
+                Box::new(Expr::Lit(Literal::Int(2))),
+                Box::new(Expr::Lit(Literal::Int(3))),
+            )),
+        );
+        let output = print_expr(&expr);
+        assert!(output.contains("1 + 2"));
+        assert!(output.contains("3"));
+    }
+    
+    #[test]
+    fn test_print_lambda() {
+        // λ→ ₀ + 1
+        let expr = Expr::Lam(Box::new(Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Idx(0)),
+            Box::new(Expr::Lit(Literal::Int(1))),
+        )));
+        let output = print_expr(&expr);
+        assert!(output.contains("λ→"));
+        assert!(output.contains("+"));
+        assert!(output.contains("1"));
+    }
+    
+    #[test]
+    fn test_print_lambda_ascii() {
+        let expr = Expr::Lam(Box::new(Expr::Idx(0)));
+        let mut p = Pretty::new(PrettyConfig::ascii());
+        p.print_expr(&expr);
+        let output = p.finish();
+        assert!(output.contains("\\->"));
+    }
+    
+    #[test]
+    fn test_print_let() {
+        // let x = 5 in x + 1
+        let expr = Expr::Let {
+            pattern: Pattern::Var(Some("x".into())),
+            value: Box::new(Expr::Lit(Literal::Int(5))),
+            body: Box::new(Expr::BinOp(
+                BinOp::Add,
+                Box::new(Expr::Idx(0)),
+                Box::new(Expr::Lit(Literal::Int(1))),
+            )),
+        };
+        let output = print_expr(&expr);
+        assert!(output.contains("let"));
+        assert!(output.contains("x"));
+        assert!(output.contains("5"));
+        assert!(output.contains("in"));
+    }
+    
+    #[test]
+    fn test_print_if() {
+        // if true then 1 else 2
+        let expr = Expr::If {
+            cond: Box::new(Expr::Lit(Literal::True)),
+            then_: Box::new(Expr::Lit(Literal::Int(1))),
+            else_: Box::new(Expr::Lit(Literal::Int(2))),
+        };
+        let output = print_expr(&expr);
+        assert!(output.contains("if"));
+        assert!(output.contains("then"));
+        assert!(output.contains("else"));
+    }
+    
+    #[test]
+    fn test_print_tuple() {
+        // ⟨1, 2, 3⟩
+        let expr = Expr::Tuple(vec![
+            Expr::Lit(Literal::Int(1)),
+            Expr::Lit(Literal::Int(2)),
+            Expr::Lit(Literal::Int(3)),
+        ]);
+        let output = print_expr(&expr);
+        assert!(output.contains("1"));
+        assert!(output.contains("2"));
+        assert!(output.contains("3"));
+        assert!(output.contains(","));
+    }
+    
+    #[test]
+    fn test_print_array() {
+        // [1, 2, 3]
+        let expr = Expr::Array(vec![
+            Expr::Lit(Literal::Int(1)),
+            Expr::Lit(Literal::Int(2)),
+            Expr::Lit(Literal::Int(3)),
+        ]);
+        assert_eq!(print_expr(&expr), "[1, 2, 3]");
+    }
+    
+    #[test]
+    fn test_print_application() {
+        // f x
+        let expr = Expr::App(
+            Box::new(Expr::Name("f".into())),
+            Box::new(Expr::Name("x".into())),
+        );
+        assert_eq!(print_expr(&expr), "f x");
+    }
+    
+    #[test]
+    fn test_print_type_prim() {
+        assert_eq!(print_type(&Type::Prim(PrimType::I64)), "I64");
+        assert_eq!(print_type(&Type::Prim(PrimType::F64)), "F64");
+        assert_eq!(print_type(&Type::Prim(PrimType::Bool)), "Bool");
+    }
+    
+    #[test]
+    fn test_print_type_function() {
+        // I64 → I64
+        let ty = Type::func(
+            Type::Prim(PrimType::I64),
+            Type::Prim(PrimType::I64),
+        );
+        let output = print_type(&ty);
+        assert!(output.contains("I64"));
+        assert!(output.contains("→") || output.contains("->"));
+    }
+    
+    #[test]
+    fn test_print_type_tuple() {
+        use crate::types::TupleField;
+        
+        let ty = Type::Tuple(vec![
+            TupleField { label: None, ty: Type::Prim(PrimType::I64) },
+            TupleField { label: None, ty: Type::Prim(PrimType::F64) },
+        ]);
+        let output = print_type(&ty);
+        assert!(output.contains("I64"));
+        assert!(output.contains("F64"));
+    }
+    
+    #[test]
+    fn test_print_module() {
+        use crate::decl::{Module, Decl, LetDecl};
+        
+        let module = Module {
+            name: Some("test".into()),
+            decls: vec![
+                Decl::Let(LetDecl {
+                    name: "x".into(),
+                    type_: Some(Type::Prim(PrimType::I64)),
+                    value: Expr::Lit(Literal::Int(42)),
+                }),
+            ],
+        };
+        
+        let output = print_module(&module);
+        assert!(output.contains("module test"));
+        assert!(output.contains("let x"));
+        assert!(output.contains("42"));
+    }
+    
+    #[test]
+    fn test_roundtrip_simple() {
+        // Pretty print should produce readable output
+        let expr = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::Lit(Literal::Int(1))),
+            Box::new(Expr::Lit(Literal::Int(2))),
+        );
+        
+        let output = print_expr(&expr);
+        
+        // Should be readable
+        assert!(!output.is_empty());
+        assert!(output.len() < 20); // Should be compact
+    }
+    
+    #[test]
+    fn test_complex_expression() {
+        // let f = λ→ ₀ + 1 in f 5
+        let expr = Expr::Let {
+            pattern: Pattern::Var(Some("f".into())),
+            value: Box::new(Expr::Lam(Box::new(Expr::BinOp(
+                BinOp::Add,
+                Box::new(Expr::Idx(0)),
+                Box::new(Expr::Lit(Literal::Int(1))),
+            )))),
+            body: Box::new(Expr::App(
+                Box::new(Expr::Idx(0)),
+                Box::new(Expr::Lit(Literal::Int(5))),
+            )),
+        };
+        
+        let output = print_expr(&expr);
+        println!("Complex: {}", output);
+        
+        assert!(output.contains("let"));
+        assert!(output.contains("f"));
+        assert!(output.contains("λ→") || output.contains("\\->"));
+        assert!(output.contains("in"));
+    }
+    
+    #[test]
+    fn test_unicode_vs_ascii() {
+        let expr = Expr::BinOp(
+            BinOp::Mul,
+            Box::new(Expr::Lit(Literal::Int(2))),
+            Box::new(Expr::Lit(Literal::Int(3))),
+        );
+        
+        // Unicode
+        let mut p = Pretty::default();
+        p.print_expr(&expr);
+        let unicode_output = p.finish();
+        assert!(unicode_output.contains("×"));
+        
+        // ASCII
+        let mut p = Pretty::new(PrettyConfig::ascii());
+        p.print_expr(&expr);
+        let ascii_output = p.finish();
+        assert!(ascii_output.contains("*"));
+    }
 }
