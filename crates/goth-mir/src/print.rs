@@ -18,7 +18,7 @@ impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Function signature
         write!(f, "fn {}(", self.name)?;
-        
+
         for (i, param) in self.params.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
@@ -29,12 +29,19 @@ impl fmt::Display for Function {
                 write!(f, "arg{}: {}", i, param)?;
             }
         }
-        
+
         writeln!(f, ") -> {} {{", self.ret_ty)?;
-        
-        // Body
+
+        // Entry block
+        writeln!(f, "  entry:")?;
         write!(f, "{}", self.body)?;
-        
+
+        // Additional blocks
+        for (block_id, block) in &self.blocks {
+            writeln!(f, "  {}:", block_id)?;
+            write!(f, "{}", block)?;
+        }
+
         writeln!(f, "}}")?;
         Ok(())
     }
@@ -139,6 +146,15 @@ impl fmt::Display for Rhs {
             Rhs::Uncertain { value, uncertainty } => {
                 write!(f, "Uncertain({}, {})", value, uncertainty)
             }
+            Rhs::Prim { name, args } => {
+                write!(f, "Prim({}",  name)?;
+                for arg in args {
+                    write!(f, ", {}", arg)?;
+                }
+                write!(f, ")")
+            }
+            Rhs::Iota(n) => write!(f, "Iota({})", n),
+            Rhs::Range(start, end) => write!(f, "Range({}, {})", start, end),
         }
     }
 }

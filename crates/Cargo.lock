@@ -263,6 +263,8 @@ dependencies = [
  "goth-ast",
  "goth-check",
  "goth-eval",
+ "goth-mir",
+ "goth-mlir",
  "goth-parse",
  "rustyline",
 ]

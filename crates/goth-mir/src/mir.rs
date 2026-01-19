@@ -27,8 +27,10 @@ pub struct Function {
     pub params: Vec<Type>,
     /// Return type
     pub ret_ty: Type,
-    /// Function body
+    /// Function body (single block for simple functions)
     pub body: Block,
+    /// Additional blocks for control flow (if/match)
+    pub blocks: Vec<(BlockId, Block)>,
     /// Is this a closure? If so, first param is environment
     pub is_closure: bool,
 }
@@ -141,6 +143,18 @@ pub enum Rhs {
         value: Operand,
         uncertainty: Operand,
     },
+
+    /// Primitive operation (built-in function)
+    Prim {
+        name: String,
+        args: Vec<Operand>,
+    },
+
+    /// Iota: generate sequence [0, 1, ..., n-1]
+    Iota(Operand),
+
+    /// Range: generate sequence [start, start+1, ..., end-1]
+    Range(Operand, Operand),
 }
 
 /// Reduction operations
