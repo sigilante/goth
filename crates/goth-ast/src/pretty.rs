@@ -671,6 +671,12 @@ fn unop_str(op: &crate::op::UnaryOp, unicode: bool) -> &'static str {
         UnaryOp::Sum => if unicode { "Σ" } else { "sum " },
         UnaryOp::Prod => if unicode { "Π" } else { "prod " },
         UnaryOp::Scan => if unicode { "⍀" } else { "scan " },
+        UnaryOp::Gamma => if unicode { "Γ" } else { "gamma " },
+        UnaryOp::Ln => "ln ",
+        UnaryOp::Exp => "exp ",
+        UnaryOp::Sin => "sin ",
+        UnaryOp::Cos => "cos ",
+        UnaryOp::Abs => "abs ",
     }
 }
 

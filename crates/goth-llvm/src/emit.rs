@@ -387,6 +387,24 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                         goth_ast::op::UnaryOp::Ceil => {
                             format!("  {} = call double @ceil(double {})\n", ssa, op_val)
                         }
+                        goth_ast::op::UnaryOp::Gamma => {
+                            format!("  {} = call double @tgamma(double {})\n", ssa, op_val)
+                        }
+                        goth_ast::op::UnaryOp::Ln => {
+                            format!("  {} = call double @log(double {})\n", ssa, op_val)
+                        }
+                        goth_ast::op::UnaryOp::Exp => {
+                            format!("  {} = call double @exp(double {})\n", ssa, op_val)
+                        }
+                        goth_ast::op::UnaryOp::Sin => {
+                            format!("  {} = call double @sin(double {})\n", ssa, op_val)
+                        }
+                        goth_ast::op::UnaryOp::Cos => {
+                            format!("  {} = call double @cos(double {})\n", ssa, op_val)
+                        }
+                        goth_ast::op::UnaryOp::Abs => {
+                            format!("  {} = call double @fabs(double {})\n", ssa, op_val)
+                        }
                         _ => return Err(LlvmError::UnsupportedOp(format!("{:?}", op))),
                     };
                     (ssa, code)

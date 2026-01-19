@@ -53,6 +53,12 @@ pub enum UnaryOp {
     Sqrt,     // √ (square root)
     Floor,    // ⌊⌋ (floor)
     Ceil,     // ⌈⌉ (ceiling)
+    Gamma,    // Γ (gamma function)
+    Ln,       // ln (natural log)
+    Exp,      // exp (e^x)
+    Sin,      // sin
+    Cos,      // cos
+    Abs,      // |x| (absolute value)
 }
 
 /// Operator associativity
@@ -165,6 +171,12 @@ impl UnaryOp {
             UnaryOp::Sqrt => "√",
             UnaryOp::Floor => "⌊⌋",
             UnaryOp::Ceil => "⌈⌉",
+            UnaryOp::Gamma => "Γ",
+            UnaryOp::Ln => "ln",
+            UnaryOp::Exp => "exp",
+            UnaryOp::Sin => "sin",
+            UnaryOp::Cos => "cos",
+            UnaryOp::Abs => "abs",
         }
     }
 
@@ -178,6 +190,12 @@ impl UnaryOp {
             UnaryOp::Sqrt => "sqrt",
             UnaryOp::Floor => "floor",
             UnaryOp::Ceil => "ceil",
+            UnaryOp::Gamma => "gamma",
+            UnaryOp::Ln => "ln",
+            UnaryOp::Exp => "exp",
+            UnaryOp::Sin => "sin",
+            UnaryOp::Cos => "cos",
+            UnaryOp::Abs => "abs",
         }
     }
 }

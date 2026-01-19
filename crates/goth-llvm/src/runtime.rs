@@ -27,6 +27,9 @@ pub fn emit_runtime_declarations() -> String {
     out.push_str("declare double @exp(double) nounwind readnone\n");
     out.push_str("declare double @log(double) nounwind readnone\n");
     out.push_str("declare double @fabs(double) nounwind readnone\n");
+    out.push_str("declare double @pow(double, double) nounwind readnone\n");
+    out.push_str("declare double @tgamma(double) nounwind readnone\n");
+    out.push_str("declare double @lgamma(double) nounwind readnone\n");
     out.push_str("\n");
 
     // Goth runtime functions (implemented in runtime.c)

@@ -192,6 +192,36 @@ impl<'a> Parser<'a> {
                 self.expect(Token::CeilClose)?;
                 Ok(Expr::UnaryOp(UnaryOp::Ceil, Box::new(operand)))
             }
+            Some(Token::Gamma) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Gamma, Box::new(operand)))
+            }
+            Some(Token::Ln) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Ln, Box::new(operand)))
+            }
+            Some(Token::Exp) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Exp, Box::new(operand)))
+            }
+            Some(Token::Sin) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Sin, Box::new(operand)))
+            }
+            Some(Token::Cos) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Cos, Box::new(operand)))
+            }
+            Some(Token::Abs) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Abs, Box::new(operand)))
+            }
             _ => self.parse_atom(),
         }
     }

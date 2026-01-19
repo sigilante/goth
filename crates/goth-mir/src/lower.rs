@@ -237,7 +237,13 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
                 goth_ast::op::UnaryOp::Floor | goth_ast::op::UnaryOp::Ceil => {
                     Type::Prim(goth_ast::types::PrimType::F64)
                 }
-                goth_ast::op::UnaryOp::Sqrt => Type::Prim(goth_ast::types::PrimType::F64),
+                goth_ast::op::UnaryOp::Sqrt
+                | goth_ast::op::UnaryOp::Gamma
+                | goth_ast::op::UnaryOp::Ln
+                | goth_ast::op::UnaryOp::Exp
+                | goth_ast::op::UnaryOp::Sin
+                | goth_ast::op::UnaryOp::Cos
+                | goth_ast::op::UnaryOp::Abs => Type::Prim(goth_ast::types::PrimType::F64),
                 goth_ast::op::UnaryOp::Not => Type::Prim(goth_ast::types::PrimType::Bool),
                 goth_ast::op::UnaryOp::Neg => op_ty.clone(),
                 _ => op_ty.clone(),

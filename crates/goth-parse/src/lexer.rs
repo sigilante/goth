@@ -207,6 +207,21 @@ pub enum Token {
     #[token("\\/")]
     Scan,
 
+    // ============ Math Functions ============
+    #[token("Γ")]
+    #[token("gamma")]
+    Gamma,
+    #[token("ln")]
+    Ln,
+    #[token("exp")]
+    Exp,
+    #[token("sin")]
+    Sin,
+    #[token("cos")]
+    Cos,
+    #[token("abs")]
+    Abs,
+
     // ============ Arrows ============
     #[token("→")]
     #[token("->")]

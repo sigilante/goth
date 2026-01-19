@@ -338,8 +338,10 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
             }
         }
 
-        // Sqrt, Floor, Ceil: T → T (where T is numeric)
-        UnaryOp::Sqrt | UnaryOp::Floor | UnaryOp::Ceil => {
+        // Sqrt, Floor, Ceil, and math functions: T → F64 (where T is numeric)
+        UnaryOp::Sqrt | UnaryOp::Floor | UnaryOp::Ceil
+        | UnaryOp::Gamma | UnaryOp::Ln | UnaryOp::Exp
+        | UnaryOp::Sin | UnaryOp::Cos | UnaryOp::Abs => {
             match operand {
                 Type::Prim(p) if p.is_numeric() => Ok(Type::Prim(PrimType::F64)),
                 Type::Tensor(sh, el) => {
