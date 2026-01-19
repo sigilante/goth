@@ -263,6 +263,7 @@ dependencies = [
  "goth-ast",
  "goth-check",
  "goth-eval",
+ "goth-llvm",
  "goth-mir",
  "goth-mlir",
  "goth-parse",
@@ -276,6 +277,15 @@ dependencies = [
  "goth-ast",
  "ordered-float",
  "pretty_assertions",
+ "thiserror",
+]
+
+[[package]]
+name = "goth-llvm"
+version = "0.1.0"
+dependencies = [
+ "goth-ast",
+ "goth-mir",
  "thiserror",
 ]
 

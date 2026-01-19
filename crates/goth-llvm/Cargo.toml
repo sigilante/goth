@@ -1,0 +1,11 @@
+[package]
+name = "goth-llvm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+goth-ast = { path = "../goth-ast" }
+goth-mir = { path = "../goth-mir" }
+thiserror = { workspace = true }

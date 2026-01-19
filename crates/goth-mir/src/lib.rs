@@ -36,6 +36,11 @@ pub mod error;
 pub use mir::*;
 pub use error::{MirError, MirResult};
 
+/// Pretty-print a MIR program
+pub fn print_program(program: &Program) -> String {
+    format!("{}", program)
+}
+
 use goth_ast::expr::Expr;
 use goth_ast::decl::Module;
 

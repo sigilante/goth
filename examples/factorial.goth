@@ -1,0 +1,2 @@
+╭─ main : I → I
+╰─ if ₀ < 2 then 1 else Π (range 1 (₀ + 1))

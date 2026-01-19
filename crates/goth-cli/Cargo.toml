@@ -10,6 +10,10 @@ repository = "https://github.com/goth-lang/goth"
 name = "goth"
 path = "src/main.rs"
 
+[[bin]]
+name = "gothc"
+path = "src/compiler.rs"
+
 [dependencies]
 goth-ast = { path = "../goth-ast" }
 goth-eval = { path = "../goth-eval" }
@@ -17,6 +21,7 @@ goth-parse = { path = "../goth-parse" }
 goth-check = { path = "../goth-check" }
 goth-mir = { path = "../goth-mir" }
 goth-mlir = { path = "../goth-mlir" }
+goth-llvm = { path = "../goth-llvm" }
 rustyline = "14.0"
 clap = { version = "4.4", features = ["derive"] }
 colored = "2.1"
