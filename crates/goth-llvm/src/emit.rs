@@ -6,13 +6,13 @@ use crate::error::{LlvmError, Result};
 use crate::runtime::{emit_format_strings, emit_runtime_declarations};
 use goth_ast::types::{PrimType, Type};
 use goth_mir::mir::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// LLVM IR emission context
 pub struct LlvmContext {
     /// SSA value counter
     next_ssa: usize,
-    /// Local variable to SSA value mapping
+    /// Local variable to SSA value mapping (for SSA values)
     local_map: HashMap<LocalId, String>,
     /// Type information for locals
     local_types: HashMap<LocalId, Type>,
@@ -20,6 +20,8 @@ pub struct LlvmContext {
     next_str: usize,
     /// Accumulated string literals
     string_literals: Vec<(String, String)>, // (name, value)
+    /// Locals that use stack allocation (for control flow merging)
+    stack_locals: HashMap<LocalId, String>, // LocalId -> alloca pointer name
 }
 
 impl LlvmContext {
@@ -30,7 +32,23 @@ impl LlvmContext {
             local_types: HashMap::new(),
             next_str: 0,
             string_literals: Vec::new(),
+            stack_locals: HashMap::new(),
         }
+    }
+
+    /// Check if a local uses stack allocation
+    fn is_stack_local(&self, local: &LocalId) -> bool {
+        self.stack_locals.contains_key(local)
+    }
+
+    /// Get the stack pointer for a local
+    fn get_stack_ptr(&self, local: &LocalId) -> Option<&String> {
+        self.stack_locals.get(local)
+    }
+
+    /// Register a stack-allocated local
+    fn register_stack_local(&mut self, local: LocalId, ptr: String) {
+        self.stack_locals.insert(local, ptr);
     }
 
     /// Generate fresh SSA value name
@@ -88,6 +106,34 @@ fn is_bool_type(ty: &Type) -> bool {
         Type::Var(name) => matches!(name.as_ref(), "B" | "Bool"),
         _ => false,
     }
+}
+
+/// Analyze a function to find locals that are assigned in multiple blocks.
+/// These need stack allocation (alloca/store/load) instead of direct SSA.
+fn find_multi_block_locals(func: &Function) -> HashMap<LocalId, Type> {
+    let mut assignments: HashMap<LocalId, HashSet<usize>> = HashMap::new();
+    let mut local_types: HashMap<LocalId, Type> = HashMap::new();
+
+    // Track assignments in entry block (block 0)
+    for stmt in &func.body.stmts {
+        assignments.entry(stmt.dest).or_default().insert(0);
+        local_types.insert(stmt.dest, stmt.ty.clone());
+    }
+
+    // Track assignments in other blocks
+    for (block_id, block) in &func.blocks {
+        for stmt in &block.stmts {
+            assignments.entry(stmt.dest).or_default().insert(block_id.0 as usize);
+            local_types.insert(stmt.dest, stmt.ty.clone());
+        }
+    }
+
+    // Return locals assigned in more than one block
+    assignments
+        .into_iter()
+        .filter(|(_, blocks)| blocks.len() > 1)
+        .filter_map(|(local, _)| local_types.get(&local).map(|ty| (local, ty.clone())))
+        .collect()
 }
 
 /// Emit LLVM type
@@ -173,7 +219,17 @@ fn emit_operand(
             }
             Ok(val)
         }
-        Operand::Local(local) => ctx.get_ssa(local),
+        Operand::Local(local) => {
+            // If this is a stack-allocated local, emit a load
+            if let Some(ptr) = ctx.get_stack_ptr(local).cloned() {
+                let llvm_ty = emit_type(ty)?;
+                let ssa = ctx.fresh_ssa();
+                output.push_str(&format!("  {} = load {}, {}* {}\n", ssa, llvm_ty, llvm_ty, ptr));
+                Ok(ssa)
+            } else {
+                ctx.get_ssa(local)
+            }
+        }
     }
 }
 
@@ -592,7 +648,14 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
     };
 
     output.push_str(&code);
-    ctx.register_local(stmt.dest, ssa, stmt.ty.clone());
+
+    // If this is a stack-allocated local, emit a store instead of registering SSA
+    if let Some(ptr) = ctx.get_stack_ptr(&stmt.dest).cloned() {
+        let llvm_ty = emit_type(&stmt.ty)?;
+        output.push_str(&format!("  store {} {}, {}* {}\n", llvm_ty, ssa, llvm_ty, ptr));
+    } else {
+        ctx.register_local(stmt.dest, ssa, stmt.ty.clone());
+    }
 
     Ok(())
 }
@@ -705,12 +768,25 @@ fn emit_function(func: &Function, is_main: bool) -> Result<String> {
         param_strs.join(", ")
     ));
 
-    // Emit entry block
+    // Find locals that need stack allocation (assigned in multiple blocks)
+    let multi_block_locals = find_multi_block_locals(func);
+
+    // Emit entry block label first
+    output.push_str("entry:\n");
+
+    // Emit alloca instructions for multi-block locals at entry
+    for (local, ty) in &multi_block_locals {
+        let llvm_ty = emit_type(ty)?;
+        let ptr_name = ctx.fresh_ssa();
+        output.push_str(&format!("  {} = alloca {}\n", ptr_name, llvm_ty));
+        ctx.register_stack_local(*local, ptr_name);
+    }
+
+    // Emit entry block body (without re-emitting the label)
     if func.blocks.is_empty() {
-        output.push_str("entry:\n");
         emit_block(&mut ctx, &func.body, None, &mut output)?;
     } else {
-        emit_block(&mut ctx, &func.body, Some("entry"), &mut output)?;
+        emit_block(&mut ctx, &func.body, None, &mut output)?;
 
         // Emit additional blocks
         for (block_id, block) in &func.blocks {
