@@ -22,10 +22,12 @@ pub struct LlvmContext {
     string_literals: Vec<(String, String)>, // (name, value)
     /// Locals that use stack allocation (for control flow merging)
     stack_locals: HashMap<LocalId, String>, // LocalId -> alloca pointer name
+    /// Function return type
+    ret_ty: Type,
 }
 
 impl LlvmContext {
-    pub fn new() -> Self {
+    pub fn new(ret_ty: Type) -> Self {
         LlvmContext {
             next_ssa: 0,
             local_map: HashMap::new(),
@@ -33,6 +35,7 @@ impl LlvmContext {
             next_str: 0,
             string_literals: Vec::new(),
             stack_locals: HashMap::new(),
+            ret_ty,
         }
     }
 
@@ -697,8 +700,8 @@ fn emit_block(
     // Emit terminator
     match &block.term {
         Terminator::Return(op) => {
-            // Infer type from context or default to i64
-            let ret_ty = Type::Prim(PrimType::I64);
+            // Use the function's return type from context
+            let ret_ty = ctx.ret_ty.clone();
             let ret_val = emit_operand(ctx, op, &ret_ty, output)?;
             let llvm_ty = emit_type(&ret_ty)?;
             output.push_str(&format!("  ret {} {}\n", llvm_ty, ret_val));
@@ -753,7 +756,7 @@ fn emit_block(
 
 /// Emit function
 fn emit_function(func: &Function, is_main: bool) -> Result<String> {
-    let mut ctx = LlvmContext::new();
+    let mut ctx = LlvmContext::new(func.ret_ty.clone());
     let mut output = String::new();
 
     // Function signature
@@ -819,8 +822,12 @@ fn emit_function(func: &Function, is_main: bool) -> Result<String> {
 }
 
 /// Emit the C main function that calls goth_main
-fn emit_c_main(main_func: &Function) -> String {
+fn emit_c_main(main_func: &Function) -> Result<String> {
     let mut output = String::new();
+
+    let ret_ty = emit_type(&main_func.ret_ty)?;
+    let is_float_ret = matches!(&main_func.ret_ty, Type::Prim(PrimType::F64))
+        || matches!(&main_func.ret_ty, Type::Var(n) if n.as_ref() == "F" || n.as_ref() == "Float");
 
     output.push_str("\n; C main entry point\n");
     output.push_str("define i32 @main(i32 %argc, i8** %argv) {\n");
@@ -829,9 +836,14 @@ fn emit_c_main(main_func: &Function) -> String {
     // If goth main takes arguments, we need to parse them from argv
     if main_func.params.is_empty() {
         // No arguments - just call
-        output.push_str("  %result = call i64 @goth_main()\n");
+        output.push_str(&format!("  %result = call {} @goth_main()\n", ret_ty));
     } else if main_func.params.len() == 1 {
-        // One argument - parse first command line arg as i64, or use 0
+        let param_ty = &main_func.params[0];
+        let llvm_ty = emit_type(param_ty)?;
+        let is_float_param = matches!(param_ty, Type::Prim(PrimType::F64))
+            || matches!(param_ty, Type::Var(n) if n.as_ref() == "F" || n.as_ref() == "Float");
+
+        // One argument - parse first command line arg
         output.push_str("  ; Check if we have command line args\n");
         output.push_str("  %has_args = icmp sgt i32 %argc, 1\n");
         output.push_str("  br i1 %has_args, label %parse_arg, label %use_default\n");
@@ -839,31 +851,87 @@ fn emit_c_main(main_func: &Function) -> String {
         output.push_str("parse_arg:\n");
         output.push_str("  %argv1_ptr = getelementptr i8*, i8** %argv, i64 1\n");
         output.push_str("  %argv1 = load i8*, i8** %argv1_ptr\n");
-        output.push_str("  %parsed = call i64 @atol(i8* %argv1)\n");
+
+        if is_float_param {
+            output.push_str("  %parsed = call double @atof(i8* %argv1)\n");
+        } else {
+            output.push_str("  %parsed = call i64 @atol(i8* %argv1)\n");
+        }
+
         output.push_str("  br label %call_main\n");
         output.push_str("\n");
         output.push_str("use_default:\n");
         output.push_str("  br label %call_main\n");
         output.push_str("\n");
         output.push_str("call_main:\n");
-        output.push_str("  %arg0 = phi i64 [ %parsed, %parse_arg ], [ 0, %use_default ]\n");
-        output.push_str("  %result = call i64 @goth_main(i64 %arg0)\n");
+
+        if is_float_param {
+            output.push_str("  %arg0 = phi double [ %parsed, %parse_arg ], [ 0.0, %use_default ]\n");
+        } else {
+            output.push_str(&format!("  %arg0 = phi {} [ %parsed, %parse_arg ], [ 0, %use_default ]\n", llvm_ty));
+        }
+
+        output.push_str(&format!(
+            "  %result = call {} @goth_main({} %arg0)\n",
+            ret_ty, llvm_ty
+        ));
     } else {
-        // Multiple arguments - just call with zeros for now
-        let args: Vec<String> = main_func.params.iter().map(|_| "i64 0".to_string()).collect();
-        output.push_str(&format!("  %result = call i64 @goth_main({})\n", args.join(", ")));
+        // Multiple arguments - parse each from argv
+        let mut arg_calls = Vec::new();
+
+        for (i, param_ty) in main_func.params.iter().enumerate() {
+            let llvm_ty = emit_type(param_ty)?;
+            let is_float = matches!(param_ty, Type::Prim(PrimType::F64))
+                || matches!(param_ty, Type::Var(n) if n.as_ref() == "F" || n.as_ref() == "Float");
+
+            let arg_idx = i + 1; // argv[0] is program name
+            output.push_str(&format!(
+                "  %argv{}_ptr = getelementptr i8*, i8** %argv, i64 {}\n",
+                arg_idx, arg_idx
+            ));
+            output.push_str(&format!(
+                "  %argv{} = load i8*, i8** %argv{}_ptr\n",
+                arg_idx, arg_idx
+            ));
+
+            if is_float {
+                output.push_str(&format!(
+                    "  %arg{} = call double @atof(i8* %argv{})\n",
+                    i, arg_idx
+                ));
+            } else {
+                output.push_str(&format!(
+                    "  %arg{} = call i64 @atol(i8* %argv{})\n",
+                    i, arg_idx
+                ));
+            }
+
+            arg_calls.push(format!("{} %arg{}", llvm_ty, i));
+        }
+
+        output.push_str(&format!(
+            "  %result = call {} @goth_main({})\n",
+            ret_ty,
+            arg_calls.join(", ")
+        ));
     }
 
     output.push_str("\n");
     output.push_str("  ; Print result\n");
-    output.push_str("  call void @goth_print_i64(i64 %result)\n");
+
+    if is_float_ret {
+        output.push_str("  call void @goth_print_f64(double %result)\n");
+    } else {
+        output.push_str(&format!("  call void @goth_print_i64({} %result)\n", ret_ty));
+    }
+
     output.push_str("  call void @goth_print_newline()\n");
     output.push_str("\n");
     output.push_str("  ; Return 0\n");
     output.push_str("  ret i32 0\n");
     output.push_str("}\n");
 
-    output
+    Ok(output)
 }
 
 /// Emit complete program
@@ -893,7 +961,7 @@ pub fn emit_program(program: &Program) -> Result<String> {
 
     // Emit C main wrapper if we have a goth main
     if let Some(main_fn) = main_func {
-        output.push_str(&emit_c_main(main_fn));
+        output.push_str(&emit_c_main(main_fn)?);
     }
 
     Ok(output)
