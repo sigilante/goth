@@ -300,12 +300,17 @@ pub enum Token {
     Char(char),
 
     // ============ Identifiers ============
-    #[regex(r"[a-zA-Z_αβγδεζηθικμνξοπρστυφχψω][a-zA-Z0-9_'αβγδεζηθικμνξοπρστυφχψω²³]*", |lex| lex.slice().to_string())]
+    // Identifiers include Greek letters and some APL symbols
+    #[regex(r"[a-zA-Z_αβγδεζηθικμνξοπρστυφχψωρι][a-zA-Z0-9_'αβγδεζηθικμνξοπρστυφχψω²³]*", |lex| lex.slice().to_string())]
     Ident(String),
 
     // ============ Type Variables (Greek) - excludes λ (lambda keyword) ============
     #[regex(r"[αβγδεζηθικμνξοπρστυφχψω]", priority = 4, callback = |lex| lex.slice().to_string())]
     TyVar(String),
+
+    // ============ APL-style single character identifiers ============
+    #[regex(r"[⍳⍴⌽⍉⧺·…↑↓]", priority = 5, callback = |lex| lex.slice().to_string())]
+    AplIdent(String),
 
     // ============ Primitive Types ============
     #[token("F64")]
@@ -395,7 +400,7 @@ impl Token {
         matches!(self,
             Token::Int(_) | Token::Float(_) | Token::String(_) | Token::Char(_) |
             Token::True | Token::False |
-            Token::Ident(_) | Token::TyVar(_) |
+            Token::Ident(_) | Token::TyVar(_) | Token::AplIdent(_) |
             Token::Lambda | Token::LParen | Token::LBracket | Token::LAngle |
             Token::If | Token::Match | Token::Let | Token::Do |
             Token::Index(_) |

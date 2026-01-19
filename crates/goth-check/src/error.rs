@@ -1,4 +1,7 @@
 //! Type checking errors
+//!
+//! This module defines error types for the Goth type checker, with special
+//! attention to shape-related errors since shape checking is a key feature.
 
 use goth_ast::types::Type;
 use goth_ast::shape::Shape;
@@ -30,13 +33,17 @@ pub enum TypeError {
     #[error("Undefined type variable: {0}")]
     UndefinedTypeVar(String),
 
+    // ============================================================
+    // Shape Errors - THE key feature of Goth
+    // ============================================================
+
     #[error("Shape mismatch: expected {expected}, found {found}")]
     ShapeMismatch {
         expected: Shape,
         found: Shape,
     },
 
-    #[error("Rank mismatch: expected rank {expected}, found rank {found}")]
+    #[error("Rank mismatch: expected {expected} dimension(s), found {found}")]
     RankMismatch {
         expected: usize,
         found: usize,
@@ -47,6 +54,23 @@ pub enum TypeError {
         position: usize,
         expected: String,
         found: String,
+    },
+
+    #[error("Shape error in {operation}: {message}")]
+    ShapeError {
+        operation: String,
+        message: String,
+    },
+
+    #[error("Matrix multiplication shape error: left columns ({left_cols}) must match right rows ({right_rows})")]
+    MatmulShapeError {
+        left_cols: String,
+        right_rows: String,
+    },
+
+    #[error("Infinite shape: dimension variable {var} would be infinite")]
+    InfiniteShape {
+        var: String,
     },
 
     #[error("Occurs check failed: {var} occurs in {ty}")]

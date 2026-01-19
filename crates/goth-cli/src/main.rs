@@ -45,6 +45,10 @@ struct Args {
     #[arg()]
     file: Option<PathBuf>,
 
+    /// Arguments to pass to the main function
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    program_args: Vec<String>,
+
     /// Evaluate expression
     #[arg(short, long)]
     eval: Option<String>,
@@ -64,6 +68,10 @@ struct Args {
     /// Type check expressions before evaluation
     #[arg(long, short = 'c')]
     check: bool,
+
+    /// Don't look for or execute main function (just load declarations)
+    #[arg(long)]
+    no_main: bool,
 }
 
 fn main() {
@@ -75,7 +83,7 @@ fn main() {
         return;
     } else if let Some(file) = args.file {
         // Run file
-        run_file(&file, args.trace, args.parse_only, args.ast);
+        run_file(&file, args.trace, args.parse_only, args.ast, args.no_main, &args.program_args);
     } else {
         // Start REPL
         if let Err(e) = run_repl(args.trace) {
@@ -140,21 +148,21 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
     }
 }
 
-fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool) {
+fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool, no_main: bool, program_args: &[String]) {
     match fs::read_to_string(path) {
         Ok(source) => {
             let name = path.file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("main");
-            
+
             match parse_module(&source, name) {
                 Ok(module) => {
                     if show_ast {
                         println!("{} {:#?}", "Parsed AST:".cyan().bold(), module);
                     }
                     if parse_only {
-                        println!("{} module '{}' with {} declarations", 
-                            "Parsed:".green().bold(), 
+                        println!("{} module '{}' with {} declarations",
+                            "Parsed:".green().bold(),
                             module.name.as_ref().map(|s| s.as_ref()).unwrap_or("anonymous"),
                             module.decls.len());
                         return;
@@ -163,7 +171,14 @@ fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool) {
                     if show_ast {
                         println!("{} {:#?}", "Resolved AST:".cyan().bold(), module);
                     }
-                    run_module(&module, trace);
+
+                    if no_main {
+                        // Just load declarations like before (verbose mode)
+                        run_module(&module, trace);
+                    } else {
+                        // Load declarations silently and execute main
+                        run_module_with_main(&module, trace, program_args);
+                    }
                 }
                 Err(e) => eprintln!("{}: {}", "Parse error".red().bold(), e),
             }
@@ -211,6 +226,108 @@ fn run_module(module: &goth_ast::decl::Module, trace: bool) {
             _ => {}
         }
     }
+}
+
+/// Run a module by loading declarations and executing main function
+fn run_module_with_main(module: &goth_ast::decl::Module, trace: bool, program_args: &[String]) {
+    use goth_ast::decl::Decl;
+    use goth_ast::expr::Expr;
+
+    let mut evaluator = Evaluator::new();
+    if trace {
+        evaluator = evaluator.with_trace(true);
+    }
+
+    // Load all declarations silently
+    for decl in &module.decls {
+        match decl {
+            Decl::Let(let_decl) => {
+                match evaluator.eval(&let_decl.value) {
+                    Ok(value) => {
+                        evaluator.define(let_decl.name.to_string(), value);
+                    }
+                    Err(e) => {
+                        eprintln!("{}: in '{}': {}", "Error".red().bold(), let_decl.name, e);
+                        return;
+                    }
+                }
+            }
+            Decl::Fn(fn_decl) => {
+                let arity = count_function_arity(&fn_decl.signature);
+                let closure = Value::closure_with_contracts(
+                    arity,
+                    fn_decl.body.clone(),
+                    Env::with_globals(evaluator.globals()),
+                    fn_decl.preconditions.clone(),
+                    fn_decl.postconditions.clone()
+                );
+                evaluator.define(fn_decl.name.to_string(), closure);
+            }
+            _ => {}
+        }
+    }
+
+    // Look for main function
+    let has_main = evaluator.globals().borrow().contains_key("main");
+    if !has_main {
+        eprintln!("{}: no 'main' function found", "Error".red().bold());
+        eprintln!("  {} Define a main function or use --no-main to load declarations only", "hint:".yellow());
+        return;
+    }
+
+    // Build an expression that calls main with the arguments
+    // Start with just referencing the main function
+    let mut call_expr = Expr::name("main");
+
+    // Apply each argument
+    if program_args.is_empty() {
+        // If main takes no args, just call it (or pass unit)
+        call_expr = Expr::app(call_expr, Expr::Tuple(vec![]));
+    } else {
+        for arg in program_args {
+            let arg_expr = parse_arg_to_expr(arg);
+            call_expr = Expr::app(call_expr, arg_expr);
+        }
+    }
+
+    // Evaluate the call expression
+    match evaluator.eval(&call_expr) {
+        Ok(value) => {
+            // Print result unless it's unit
+            if !matches!(value, Value::Unit) {
+                println!("{}", value);
+            }
+        }
+        Err(e) => {
+            eprintln!("{}: {}", "Error".red().bold(), e);
+        }
+    }
+}
+
+/// Parse a CLI argument string into a Goth expression
+fn parse_arg_to_expr(arg: &str) -> goth_ast::expr::Expr {
+    use goth_ast::expr::Expr;
+    use goth_ast::literal::Literal;
+
+    // Try to parse as integer first
+    if let Ok(n) = arg.parse::<i128>() {
+        return Expr::Lit(Literal::Int(n));
+    }
+
+    // Try to parse as float
+    if let Ok(f) = arg.parse::<f64>() {
+        return Expr::Lit(Literal::Float(f));
+    }
+
+    // Try to parse as boolean
+    match arg {
+        "true" | "⊤" => return Expr::Lit(Literal::True),
+        "false" | "⊥" => return Expr::Lit(Literal::False),
+        _ => {}
+    }
+
+    // Otherwise, treat as string
+    Expr::Lit(Literal::String(arg.into()))
 }
 
 fn run_repl(trace: bool) -> RlResult<()> {

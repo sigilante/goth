@@ -1,0 +1,3 @@
+# Test filter: keep only even numbers from 0..9
+╭─ main : I → [m]I
+╰─ (iota ₀) ▸ (λ→ (₀ % 2) = 0)

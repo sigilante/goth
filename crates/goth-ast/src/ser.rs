@@ -142,6 +142,7 @@ mod tests {
     use crate::op::BinOp;
     use crate::types::{Type, PrimType};
     use crate::decl::{Decl, LetDecl, FnDecl};
+    use crate::effect::Effects;
     use crate::pattern::Pattern;
     use pretty_assertions::assert_eq;
     
@@ -345,6 +346,7 @@ mod tests {
                         Type::Prim(PrimType::I64),
                         Type::Prim(PrimType::I64),
                     ),
+                    effects: Effects::pure(),
                     body: Expr::BinOp(
                         BinOp::Add,
                         Box::new(Expr::Idx(0)),

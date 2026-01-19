@@ -79,20 +79,31 @@ fn numeric_binop(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
             // Promote to wider type
             Ok(Type::Prim(promote_numeric(*p1, *p2)))
         }
-        
+
         // Tensor × Tensor (element-wise)
         (Type::Tensor(sh1, el1), Type::Tensor(sh2, el2)) => {
-            // Shapes must match (will unify later)
-            if sh1 != sh2 {
-                return Err(TypeError::ShapeMismatch {
+            // Use proper shape unification instead of structural equality
+            use crate::shapes::unify_shapes;
+            let _shape_subst = unify_shapes(sh1, sh2).map_err(|_| {
+                TypeError::ShapeMismatch {
                     expected: sh1.clone(),
                     found: sh2.clone(),
-                });
-            }
+                }
+            })?;
+
+            // After unification succeeds, use the first shape
+            // (they're now known to be compatible)
             let result_elem = numeric_binop(op, el1, el2)?;
             Ok(Type::Tensor(sh1.clone(), Box::new(result_elem)))
         }
-        
+
+        // Scalar × Tensor or Tensor × Scalar (broadcasting)
+        (Type::Prim(p), Type::Tensor(sh, el)) | (Type::Tensor(sh, el), Type::Prim(p))
+            if p.is_numeric() => {
+            let result_elem = numeric_binop(op, &Type::Prim(*p), el)?;
+            Ok(Type::Tensor(sh.clone(), Box::new(result_elem)))
+        }
+
         _ => Err(TypeError::InvalidBinOp {
             op: format!("{:?}", op),
             left: left.clone(),
@@ -165,8 +176,16 @@ fn filter_type(arr: &Type, pred: &Type) -> TypeResult<Type> {
 
 fn zip_type(left: &Type, right: &Type) -> TypeResult<Type> {
     match (left, right) {
-        (Type::Tensor(sh1, el1), Type::Tensor(_sh2, el2)) => {
-            // Shapes must match
+        (Type::Tensor(sh1, el1), Type::Tensor(sh2, el2)) => {
+            // Use proper shape unification
+            use crate::shapes::unify_shapes;
+            let _shape_subst = unify_shapes(sh1, sh2).map_err(|_| {
+                TypeError::ShapeMismatch {
+                    expected: sh1.clone(),
+                    found: sh2.clone(),
+                }
+            })?;
+
             Ok(Type::Tensor(
                 sh1.clone(),
                 Box::new(Type::tuple(vec![*el1.clone(), *el2.clone()])),

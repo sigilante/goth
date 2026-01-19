@@ -1,0 +1,45 @@
+# current.goth - Calculate currents (differences) between syzygies
+# A syzygy is a pair (i, n-1-i) where the sum is always n-1
+# A current is the difference between elements
+
+# Generate syzygy pairs for number n
+╭─ syzygies : I → [m]⟨I, I⟩
+╰─ let n ← ₀ in
+   let count ← (n + 1) / 2 in
+   (⍳ count) ↦ (λ→ ⟨₀, n - 1 - ₀⟩)
+
+# Calculate the difference (current) for a syzygy pair
+# Note: after let a ← ₀.0, the arg shifts from ₀ to ₁
+╭─ current : ⟨I, I⟩ → I
+╰─ let a ← ₀.0 in
+   let b ← ₁.1 in
+   if b > a then b - a else a - b
+
+# Check if a value appears in a syzygy pair
+╭─ pair_contains : ⟨I, I⟩ → I → Bool
+╰─ (₀.0 = ₁) ∨ (₀.1 = ₁)
+
+# Find index of pair containing value, or -1 if not found
+# For 2-arg function: ₀ = first arg (value), ₁ = second arg (pairs)
+╭─ find_pair_idx : I → [n]⟨I, I⟩ → I
+╰─ let value ← ₀ in
+   let pairs ← ₂ in
+   let matches ← (⍳ (len pairs)) ▸ (λ→ pair_contains (index pairs ₀) value) in
+   if (len matches) > 0 then index matches 0 else -1
+
+# Print info about a syzygy and its current
+╭─ show_current : ⟨I, I⟩ → [n]⟨I, I⟩ → ()
+│  ◇io
+╰─ let pair ← ₀ in
+   let all_pairs ← ₂ in
+   let diff ← current pair in
+   let target_idx ← find_pair_idx diff all_pairs in
+   print ⟨pair, diff, target_idx⟩
+
+# Main: generate syzygies and show currents
+╭─ main : I → ()
+│  ◇io
+╰─ let n ← ₀ in
+   let pairs ← syzygies n in
+   let _ ← pairs ↦ (λ→ show_current ₀ pairs) in
+   ⟨⟩

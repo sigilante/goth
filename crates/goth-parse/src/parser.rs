@@ -10,6 +10,7 @@ use goth_ast::literal::Literal;
 use goth_ast::op::{BinOp, UnaryOp};
 use goth_ast::shape::{Shape, Dim};
 use goth_ast::decl::{Module, Decl, FnDecl, TypeDecl};
+use goth_ast::effect::{Effect, Effects};
 use thiserror::Error;
 
 /// Parse error
@@ -59,7 +60,7 @@ impl<'a> Parser<'a> {
 
     fn expect_ident(&mut self) -> ParseResult<String> {
         match self.next() {
-            Some(Token::Ident(s)) | Some(Token::TyVar(s)) => Ok(s),
+            Some(Token::Ident(s)) | Some(Token::TyVar(s)) | Some(Token::AplIdent(s)) => Ok(s),
             other => Err(ParseError::Unexpected {
                 found: other,
                 expected: "identifier".into(),
@@ -209,8 +210,8 @@ impl<'a> Parser<'a> {
             // De Bruijn index
             Some(Token::Index(i)) => { self.next(); Expr::Idx(i) }
 
-            // Identifier (including Greek letters used as variable names)
-            Some(Token::Ident(name)) | Some(Token::TyVar(name)) => { self.next(); Expr::Name(name.into()) }
+            // Identifier (including Greek letters and APL symbols used as variable names)
+            Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) => { self.next(); Expr::Name(name.into()) }
 
             // Lambda
             Some(Token::Lambda) => self.parse_lambda()?,
@@ -257,7 +258,7 @@ impl<'a> Parser<'a> {
                 Some(Token::Dot) => {
                     self.next();
                     match self.next() {
-                        Some(Token::Ident(name)) | Some(Token::TyVar(name)) => {
+                        Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) => {
                             expr = Expr::Field(Box::new(expr), FieldAccess::Named(name.into()));
                         }
                         Some(Token::Int(i)) => {
@@ -666,12 +667,12 @@ impl<'a> Parser<'a> {
             Some(Token::True) => { self.next(); Ok(Pattern::Lit(Literal::True)) }
             Some(Token::False) => { self.next(); Ok(Pattern::Lit(Literal::False)) }
 
-            Some(Token::Ident(name)) | Some(Token::TyVar(name)) => {
+            Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) => {
                 self.next();
                 // Check if it's a variant constructor (starts with uppercase)
                 if name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
-                    let payload = if self.peek().map(|t| t.can_start_expr()).unwrap_or(false) 
-                        && !self.peek().map(|t| t.is_binop()).unwrap_or(false) 
+                    let payload = if self.peek().map(|t| t.can_start_expr()).unwrap_or(false)
+                        && !self.peek().map(|t| t.is_binop()).unwrap_or(false)
                         && !matches!(self.peek(), Some(Token::Arrow) | Some(Token::If)) {
                         Some(Box::new(self.parse_pattern_atom()?))
                     } else {
@@ -792,7 +793,7 @@ impl<'a> Parser<'a> {
 
             // Type variable
             Some(Token::TyVar(v)) => { self.next(); Ok(Type::Var(v.into())) }
-            Some(Token::Ident(name)) => { self.next(); Ok(Type::Var(name.into())) }
+            Some(Token::Ident(name)) | Some(Token::AplIdent(name)) => { self.next(); Ok(Type::Var(name.into())) }
 
             // Tensor type [shape]T
             Some(Token::LBracket) => {
@@ -837,7 +838,7 @@ impl<'a> Parser<'a> {
                 // Parse first element, check if followed by colon (record) or comma/rangle (tuple)
                 
                 // Try parsing as record if first thing looks like "name:"
-                if let Some(Token::Ident(name)) | Some(Token::TyVar(name)) = self.peek().cloned() {
+                if let Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) = self.peek().cloned() {
                     self.next();
                     if self.at(&Token::Colon) {
                         // It's a record! name: Type
@@ -912,7 +913,7 @@ impl<'a> Parser<'a> {
             Some(Token::Forall) => {
                 self.next();
                 let mut params = Vec::new();
-                while let Some(Token::Ident(name)) | Some(Token::TyVar(name)) = self.peek().cloned() {
+                while let Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) = self.peek().cloned() {
                     self.next();
                     params.push(TypeParam { name: name.into(), kind: TypeParamKind::Type });
                 }
@@ -938,11 +939,11 @@ impl<'a> Parser<'a> {
     /// Parse tensor shape
     fn parse_shape(&mut self) -> ParseResult<Shape> {
         let mut dims = Vec::new();
-        
+
         while !self.at(&Token::RBracket) {
             let dim = match self.peek().cloned() {
                 Some(Token::Int(n)) => { self.next(); Dim::Const(n as u64) }
-                Some(Token::Ident(name)) | Some(Token::TyVar(name)) => { self.next(); Dim::Var(name.into()) }
+                Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) => { self.next(); Dim::Var(name.into()) }
                 _ => break,
             };
             dims.push(dim);
@@ -984,18 +985,32 @@ impl<'a> Parser<'a> {
     /// Parse function declaration
     fn parse_fn_decl(&mut self) -> ParseResult<Decl> {
         self.expect(Token::FnStart)?;
-        
+
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let sig = self.parse_type()?;
 
-        // Optional where clause, preconditions, postconditions
+        // Optional where clause, preconditions, postconditions, effects
         let constraints = Vec::new();
         let mut preconditions = Vec::new();
         let mut postconditions = Vec::new();
+        let mut effects = Effects::pure();
 
         while self.eat(&Token::FnMid) {
             match self.peek() {
+                Some(Token::Diamond) => {
+                    self.next();  // consume ◇
+                    // Parse effect name: io, mut, rand, div, etc.
+                    let effect_name = self.expect_ident()?;
+                    let effect = match effect_name.as_str() {
+                        "io" | "IO" => Effect::Io,
+                        "mut" | "Mut" => Effect::Mut,
+                        "rand" | "Rand" => Effect::Rand,
+                        "div" | "Div" => Effect::Div,
+                        other => Effect::Custom(other.into()),
+                    };
+                    effects = effects.with(effect);
+                }
                 Some(Token::Where) => {
                     self.next();
                     // Parse constraints (simplified)
@@ -1019,6 +1034,7 @@ impl<'a> Parser<'a> {
             name: name.into(),
             type_params: vec![],
             signature: sig,
+            effects,
             constraints,
             preconditions,
             postconditions,
@@ -1053,7 +1069,7 @@ impl<'a> Parser<'a> {
         let name = self.expect_ident()?;
 
         let mut params = Vec::new();
-        while let Some(Token::Ident(p)) | Some(Token::TyVar(p)) = self.peek().cloned() {
+        while let Some(Token::Ident(p)) | Some(Token::TyVar(p)) | Some(Token::AplIdent(p)) = self.peek().cloned() {
             self.next();
             params.push(TypeParam { name: p.into(), kind: TypeParamKind::Type });
         }

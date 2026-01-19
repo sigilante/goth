@@ -24,6 +24,7 @@ pub mod context;
 pub mod builtins;
 pub mod infer;
 pub mod check;
+pub mod shapes;
 
 pub use error::{TypeError, TypeResult};
 pub use context::Context;
@@ -318,9 +319,10 @@ mod tests {
     #[test]
     fn test_check_multi_arg_function() {
         use goth_ast::decl::{Module, Decl, FnDecl};
-        
+        use goth_ast::effect::Effects;
+
         let mut checker = TypeChecker::new();
-        
+
         // Create: add : I64 → I64 → I64, body: ₀ + ₁
         let fn_type = Type::func(
             Type::Prim(PrimType::I64),
@@ -329,16 +331,17 @@ mod tests {
                 Type::Prim(PrimType::I64)
             )
         );
-        
+
         let body = Expr::BinOp(
             BinOp::Add,
             Box::new(Expr::Idx(0)),  // ₀
             Box::new(Expr::Idx(1)),  // ₁
         );
-        
+
         let fn_decl = FnDecl {
             name: "add".into(),
             signature: fn_type.clone(),
+            effects: Effects::pure(),
             body,
             preconditions: vec![],
             postconditions: vec![],
@@ -362,9 +365,10 @@ mod tests {
     #[test]
     fn test_check_three_arg_function() {
         use goth_ast::decl::{Module, Decl, FnDecl};
-        
+        use goth_ast::effect::Effects;
+
         let mut checker = TypeChecker::new();
-        
+
         // Create: add3 : I64 → I64 → I64 → I64, body: ₀ + ₁ + ₂
         let fn_type = Type::func(
             Type::Prim(PrimType::I64),
@@ -376,7 +380,7 @@ mod tests {
                 )
             )
         );
-        
+
         let body = Expr::BinOp(
             BinOp::Add,
             Box::new(Expr::BinOp(
@@ -386,10 +390,11 @@ mod tests {
             )),
             Box::new(Expr::Idx(2)),  // ₂
         );
-        
+
         let fn_decl = FnDecl {
             name: "add3".into(),
             signature: fn_type.clone(),
+            effects: Effects::pure(),
             body,
             preconditions: vec![],
             postconditions: vec![],
@@ -409,9 +414,10 @@ mod tests {
     #[test]
     fn test_multi_arg_with_operators() {
         use goth_ast::decl::{Module, Decl, FnDecl};
-        
+        use goth_ast::effect::Effects;
+
         let mut checker = TypeChecker::new();
-        
+
         // Create: pythag : F64 → F64 → F64, body: √(₀ × ₀ + ₁ × ₁)
         let fn_type = Type::func(
             Type::Prim(PrimType::F64),
@@ -420,7 +426,7 @@ mod tests {
                 Type::Prim(PrimType::F64)
             )
         );
-        
+
         let body = Expr::UnaryOp(
             UnaryOp::Sqrt,
             Box::new(Expr::BinOp(
@@ -437,10 +443,11 @@ mod tests {
                 )),
             )),
         );
-        
+
         let fn_decl = FnDecl {
             name: "pythag".into(),
             signature: fn_type.clone(),
+            effects: Effects::pure(),
             body,
             preconditions: vec![],
             postconditions: vec![],
@@ -460,9 +467,10 @@ mod tests {
     #[test]
     fn test_multi_arg_wrong_arity() {
         use goth_ast::decl::{Module, Decl, FnDecl};
-        
+        use goth_ast::effect::Effects;
+
         let mut checker = TypeChecker::new();
-        
+
         // Create: bad : I64 → I64 → I64, body: ₀ + ₂ (₂ out of bounds!)
         let fn_type = Type::func(
             Type::Prim(PrimType::I64),
@@ -471,16 +479,17 @@ mod tests {
                 Type::Prim(PrimType::I64)
             )
         );
-        
+
         let body = Expr::BinOp(
             BinOp::Add,
             Box::new(Expr::Idx(0)),  // ₀
             Box::new(Expr::Idx(2)),  // ₂ - should be out of bounds!
         );
-        
+
         let fn_decl = FnDecl {
             name: "bad".into(),
             signature: fn_type.clone(),
+            effects: Effects::pure(),
             body,
             preconditions: vec![],
             postconditions: vec![],
@@ -643,13 +652,398 @@ mod tests {
     #[test]
     fn test_not() {
         let mut checker = TypeChecker::new();
-        
+
         let expr = Expr::UnaryOp(
             UnaryOp::Not,
             Box::new(Expr::Lit(Literal::True)),
         );
-        
+
         let ty = checker.infer(&expr).unwrap();
         assert_eq!(ty, Type::Prim(PrimType::Bool));
+    }
+
+    // ============================================================
+    // Shape Checking Tests
+    // ============================================================
+
+    #[test]
+    fn test_tensor_add_same_shape() {
+        // [3]F64 + [3]F64 should work
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(4.0)),
+            Expr::Lit(Literal::Float(5.0)),
+            Expr::Lit(Literal::Float(6.0)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::Add, Box::new(arr1), Box::new(arr2));
+        let ty = checker.infer(&expr).unwrap();
+
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape, Shape(vec![Dim::Const(3)]));
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_tensor_add_different_shape() {
+        // [3]F64 + [5]F64 should FAIL
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+            Expr::Lit(Literal::Float(4.0)),
+            Expr::Lit(Literal::Float(5.0)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::Add, Box::new(arr1), Box::new(arr2));
+        let result = checker.infer(&expr);
+
+        assert!(result.is_err(), "Should fail: [3] + [5] shape mismatch");
+    }
+
+    #[test]
+    fn test_tensor_mul_same_shape() {
+        // Element-wise multiplication: [2]F64 × [2]F64 → [2]F64
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(4.0)),
+            Expr::Lit(Literal::Float(5.0)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::Mul, Box::new(arr1), Box::new(arr2));
+        let ty = checker.infer(&expr).unwrap();
+
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape, Shape(vec![Dim::Const(2)]));
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_tensor_scalar_broadcast() {
+        // scalar + [3]F64 should work (broadcasting)
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let scalar = Expr::Lit(Literal::Float(10.0));
+        let arr = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::Add, Box::new(scalar), Box::new(arr));
+        let ty = checker.infer(&expr).unwrap();
+
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape, Shape(vec![Dim::Const(3)]));
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_tensor_function_type_with_shapes() {
+        // Test that we can define functions with shape-annotated types
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        use goth_ast::shape::{Shape, Dim};
+        use goth_ast::effect::Effects;
+
+        let mut checker = TypeChecker::new();
+
+        // Define: id_vec : [n]F64 → [n]F64 (identity on vectors)
+        // Body: ₀ (return the argument)
+        let param_shape = Shape(vec![Dim::Var("n".into())]);
+        let param_type = Type::Tensor(param_shape.clone(), Box::new(Type::Prim(PrimType::F64)));
+        let ret_type = Type::Tensor(param_shape, Box::new(Type::Prim(PrimType::F64)));
+
+        let fn_type = Type::func(param_type, ret_type);
+
+        let fn_decl = FnDecl {
+            name: "id_vec".into(),
+            signature: fn_type.clone(),
+            effects: Effects::pure(),
+            body: Expr::Idx(0), // λ→ ₀
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+
+        let result = checker.check_module(&module);
+        assert!(result.is_ok(), "id_vec : [n]F64 → [n]F64 should type-check");
+    }
+
+    #[test]
+    fn test_tensor_function_shape_mismatch() {
+        // Test that shape mismatches in function signatures are caught
+        use goth_ast::decl::{Module, Decl, FnDecl};
+        use goth_ast::shape::{Shape, Dim};
+        use goth_ast::effect::Effects;
+
+        let mut checker = TypeChecker::new();
+
+        // Define: bad : [3]F64 → [5]F64
+        // Body: ₀ (return the argument - but shapes don't match!)
+        let param_type = Type::Tensor(
+            Shape(vec![Dim::Const(3)]),
+            Box::new(Type::Prim(PrimType::F64)),
+        );
+        let ret_type = Type::Tensor(
+            Shape(vec![Dim::Const(5)]),
+            Box::new(Type::Prim(PrimType::F64)),
+        );
+
+        let fn_type = Type::func(param_type, ret_type);
+
+        let fn_decl = FnDecl {
+            name: "bad".into(),
+            signature: fn_type.clone(),
+            effects: Effects::pure(),
+            body: Expr::Idx(0), // λ→ ₀
+            preconditions: vec![],
+            postconditions: vec![],
+            constraints: vec![],
+            type_params: vec![],
+        };
+
+        let module = Module {
+            decls: vec![Decl::Fn(fn_decl)],
+            name: Some("test".into()),
+        };
+
+        let result = checker.check_module(&module);
+        assert!(result.is_err(), "bad : [3]F64 → [5]F64 with body ₀ should fail");
+    }
+
+    #[test]
+    fn test_tensor_sum_reduction() {
+        // Σ [3]F64 → F64 (sum reduces tensor to scalar)
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let arr = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+
+        let expr = Expr::UnaryOp(UnaryOp::Sum, Box::new(arr));
+        let ty = checker.infer(&expr).unwrap();
+
+        // Sum should return scalar F64
+        assert_eq!(ty, Type::Prim(PrimType::F64));
+    }
+
+    #[test]
+    fn test_tensor_concat_shapes() {
+        // concat [2]F64 [3]F64 → [5]F64 (or [2+3]F64)
+        use goth_ast::shape::{Shape, Dim, DimOp};
+
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(3.0)),
+            Expr::Lit(Literal::Float(4.0)),
+            Expr::Lit(Literal::Float(5.0)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::Concat, Box::new(arr1), Box::new(arr2));
+        let ty = checker.infer(&expr).unwrap();
+
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape.rank(), 1);
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+                // Shape should be [2+3] = BinOp(Const(2), Add, Const(3))
+                match &shape.0[0] {
+                    Dim::BinOp(l, DimOp::Add, r) => {
+                        assert_eq!(**l, Dim::Const(2));
+                        assert_eq!(**r, Dim::Const(3));
+                    }
+                    _ => panic!("Expected BinOp dimension for concat"),
+                }
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_shape_variable_unification() {
+        // Test that shape variables unify correctly
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        // Define a function with shape variable: double : [n]F64 → [n]F64
+        let n_shape = Shape(vec![Dim::Var("n".into())]);
+        let fn_type = Type::func(
+            Type::Tensor(n_shape.clone(), Box::new(Type::Prim(PrimType::F64))),
+            Type::Tensor(n_shape, Box::new(Type::Prim(PrimType::F64))),
+        );
+        checker.define("double", fn_type);
+
+        // Apply to [3]F64 array
+        let arr = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+
+        let expr = Expr::App(
+            Box::new(Expr::Name("double".into())),
+            Box::new(arr),
+        );
+
+        let ty = checker.infer(&expr).unwrap();
+
+        // Result should be [3]F64 (n unified with 3)
+        match ty {
+            Type::Tensor(shape, elem) => {
+                // Note: The shape might still have the variable if we don't
+                // apply the substitution, but it should type-check
+                assert_eq!(shape.rank(), 1);
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected tensor type, got {:?}", ty),
+        }
+    }
+
+    #[test]
+    fn test_zip_same_shape() {
+        // zip [3]F64 [3]I64 → [3]⟨F64, I64⟩
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Int(1)),
+            Expr::Lit(Literal::Int(2)),
+            Expr::Lit(Literal::Int(3)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::ZipWith, Box::new(arr1), Box::new(arr2));
+        let ty = checker.infer(&expr).unwrap();
+
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape, Shape(vec![Dim::Const(3)]));
+                // elem should be a tuple of (F64, I64)
+                match elem.as_ref() {
+                    Type::Tuple(fields) => {
+                        assert_eq!(fields.len(), 2);
+                        assert_eq!(fields[0].ty, Type::Prim(PrimType::F64));
+                        assert_eq!(fields[1].ty, Type::Prim(PrimType::I64));
+                    }
+                    _ => panic!("Expected tuple element type"),
+                }
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_zip_different_shape() {
+        // zip [3]F64 [5]I64 should FAIL
+        let mut checker = TypeChecker::new();
+
+        let arr1 = Expr::Array(vec![
+            Expr::Lit(Literal::Float(1.0)),
+            Expr::Lit(Literal::Float(2.0)),
+            Expr::Lit(Literal::Float(3.0)),
+        ]);
+        let arr2 = Expr::Array(vec![
+            Expr::Lit(Literal::Int(1)),
+            Expr::Lit(Literal::Int(2)),
+            Expr::Lit(Literal::Int(3)),
+            Expr::Lit(Literal::Int(4)),
+            Expr::Lit(Literal::Int(5)),
+        ]);
+
+        let expr = Expr::BinOp(BinOp::ZipWith, Box::new(arr1), Box::new(arr2));
+        let result = checker.infer(&expr);
+
+        assert!(result.is_err(), "zip [3] [5] should fail due to shape mismatch");
+    }
+
+    #[test]
+    fn test_nested_tensor_shape() {
+        // [[1,2], [3,4]] should be [2][2]I64 (2x2 matrix)
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let row1 = Expr::Array(vec![
+            Expr::Lit(Literal::Int(1)),
+            Expr::Lit(Literal::Int(2)),
+        ]);
+        let row2 = Expr::Array(vec![
+            Expr::Lit(Literal::Int(3)),
+            Expr::Lit(Literal::Int(4)),
+        ]);
+        let matrix = Expr::Array(vec![row1, row2]);
+
+        let ty = checker.infer(&matrix).unwrap();
+
+        match ty {
+            Type::Tensor(outer_shape, inner) => {
+                assert_eq!(outer_shape, Shape(vec![Dim::Const(2)]));
+                match inner.as_ref() {
+                    Type::Tensor(inner_shape, elem) => {
+                        assert_eq!(*inner_shape, Shape(vec![Dim::Const(2)]));
+                        assert_eq!(**elem, Type::Prim(PrimType::I64));
+                    }
+                    _ => panic!("Expected nested tensor"),
+                }
+            }
+            _ => panic!("Expected tensor type"),
+        }
     }
 }

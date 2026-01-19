@@ -1,0 +1,25 @@
+# gate.goth - Calculate gates through plexing in a given base
+# A gate is the triangular number of a zone
+# Plexing repeatedly sums digits until result < base
+
+# Triangular number: zone × (zone + 1) / 2
+╭─ culminate : I → I
+╰─ (₀ × (₀ + 1)) / 2
+
+# Digital root in given base using modular arithmetic
+# dr(n, b) = 1 + ((n - 1) mod (b - 1)) for n > 0, 0 for n = 0
+╭─ plex : I → I → I
+╰─ if ₀ = 0 then 0
+   else 1 + ((₀ - 1) % (₁ - 1))
+
+# Print a single gate entry: ⟨zone, gate, target_zone⟩
+╭─ show_gate : I → I → ()
+│  ◇io
+╰─ print ⟨₀, culminate ₀, plex (culminate ₀) ₁⟩
+
+# Generate and display gates for zones 0 to base-1
+╭─ main : I → ()
+│  ◇io
+╰─ let base ← ₀ in
+   let _ ← (⍳ base) ↦ (λ→ show_gate ₀ base) in
+   ⟨⟩

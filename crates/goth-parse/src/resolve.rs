@@ -440,6 +440,7 @@ impl ResolveCtx {
                     name: fn_decl.name,
                     type_params: fn_decl.type_params,
                     signature: fn_decl.signature,
+                    effects: fn_decl.effects,
                     constraints: fn_decl.constraints,
                     preconditions,
                     postconditions,

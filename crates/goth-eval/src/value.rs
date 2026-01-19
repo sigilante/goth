@@ -59,6 +59,7 @@ pub enum PrimFn {
     Map, Filter, Fold, Scan, Zip, Concat, Reverse,
     Sum, Prod, Len, Shape, Reshape, Transpose,
     Index, Slice, Take, Drop,
+    Iota, Range,  // Sequence generation
     MatMul, Dot, Outer, Inner, Norm,
     Chars, ToString, StrConcat,
     Print, ReadLine, ReadFile, WriteFile,

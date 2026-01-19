@@ -3,7 +3,8 @@
 use goth_ast::types::Type;
 use goth_ast::shape::{Shape, Dim};
 use crate::error::{TypeError, TypeResult};
-use crate::subst::{Subst, apply_type, apply_dim};
+use crate::subst::{Subst, apply_type};
+use crate::shapes::{unify_shapes as shapes_unify_shapes, ShapeSubst};
 
 /// Unify two types, returning a substitution that makes them equal
 pub fn unify(t1: &Type, t2: &Type) -> TypeResult<Subst> {
@@ -126,72 +127,38 @@ fn occurs_in(var: &str, ty: &Type) -> bool {
 }
 
 /// Unify two shapes
+///
+/// Delegates to the shapes module for proper shape unification with:
+/// - Occurs check for shape variables
+/// - Dimension simplification
+/// - Better error messages
 pub fn unify_shapes(sh1: &Shape, sh2: &Shape) -> TypeResult<Subst> {
-    if sh1.rank() != sh2.rank() {
-        return Err(TypeError::RankMismatch {
-            expected: sh1.rank(),
-            found: sh2.rank(),
-        });
-    }
+    let shape_subst = shapes_unify_shapes(sh1, sh2)?;
+    Ok(shape_subst_to_subst(shape_subst))
+}
 
+/// Convert a ShapeSubst to a Subst
+fn shape_subst_to_subst(shape_subst: ShapeSubst) -> Subst {
     let mut subst = Subst::new();
-    for (i, (d1, d2)) in sh1.0.iter().zip(&sh2.0).enumerate() {
-        let d1_sub = apply_dim(&subst, d1);
-        let d2_sub = apply_dim(&subst, d2);
-        let s = unify_dims(&d1_sub, &d2_sub, i)?;
-        subst = Subst::compose(subst, s);
+    for var in shape_subst.vars() {
+        if let Some(dim) = shape_subst.get(var) {
+            subst.shapes.insert(var.to_string(), dim.clone());
+        }
     }
-    Ok(subst)
+    subst
 }
 
 /// Unify two dimensions
+///
+/// Delegates to the shapes module for proper dimension unification with:
+/// - Occurs check for shape variables
+/// - Dimension simplification (e.g., n+0 → n)
+/// - Simple equation solving (e.g., n+3 = 10 → n = 7)
+#[allow(dead_code)]
 fn unify_dims(d1: &Dim, d2: &Dim, position: usize) -> TypeResult<Subst> {
-    match (d1, d2) {
-        // Same constant
-        (Dim::Const(n1), Dim::Const(n2)) if n1 == n2 => {
-            Ok(Subst::new())
-        }
-
-        // Variable on left
-        (Dim::Var(v), dim) => {
-            if let Dim::Var(v2) = dim {
-                if v.as_ref() == v2.as_ref() {
-                    return Ok(Subst::new());
-                }
-            }
-            Ok(Subst::singleton_shape(v.as_ref(), dim.clone()))
-        }
-
-        // Variable on right
-        (dim, Dim::Var(v)) => {
-            Ok(Subst::singleton_shape(v.as_ref(), dim.clone()))
-        }
-
-        // Mismatched constants
-        (Dim::Const(n1), Dim::Const(n2)) => {
-            Err(TypeError::DimMismatch {
-                position,
-                expected: n1.to_string(),
-                found: n2.to_string(),
-            })
-        }
-
-        // BinOp cases need more sophisticated solving
-        // For now, just check structural equality
-        (Dim::BinOp(l1, op1, r1), Dim::BinOp(l2, op2, r2)) if op1 == op2 => {
-            let s1 = unify_dims(l1, l2, position)?;
-            let r1_sub = apply_dim(&s1, r1);
-            let r2_sub = apply_dim(&s1, r2);
-            let s2 = unify_dims(&r1_sub, &r2_sub, position)?;
-            Ok(Subst::compose(s1, s2))
-        }
-
-        _ => Err(TypeError::DimMismatch {
-            position,
-            expected: format!("{}", d1),
-            found: format!("{}", d2),
-        })
-    }
+    use crate::shapes::unify_dims as shapes_unify_dims;
+    let shape_subst = shapes_unify_dims(d1, d2, position)?;
+    Ok(shape_subst_to_subst(shape_subst))
 }
 
 #[cfg(test)]

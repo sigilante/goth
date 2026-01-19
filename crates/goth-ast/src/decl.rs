@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use crate::expr::Expr;
 use crate::types::{Type, Constraint, TypeParam};
+use crate::effect::Effects;
 
 /// A complete Goth program/module
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,6 +36,7 @@ pub enum Decl {
 
 /// Function declaration
 /// ╭─ name : TypeSig
+/// │  ◇io           (effect annotation)
 /// │  where Constraints
 /// │  ⊢ Preconditions
 /// │  ⊨ Postconditions
@@ -44,6 +46,7 @@ pub struct FnDecl {
     pub name: Box<str>,
     pub type_params: Vec<TypeParam>,
     pub signature: Type,
+    pub effects: Effects,
     pub constraints: Vec<Constraint>,
     pub preconditions: Vec<Expr>,
     pub postconditions: Vec<Expr>,
@@ -133,11 +136,18 @@ impl FnDecl {
             name: name.into(),
             type_params: vec![],
             signature: sig,
+            effects: Effects::pure(),
             constraints: vec![],
             preconditions: vec![],
             postconditions: vec![],
             body,
         }
+    }
+
+    /// Add effects annotation
+    pub fn with_effects(mut self, effects: Effects) -> Self {
+        self.effects = effects;
+        self
     }
 
     /// Add a constraint

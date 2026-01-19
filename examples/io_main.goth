@@ -1,0 +1,3 @@
+╭─ main : () → ()
+│  ◇io
+╰─ print (read_line ⟨⟩)
