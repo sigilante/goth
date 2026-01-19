@@ -24,6 +24,7 @@ Examples:
 cd goth/crates
 cargo run --package goth-ast --example json_ast_demo
 cargo run --package goth-ast --example roundtrip_validation
+cargo run --package goth-mlir --example end-to-end-example
 ```
 
 ## Status
