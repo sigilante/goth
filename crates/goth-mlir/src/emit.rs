@@ -77,7 +77,8 @@ pub fn emit_type(ty: &Type) -> Result<String> {
         Type::Prim(PrimType::I64) => Ok("i64".to_string()),
         Type::Prim(PrimType::F64) => Ok("f64".to_string()),
         Type::Prim(PrimType::Bool) => Ok("i1".to_string()),
-        
+        Type::Prim(PrimType::String) => Ok("!llvm.ptr<i8>".to_string()),
+
         Type::Tuple(fields) if fields.is_empty() => Ok("()".to_string()),
         
         Type::Tuple(fields) => {
@@ -147,8 +148,13 @@ fn emit_constant(ctx: &mut MlirContext, constant: &Constant, ty: &Type) -> Resul
                 ctx.indent_str(), ssa, val, mlir_ty)
         }
         Constant::Unit => {
-            format!("{}{} = arith.constant () : ()", 
+            format!("{}{} = arith.constant () : ()",
                 ctx.indent_str(), ssa)
+        }
+        Constant::String(s) => {
+            // Use memref for string literals
+            format!("{}{} = arith.constant \"{}\" : !llvm.ptr<i8>",
+                ctx.indent_str(), ssa, s.escape_default())
         }
     };
     
@@ -165,6 +171,7 @@ fn emit_operand(ctx: &mut MlirContext, op: &Operand, output: &mut String) -> Res
                 Constant::Int(_) => Type::Prim(PrimType::I64),
                 Constant::Float(_) => Type::Prim(PrimType::F64),
                 Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                Constant::String(_) => Type::Prim(PrimType::String),
                 Constant::Unit => Type::Tuple(vec![]),
             };
             

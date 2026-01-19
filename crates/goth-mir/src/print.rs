@@ -206,6 +206,7 @@ impl fmt::Display for Constant {
             Constant::Int(n) => write!(f, "{}", n),
             Constant::Float(x) => write!(f, "{}", x),
             Constant::Bool(b) => write!(f, "{}", b),
+            Constant::String(s) => write!(f, "\"{}\"", s),
             Constant::Unit => write!(f, "()"),
         }
     }

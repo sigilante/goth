@@ -111,6 +111,25 @@ fn is_bool_type(ty: &Type) -> bool {
     }
 }
 
+/// Escape a string for LLVM IR constant format
+fn escape_string_for_llvm(s: &str) -> String {
+    let mut result = String::new();
+    for byte in s.bytes() {
+        match byte {
+            b'\\' => result.push_str("\\5C"),
+            b'"' => result.push_str("\\22"),
+            b'\n' => result.push_str("\\0A"),
+            b'\r' => result.push_str("\\0D"),
+            b'\t' => result.push_str("\\09"),
+            0x20..=0x7E => result.push(byte as char),
+            _ => result.push_str(&format!("\\{:02X}", byte)),
+        }
+    }
+    // Add null terminator
+    result.push_str("\\00");
+    result
+}
+
 /// Analyze a function to find locals that are assigned in multiple blocks.
 /// These need stack allocation (alloca/store/load) instead of direct SSA.
 fn find_multi_block_locals(func: &Function) -> HashMap<LocalId, Type> {
@@ -146,6 +165,7 @@ pub fn emit_type(ty: &Type) -> Result<String> {
         Type::Prim(PrimType::F64) => Ok("double".to_string()),
         Type::Prim(PrimType::Bool) => Ok("i1".to_string()),
         Type::Prim(PrimType::Char) => Ok("i8".to_string()),
+        Type::Prim(PrimType::String) => Ok("i8*".to_string()), // Pointer to null-terminated UTF-8
 
         Type::Tuple(fields) if fields.is_empty() => Ok("void".to_string()),
 
@@ -211,6 +231,11 @@ fn emit_constant(ctx: &mut LlvmContext, constant: &Constant, ty: &Type) -> Resul
         Constant::Bool(b) => {
             let val = if *b { "1" } else { "0" };
             return Ok((val.to_string(), String::new()));
+        }
+        Constant::String(s) => {
+            // Add string to the global string literals and return the name
+            let name = ctx.add_string(s);
+            return Ok((name, String::new()));
         }
         Constant::Unit => {
             return Ok(("void".to_string(), String::new()));
@@ -896,8 +921,8 @@ fn emit_block(
     Ok(())
 }
 
-/// Emit function
-fn emit_function(func: &Function, is_main: bool) -> Result<String> {
+/// Emit function - returns (function_code, string_literals)
+fn emit_function(func: &Function, is_main: bool) -> Result<(String, Vec<(String, String)>)> {
     let mut ctx = LlvmContext::new(func.ret_ty.clone());
     let mut output = String::new();
 
@@ -960,7 +985,7 @@ fn emit_function(func: &Function, is_main: bool) -> Result<String> {
 
     output.push_str("}\n");
 
-    Ok(output)
+    Ok((output, ctx.string_literals))
 }
 
 /// Emit the C main function that calls goth_main
@@ -1092,12 +1117,35 @@ pub fn emit_program(program: &Program) -> Result<String> {
     // Format strings
     output.push_str(&emit_format_strings());
 
-    // Emit all functions
+    // Emit all functions and collect string literals
     let main_func = program.functions.iter().find(|f| f.name == "main");
+    let mut all_string_literals: Vec<(String, String)> = Vec::new();
+    let mut function_outputs: Vec<String> = Vec::new();
 
     for func in &program.functions {
         let is_main = func.name == "main";
-        output.push_str(&emit_function(func, is_main)?);
+        let (func_code, string_literals) = emit_function(func, is_main)?;
+        function_outputs.push(func_code);
+        all_string_literals.extend(string_literals);
+    }
+
+    // Emit collected string literals before functions
+    if !all_string_literals.is_empty() {
+        output.push_str("; String literals\n");
+        for (name, value) in &all_string_literals {
+            let escaped = escape_string_for_llvm(value);
+            let len = value.len() + 1; // Include null terminator
+            output.push_str(&format!(
+                "{} = private unnamed_addr constant [{} x i8] c\"{}\", align 1\n",
+                name, len, escaped
+            ));
+        }
+        output.push_str("\n");
+    }
+
+    // Output functions
+    for func_code in function_outputs {
+        output.push_str(&func_code);
         output.push_str("\n");
     }
 

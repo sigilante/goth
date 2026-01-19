@@ -669,12 +669,15 @@ fn lower_literal(lit: &Literal) -> (Constant, Type) {
         Literal::Unit => {
             (Constant::Unit, Type::Tuple(vec![]))
         }
-        Literal::Char(_) => {
-            // TODO: Handle char literals
-            (Constant::Int(0), Type::Prim(goth_ast::types::PrimType::Char))
+        Literal::Char(c) => {
+            // Char as 32-bit unicode scalar
+            (Constant::Int(*c as i64), Type::Prim(goth_ast::types::PrimType::Char))
+        }
+        Literal::String(s) => {
+            (Constant::String(s.to_string()), Type::Prim(goth_ast::types::PrimType::String))
         }
         _ => {
-            // TODO: Handle other literal types
+            // TODO: Handle other literal types (Array, Tensor)
             (Constant::Unit, Type::Tuple(vec![]))
         }
     }

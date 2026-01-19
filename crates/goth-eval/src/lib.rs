@@ -287,4 +287,139 @@ mod tests {
         );
         assert_eq!(e.eval(&expr).unwrap(), Value::Int(10));
     }
+
+    // ============ String and I/O Tests ============
+
+    #[test]
+    fn test_string_value() {
+        // Create a string value from the Value constructor
+        let s = Value::string("hello");
+        match s {
+            Value::Tensor(t) => {
+                assert_eq!(t.to_string_value(), Some("hello".to_string()));
+            }
+            _ => panic!("Expected string (tensor of chars)"),
+        }
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let expr = Expr::Lit(Literal::String("hello world".into()));
+        let result = eval(&expr).unwrap();
+        match result {
+            Value::Tensor(t) => {
+                assert_eq!(t.to_string_value(), Some("hello world".to_string()));
+            }
+            _ => panic!("Expected string tensor"),
+        }
+    }
+
+    #[test]
+    fn test_to_string_int() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("toString"), Expr::int(42));
+        let result = e.eval(&expr).unwrap();
+        match result {
+            Value::Tensor(t) => {
+                assert_eq!(t.to_string_value(), Some("42".to_string()));
+            }
+            _ => panic!("Expected string tensor"),
+        }
+    }
+
+    #[test]
+    fn test_to_string_float() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("toString"), Expr::float(3.14));
+        let result = e.eval(&expr).unwrap();
+        match result {
+            Value::Tensor(t) => {
+                let s = t.to_string_value().unwrap();
+                assert!(s.starts_with("3.14"));
+            }
+            _ => panic!("Expected string tensor"),
+        }
+    }
+
+    #[test]
+    fn test_file_io_roundtrip() {
+        use std::fs;
+
+        let mut e = Evaluator::new();
+
+        // Create a temp file path
+        let temp_path = "/tmp/goth_test_io.txt";
+        let content = "Hello, Goth!";
+
+        // Write to file using writeFile primitive
+        let write_expr = Expr::app(
+            Expr::app(Expr::name("writeFile"), Expr::Lit(Literal::String(temp_path.into()))),
+            Expr::Lit(Literal::String(content.into()))
+        );
+        let result = e.eval(&write_expr);
+        assert!(result.is_ok(), "writeFile failed: {:?}", result.err());
+
+        // Read from file using readFile primitive
+        let read_expr = Expr::app(Expr::name("readFile"), Expr::Lit(Literal::String(temp_path.into())));
+        let result = e.eval(&read_expr).unwrap();
+
+        match result {
+            Value::Tensor(t) => {
+                assert_eq!(t.to_string_value(), Some(content.to_string()));
+            }
+            _ => panic!("Expected string tensor"),
+        }
+
+        // Clean up
+        let _ = fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn test_read_file_not_found() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(
+            Expr::name("readFile"),
+            Expr::Lit(Literal::String("/nonexistent/path/file.txt".into()))
+        );
+        let result = e.eval(&expr);
+        assert!(result.is_err(), "Expected error but got: {:?}", result);
+        match result {
+            Err(EvalError::IoError(msg)) => {
+                assert!(msg.contains("Failed to read"));
+            }
+            _ => panic!("Expected IoError"),
+        }
+    }
+
+    #[test]
+    fn test_str_concat() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(
+            Expr::app(Expr::name("strConcat"), Expr::Lit(Literal::String("Hello, ".into()))),
+            Expr::Lit(Literal::String("World!".into()))
+        );
+        let result = e.eval(&expr).unwrap();
+        match result {
+            Value::Tensor(t) => {
+                assert_eq!(t.to_string_value(), Some("Hello, World!".to_string()));
+            }
+            _ => panic!("Expected string tensor"),
+        }
+    }
+
+    #[test]
+    fn test_chars() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("chars"), Expr::Lit(Literal::String("abc".into())));
+        let result = e.eval(&expr).unwrap();
+        match result {
+            Value::Tensor(t) => {
+                assert_eq!(t.len(), 3);
+                assert_eq!(t.get_flat(0), Some(Value::Char('a')));
+                assert_eq!(t.get_flat(1), Some(Value::Char('b')));
+                assert_eq!(t.get_flat(2), Some(Value::Char('c')));
+            }
+            _ => panic!("Expected tensor of chars"),
+        }
+    }
 }

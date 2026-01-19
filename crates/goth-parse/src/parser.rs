@@ -876,6 +876,7 @@ impl<'a> Parser<'a> {
             Some(Token::TyBool) => { self.next(); Ok(Type::Prim(PrimType::Bool)) }
             Some(Token::TyChar) => { self.next(); Ok(Type::Prim(PrimType::Char)) }
             Some(Token::TyByte) => { self.next(); Ok(Type::Prim(PrimType::Byte)) }
+            Some(Token::TyString) => { self.next(); Ok(Type::Prim(PrimType::String)) }
             Some(Token::TyNat) => { self.next(); Ok(Type::Prim(PrimType::Nat)) }
             Some(Token::TyInt) => { self.next(); Ok(Type::Prim(PrimType::Int)) }
             Some(Token::TyUnit) => { self.next(); Ok(Type::Tuple(vec![])) }

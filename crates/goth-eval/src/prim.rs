@@ -89,6 +89,30 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
             }
             Ok(Value::string(&line))
         }
+        PrimFn::ReadFile => {
+            if args.len() != 1 { return Err(EvalError::ArityMismatch { expected: 1, got: args.len() }); }
+            let path = match &args[0] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[0]))?,
+                _ => return Err(EvalError::type_error("String", &args[0])),
+            };
+            use std::fs;
+            let contents = fs::read_to_string(&path).map_err(|e| EvalError::IoError(format!("Failed to read '{}': {}", path, e)))?;
+            Ok(Value::string(&contents))
+        }
+        PrimFn::WriteFile => {
+            if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
+            let path = match &args[0] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[0]))?,
+                _ => return Err(EvalError::type_error("String", &args[0])),
+            };
+            let contents = match &args[1] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[1]))?,
+                _ => return Err(EvalError::type_error("String", &args[1])),
+            };
+            use std::fs;
+            fs::write(&path, &contents).map_err(|e| EvalError::IoError(format!("Failed to write '{}': {}", path, e)))?;
+            Ok(Value::Unit)
+        }
         PrimFn::Iota => unary_args(&args, iota),
         PrimFn::Range => binary_args(&args, range),
         PrimFn::ToString => unary_args(&args, to_string),

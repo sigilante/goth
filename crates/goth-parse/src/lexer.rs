@@ -383,6 +383,8 @@ pub enum Token {
     TyChar,
     #[token("Byte")]
     TyByte,
+    #[token("String")]
+    TyString,
     #[token("ℕ")]
     #[token("Nat")]
     TyNat,
