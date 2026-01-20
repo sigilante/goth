@@ -69,7 +69,7 @@ cd jupyter && ./install.sh
 
 `goth` is an experiment in language design and exotic syntax.  It targets certain desiderata for a language that is human readable but optimized for LLM characteristics.
 
-`goth` was born on 2026-01-16.  The alpha version of the language and interpreter were completed on 2026-01-17.  Type checking was implemented from 2026-01-17 to 2026-01-18.  The compiler was implemented starting on 2026-01-18.
+`goth` was born on 2026-01-16.  The alpha version of the language and interpreter were completed on 2026-01-17.  Type checking was implemented from 2026-01-17 to 2026-01-18.  The compiler was implemented starting on 2026-01-18.  The 1.0 was finalized and released on 2026-01-20.
 
 The language is not particularly efficient to execute, but it is designed to be easy for LLMs to read and write.  In particular, contracts (preconditions and postconditions) are checked at runtime for each evaluation.
 
