@@ -374,7 +374,7 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 Type::Prim(PrimType::F64),
             ))
         }
-        "length" => {
+        "length" | "len" => {
             // ∀n α. [n]α → I64
             Some(Type::Forall(
                 vec![
@@ -623,6 +623,92 @@ pub fn primitive_type(name: &str) -> Option<Type> {
             Some(Type::func(
                 Type::unit(),
                 Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
+        "readFile" => {
+            // String → String (read file contents)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
+        "writeFile" => {
+            // String → String → Unit (write content to file)
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::unit(),
+            ))
+        }
+        // String splitting (for wc-like operations)
+        "lines" => {
+            // String → [m]String (split by newlines)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(
+                    Shape(vec![Dim::Var("m".into())]),
+                    Box::new(Type::Tensor(Shape(vec![Dim::Var("k".into())]), Box::new(Type::Prim(PrimType::Char)))),
+                ),
+            ))
+        }
+        "words" => {
+            // String → [m]String (split by whitespace)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(
+                    Shape(vec![Dim::Var("m".into())]),
+                    Box::new(Type::Tensor(Shape(vec![Dim::Var("k".into())]), Box::new(Type::Prim(PrimType::Char)))),
+                ),
+            ))
+        }
+        "bytes" => {
+            // String → [m]I64 (UTF-8 byte values)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
+        // String comparison
+        "strEq" => {
+            // String → String → Bool
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::Prim(PrimType::Bool),
+            ))
+        }
+        "startsWith" => {
+            // String → String → Bool (check if string starts with prefix)
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::Prim(PrimType::Bool),
+            ))
+        }
+        "endsWith" => {
+            // String → String → Bool (check if string ends with suffix)
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::Prim(PrimType::Bool),
+            ))
+        }
+        "contains" => {
+            // String → String → Bool (check if string contains substring)
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::Prim(PrimType::Bool),
             ))
         }
         _ => None,

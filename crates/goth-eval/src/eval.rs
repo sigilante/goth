@@ -58,6 +58,11 @@ impl Evaluator {
             ("drop", PrimFn::Drop), ("↓", PrimFn::Drop),  // APL drop
             ("zip", PrimFn::Zip),
             ("transpose", PrimFn::Transpose), ("⍉", PrimFn::Transpose),  // APL transpose
+            // String splitting (for wc-like operations)
+            ("lines", PrimFn::Lines), ("words", PrimFn::Words), ("bytes", PrimFn::Bytes),
+            // String comparison
+            ("strEq", PrimFn::StrEq), ("startsWith", PrimFn::StartsWith),
+            ("endsWith", PrimFn::EndsWith), ("contains", PrimFn::Contains),
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
     }
@@ -375,7 +380,9 @@ fn prim_arity(prim: PrimFn) -> usize {
     match prim {
         PrimFn::Neg | PrimFn::Abs | PrimFn::Not | PrimFn::Exp | PrimFn::Ln | PrimFn::Sqrt | PrimFn::Sin | PrimFn::Cos | PrimFn::Tan | PrimFn::Floor | PrimFn::Ceil | PrimFn::Round | PrimFn::Sum | PrimFn::Prod | PrimFn::Len | PrimFn::Shape | PrimFn::Reverse | PrimFn::Transpose | PrimFn::Norm | PrimFn::ToInt | PrimFn::ToFloat | PrimFn::ToBool | PrimFn::ToChar | PrimFn::ParseInt | PrimFn::ParseFloat | PrimFn::Iota | PrimFn::ToString | PrimFn::Chars => 1,
         PrimFn::Print | PrimFn::ReadLine | PrimFn::ReadFile => 1,  // ReadLine takes unit, ReadFile takes path
+        PrimFn::Lines | PrimFn::Words | PrimFn::Bytes => 1,  // String splitting (unary)
         PrimFn::WriteFile => 2,  // WriteFile takes path and content
+        PrimFn::StrEq | PrimFn::StartsWith | PrimFn::EndsWith | PrimFn::Contains => 2,  // String comparison (binary)
         _ => 2,  // Range, StrConcat, Take, Drop, Index etc take 2 args
     }
 }

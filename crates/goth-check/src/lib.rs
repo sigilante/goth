@@ -48,7 +48,7 @@ impl TypeChecker {
         // Add built-in primitives
         for prim in ["sqrt", "exp", "ln", "sin", "cos", "tan",
                      "asin", "acos", "atan", "sinh", "cosh", "tanh",
-                     "floor", "ceil", "round", "abs", "length",
+                     "floor", "ceil", "round", "abs", "length", "len",
                      "dot", "·", "matmul", "transpose", "⍉", "norm",
                      "iota", "ι", "⍳", "range",
                      // Type conversions
@@ -59,7 +59,10 @@ impl TypeChecker {
                      // Array operations
                      "reverse", "take", "drop", "concat", "⧺",
                      // I/O
-                     "print", "readLine"] {
+                     "print", "readLine", "readFile", "writeFile",
+                     // String operations (for wc-like utilities)
+                     "lines", "words", "bytes",
+                     "strEq", "startsWith", "endsWith", "contains"] {
             if let Some(ty) = builtins::primitive_type(prim) {
                 ctx.define_global(prim, ty);
             }

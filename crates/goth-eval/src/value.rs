@@ -65,6 +65,8 @@ pub enum PrimFn {
     Print, ReadLine, ReadFile, WriteFile,
     ToInt, ToFloat, ToBool, ToChar,
     ParseInt, ParseFloat,  // String parsing
+    Lines, Words, Bytes,  // String splitting for wc
+    StrEq, StartsWith, EndsWith, Contains,  // String comparison
 }
 
 #[derive(Debug, Clone)]

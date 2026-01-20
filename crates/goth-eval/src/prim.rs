@@ -122,6 +122,13 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::Take => binary_args(&args, take),
         PrimFn::Drop => binary_args(&args, drop_fn),
         PrimFn::Index => binary_args(&args, index),
+        PrimFn::Lines => unary_args(&args, lines),
+        PrimFn::Words => unary_args(&args, words),
+        PrimFn::Bytes => unary_args(&args, bytes),
+        PrimFn::StrEq => binary_args(&args, str_eq),
+        PrimFn::StartsWith => binary_args(&args, starts_with),
+        PrimFn::EndsWith => binary_args(&args, ends_with),
+        PrimFn::Contains => binary_args(&args, str_contains),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -617,6 +624,119 @@ fn index(arr: Value, idx: Value) -> EvalResult<Value> {
             "index requires (Tensor/Tuple, Int), got ({}, {})",
             arr.type_name(),
             idx.type_name()
+        ))),
+    }
+}
+
+/// lines str: Split a string by newlines into an array of strings
+fn lines(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            if let Some(s) = t.to_string_value() {
+                let line_strs: Vec<Value> = s.lines().map(|l| Value::string(l)).collect();
+                Ok(Value::Tensor(Tensor::from_values(vec![line_strs.len()], line_strs)))
+            } else {
+                Err(EvalError::type_error("String", &Value::Tensor(t)))
+            }
+        }
+        _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// words str: Split a string by whitespace into an array of words
+fn words(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            if let Some(s) = t.to_string_value() {
+                let word_strs: Vec<Value> = s.split_whitespace().map(|w| Value::string(w)).collect();
+                Ok(Value::Tensor(Tensor::from_values(vec![word_strs.len()], word_strs)))
+            } else {
+                Err(EvalError::type_error("String", &Value::Tensor(t)))
+            }
+        }
+        _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// bytes str: Get the UTF-8 bytes of a string as an array of integers
+fn bytes(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            if let Some(s) = t.to_string_value() {
+                let byte_vals: Vec<i128> = s.as_bytes().iter().map(|&b| b as i128).collect();
+                Ok(Value::Tensor(Tensor::from_ints(byte_vals)))
+            } else {
+                Err(EvalError::type_error("String", &Value::Tensor(t)))
+            }
+        }
+        _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// strEq a b: Check if two strings are equal
+fn str_eq(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Tensor(a), Value::Tensor(b)) => {
+            match (a.to_string_value(), b.to_string_value()) {
+                (Some(s1), Some(s2)) => Ok(Value::Bool(s1 == s2)),
+                _ => Err(EvalError::type_error_msg("strEq requires two strings")),
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "strEq requires two strings, got {} and {}",
+            left.type_name(),
+            right.type_name()
+        ))),
+    }
+}
+
+/// startsWith str prefix: Check if a string starts with a prefix
+fn starts_with(str_val: Value, prefix_val: Value) -> EvalResult<Value> {
+    match (&str_val, &prefix_val) {
+        (Value::Tensor(a), Value::Tensor(b)) => {
+            match (a.to_string_value(), b.to_string_value()) {
+                (Some(s), Some(prefix)) => Ok(Value::Bool(s.starts_with(&prefix))),
+                _ => Err(EvalError::type_error_msg("startsWith requires two strings")),
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "startsWith requires two strings, got {} and {}",
+            str_val.type_name(),
+            prefix_val.type_name()
+        ))),
+    }
+}
+
+/// endsWith str suffix: Check if a string ends with a suffix
+fn ends_with(str_val: Value, suffix_val: Value) -> EvalResult<Value> {
+    match (&str_val, &suffix_val) {
+        (Value::Tensor(a), Value::Tensor(b)) => {
+            match (a.to_string_value(), b.to_string_value()) {
+                (Some(s), Some(suffix)) => Ok(Value::Bool(s.ends_with(&suffix))),
+                _ => Err(EvalError::type_error_msg("endsWith requires two strings")),
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "endsWith requires two strings, got {} and {}",
+            str_val.type_name(),
+            suffix_val.type_name()
+        ))),
+    }
+}
+
+/// contains str substr: Check if a string contains a substring
+fn str_contains(str_val: Value, substr_val: Value) -> EvalResult<Value> {
+    match (&str_val, &substr_val) {
+        (Value::Tensor(a), Value::Tensor(b)) => {
+            match (a.to_string_value(), b.to_string_value()) {
+                (Some(s), Some(substr)) => Ok(Value::Bool(s.contains(&substr))),
+                _ => Err(EvalError::type_error_msg("contains requires two strings")),
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "contains requires two strings, got {} and {}",
+            str_val.type_name(),
+            substr_val.type_name()
         ))),
     }
 }

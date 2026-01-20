@@ -1,0 +1,22 @@
+# wc - Word count utility
+# Usage: goth wc.goth <filename>
+#        goth wc.goth -l <filename>  (lines only)
+#        goth wc.goth -w <filename>  (words only)
+#        goth wc.goth -c <filename>  (bytes only)
+
+# Count lines in a string
+╭─ countLines : [n]Char → I64
+╰─ len (lines ₀)
+
+# Count words in a string
+╭─ countWords : [n]Char → I64
+╰─ len (words ₀)
+
+# Count bytes in a string
+╭─ countBytes : [n]Char → I64
+╰─ len (bytes ₀)
+
+# Main: wc <filename> - show all counts
+╭─ main : [n]Char → ()
+╰─ let content = readFile ₀ in
+   print ⟨countLines content, countWords content, countBytes content⟩
