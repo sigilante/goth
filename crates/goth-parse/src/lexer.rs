@@ -77,8 +77,12 @@ pub enum Token {
     Rec,
     #[token("type")]
     Type,
+    #[token("enum")]
+    Enum,
     #[token("fn")]
     Fn,
+    #[token("use")]
+    Use,
 
     // ============ Function Box ============
     #[token("╭─")]
@@ -207,6 +211,46 @@ pub enum Token {
     #[token("\\/")]
     Scan,
 
+    // ============ Math Functions ============
+    #[token("Γ")]
+    #[token("gamma")]
+    Gamma,
+    #[token("ln")]
+    Ln,
+    #[token("exp")]
+    Exp,
+    #[token("sin")]
+    Sin,
+    #[token("cos")]
+    Cos,
+    #[token("abs")]
+    Abs,
+    #[token("tan")]
+    Tan,
+    #[token("asin")]
+    Asin,
+    #[token("acos")]
+    Acos,
+    #[token("atan")]
+    Atan,
+    #[token("sinh")]
+    Sinh,
+    #[token("cosh")]
+    Cosh,
+    #[token("tanh")]
+    Tanh,
+    #[token("log₁₀")]
+    #[token("log10")]
+    Log10,
+    #[token("log₂")]
+    #[token("log2")]
+    Log2,
+    #[token("round")]
+    Round,
+    #[token("sign")]
+    #[token("signum")]
+    Sign,
+
     // ============ Arrows ============
     #[token("→")]
     #[token("->")]
@@ -257,6 +301,14 @@ pub enum Token {
     #[token("⊥")]
     #[token("false")]
     False,
+
+    // ============ Math Constants ============
+    #[token("π", priority = 5)]
+    #[token("pi")]
+    Pi,
+    #[token("𝕖", priority = 5)]
+    #[token("euler")]
+    Euler,
 
     // ============ Special ============
     #[token("∞")]
@@ -331,6 +383,8 @@ pub enum Token {
     TyChar,
     #[token("Byte")]
     TyByte,
+    #[token("String")]
+    TyString,
     #[token("ℕ")]
     #[token("Nat")]
     TyNat,
@@ -395,14 +449,16 @@ fn unescape_char(s: &str) -> Option<char> {
 }
 
 impl Token {
-    /// Check if token can start an expression
+    /// Check if token can start an expression (for function application)
+    /// Note: Keywords like Let, If, Match, Do are excluded because they can
+    /// start top-level declarations and shouldn't be parsed as function arguments
+    /// in juxtaposition. They're handled explicitly in parse_atom/parse_prefix.
     pub fn can_start_expr(&self) -> bool {
         matches!(self,
             Token::Int(_) | Token::Float(_) | Token::String(_) | Token::Char(_) |
-            Token::True | Token::False |
+            Token::True | Token::False | Token::Pi | Token::Euler |
             Token::Ident(_) | Token::TyVar(_) | Token::AplIdent(_) |
             Token::Lambda | Token::LParen | Token::LBracket | Token::LAngle |
-            Token::If | Token::Match | Token::Let | Token::Do |
             Token::Index(_) |
             Token::Minus | Token::Not | Token::Sum | Token::Prod | Token::Scan |
             Token::Norm | Token::Underscore
@@ -447,6 +503,8 @@ impl fmt::Display for Token {
             Token::Index(i) => write!(f, "_{}", i),
             Token::True => write!(f, "⊤"),
             Token::False => write!(f, "⊥"),
+            Token::Pi => write!(f, "π"),
+            Token::Euler => write!(f, "𝕖"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "×"),

@@ -1,0 +1,37 @@
+{
+  "comments": {
+    "lineComment": "--"
+  },
+  "brackets": [
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+    ["⌊", "⌋"],
+    ["⌈", "⌉"],
+    ["‖", "‖"],
+    ["╭─", "╰─"]
+  ],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "[", "close": "]" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"" },
+    { "open": "'", "close": "'" },
+    { "open": "⌊", "close": "⌋" },
+    { "open": "⌈", "close": "⌉" },
+    { "open": "‖", "close": "‖" }
+  ],
+  "surroundingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "[", "close": "]" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"" },
+    { "open": "'", "close": "'" },
+    { "open": "⌊", "close": "⌋" },
+    { "open": "⌈", "close": "⌉" }
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^.*(let|where|do|then|else|match|with|class|impl)\\s*$",
+    "decreaseIndentPattern": "^\\s*(in|end)\\s*$"
+  }
+}

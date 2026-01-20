@@ -44,7 +44,9 @@ impl Evaluator {
             ("range", PrimFn::Range), ("…", PrimFn::Range),
             ("dot", PrimFn::Dot), ("·", PrimFn::Dot),  // middle dot
             ("norm", PrimFn::Norm), ("matmul", PrimFn::MatMul),
-            ("print", PrimFn::Print), ("read_line", PrimFn::ReadLine),
+            ("print", PrimFn::Print), ("println", PrimFn::Print),
+            ("readLine", PrimFn::ReadLine), ("read_line", PrimFn::ReadLine),
+            ("readFile", PrimFn::ReadFile), ("writeFile", PrimFn::WriteFile),
             ("toInt", PrimFn::ToInt), ("toFloat", PrimFn::ToFloat), ("toBool", PrimFn::ToBool), ("toChar", PrimFn::ToChar),
             ("toString", PrimFn::ToString), ("str", PrimFn::ToString),
             ("chars", PrimFn::Chars),
@@ -371,7 +373,8 @@ impl Default for Evaluator { fn default() -> Self { Self::new() } }
 fn prim_arity(prim: PrimFn) -> usize {
     match prim {
         PrimFn::Neg | PrimFn::Abs | PrimFn::Not | PrimFn::Exp | PrimFn::Ln | PrimFn::Sqrt | PrimFn::Sin | PrimFn::Cos | PrimFn::Tan | PrimFn::Floor | PrimFn::Ceil | PrimFn::Round | PrimFn::Sum | PrimFn::Prod | PrimFn::Len | PrimFn::Shape | PrimFn::Reverse | PrimFn::Transpose | PrimFn::Norm | PrimFn::ToInt | PrimFn::ToFloat | PrimFn::ToBool | PrimFn::ToChar | PrimFn::Iota | PrimFn::ToString | PrimFn::Chars => 1,
-        PrimFn::Print | PrimFn::ReadLine => 1,  // ReadLine takes unit, returns string
+        PrimFn::Print | PrimFn::ReadLine | PrimFn::ReadFile => 1,  // ReadLine takes unit, ReadFile takes path
+        PrimFn::WriteFile => 2,  // WriteFile takes path and content
         _ => 2,  // Range, StrConcat, Take, Drop, Index etc take 2 args
     }
 }

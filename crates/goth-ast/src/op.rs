@@ -53,6 +53,23 @@ pub enum UnaryOp {
     Sqrt,     // √ (square root)
     Floor,    // ⌊⌋ (floor)
     Ceil,     // ⌈⌉ (ceiling)
+    Round,    // round (round to nearest)
+    Gamma,    // Γ (gamma function)
+    Ln,       // ln (natural log)
+    Log10,    // log₁₀ (base-10 log)
+    Log2,     // log₂ (base-2 log)
+    Exp,      // exp (e^x)
+    Sin,      // sin
+    Cos,      // cos
+    Tan,      // tan
+    Asin,     // asin (arcsin)
+    Acos,     // acos (arccos)
+    Atan,     // atan (arctan)
+    Sinh,     // sinh (hyperbolic sin)
+    Cosh,     // cosh (hyperbolic cos)
+    Tanh,     // tanh (hyperbolic tan)
+    Abs,      // |x| (absolute value)
+    Sign,     // sign/signum (-1, 0, 1)
 }
 
 /// Operator associativity
@@ -165,6 +182,23 @@ impl UnaryOp {
             UnaryOp::Sqrt => "√",
             UnaryOp::Floor => "⌊⌋",
             UnaryOp::Ceil => "⌈⌉",
+            UnaryOp::Round => "round",
+            UnaryOp::Gamma => "Γ",
+            UnaryOp::Ln => "ln",
+            UnaryOp::Log10 => "log₁₀",
+            UnaryOp::Log2 => "log₂",
+            UnaryOp::Exp => "exp",
+            UnaryOp::Sin => "sin",
+            UnaryOp::Cos => "cos",
+            UnaryOp::Tan => "tan",
+            UnaryOp::Asin => "asin",
+            UnaryOp::Acos => "acos",
+            UnaryOp::Atan => "atan",
+            UnaryOp::Sinh => "sinh",
+            UnaryOp::Cosh => "cosh",
+            UnaryOp::Tanh => "tanh",
+            UnaryOp::Abs => "abs",
+            UnaryOp::Sign => "sign",
         }
     }
 
@@ -178,6 +212,23 @@ impl UnaryOp {
             UnaryOp::Sqrt => "sqrt",
             UnaryOp::Floor => "floor",
             UnaryOp::Ceil => "ceil",
+            UnaryOp::Round => "round",
+            UnaryOp::Gamma => "gamma",
+            UnaryOp::Ln => "ln",
+            UnaryOp::Log10 => "log10",
+            UnaryOp::Log2 => "log2",
+            UnaryOp::Exp => "exp",
+            UnaryOp::Sin => "sin",
+            UnaryOp::Cos => "cos",
+            UnaryOp::Tan => "tan",
+            UnaryOp::Asin => "asin",
+            UnaryOp::Acos => "acos",
+            UnaryOp::Atan => "atan",
+            UnaryOp::Sinh => "sinh",
+            UnaryOp::Cosh => "cosh",
+            UnaryOp::Tanh => "tanh",
+            UnaryOp::Abs => "abs",
+            UnaryOp::Sign => "sign",
         }
     }
 }

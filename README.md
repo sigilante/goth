@@ -33,6 +33,8 @@ cargo run --package goth-mlir --example end-to-end-example
 
 `goth` was born on 2026-01-16.  The alpha version of the language and interpreter were completed on 2026-01-17.  Type checking was implemented from 2026-01-17 to 2026-01-18.  The compiler was implemented starting on 2026-01-18.
 
+The language is not particularly efficient to execute, but it is designed to be easy for LLMs to read and write.  In particular, contracts (preconditions and postconditions) are checked at runtime for each evaluation.
+
 ### Fully Implemented
 
 - Complete lexer with Unicode support

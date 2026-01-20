@@ -14,3 +14,4 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 goth-parse = { path = "../goth-parse" }
+goth-mlir = { path = "../goth-mlir" }

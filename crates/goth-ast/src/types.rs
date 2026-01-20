@@ -38,6 +38,7 @@ pub enum PrimType {
     Bool,
     Char,   // Unicode scalar (32-bit)
     Byte,   // Alias for U8
+    String, // UTF-8 string (heap-allocated)
 
     // Arbitrary precision (for compile-time computation)
     Nat,    // ℕ - natural numbers
@@ -305,7 +306,7 @@ impl PrimType {
             PrimType::F32 | PrimType::I32 | PrimType::U32 | PrimType::Char => Some(32),
             PrimType::I16 | PrimType::U16 => Some(16),
             PrimType::I8 | PrimType::U8 | PrimType::Byte | PrimType::Bool => Some(8),
-            PrimType::Nat | PrimType::Int => None, // Arbitrary precision
+            PrimType::Nat | PrimType::Int | PrimType::String => None, // Variable/arbitrary size
         }
     }
 }
@@ -328,6 +329,7 @@ impl std::fmt::Display for PrimType {
             PrimType::Bool => write!(f, "Bool"),
             PrimType::Char => write!(f, "Char"),
             PrimType::Byte => write!(f, "Byte"),
+            PrimType::String => write!(f, "String"),
             PrimType::Nat => write!(f, "ℕ"),
             PrimType::Int => write!(f, "ℤ"),
         }

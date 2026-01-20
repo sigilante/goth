@@ -1,0 +1,214 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Goth",
+  "scopeName": "source.goth",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#function-box" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#operators" },
+    { "include": "#de-bruijn" },
+    { "include": "#quantifiers" },
+    { "include": "#delimiters" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.goth",
+          "match": "--.*$"
+        }
+      ]
+    },
+    "function-box": {
+      "patterns": [
+        {
+          "name": "keyword.control.function-box.goth",
+          "match": "╭─|╰─|│|/-"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.goth",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.goth",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.goth",
+          "match": "'[^'\\\\]'"
+        },
+        {
+          "name": "string.quoted.single.goth",
+          "match": "'\\\\[nrt\\\\'\"]'"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.goth",
+          "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.goth",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.goth",
+          "match": "\\b(if|then|else|match|with|let|in|where|do|end|rec|fn|use)\\b"
+        },
+        {
+          "name": "keyword.declaration.goth",
+          "match": "\\b(type|class|impl)\\b"
+        },
+        {
+          "name": "constant.language.boolean.goth",
+          "match": "\\b(true|false|True|False)\\b"
+        },
+        {
+          "name": "constant.language.unit.goth",
+          "match": "\\(\\)"
+        },
+        {
+          "name": "constant.language.math.goth",
+          "match": "[π𝕖]|\\b(pi|euler)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.goth",
+          "match": "\\b(I64|F64|Bool|Char|Int|Float|I|F|B|N|Nat)\\b"
+        },
+        {
+          "name": "support.type.primitive.unicode.goth",
+          "match": "[ℤℕℝ𝔹]"
+        },
+        {
+          "name": "entity.name.type.goth",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.lambda.goth",
+          "match": "[λΛ\\\\]"
+        },
+        {
+          "name": "keyword.operator.arrow.goth",
+          "match": "→|->|←|<-|⇒|=>"
+        },
+        {
+          "name": "keyword.operator.reduction.goth",
+          "match": "[Σ∏Π⍀]|\\+/|\\*/|\\\\/"
+        },
+        {
+          "name": "keyword.operator.math.goth",
+          "match": "[Γ√]|\\b(gamma|sqrt|ln|exp|sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|abs|sign|signum|round|log10|log2)\\b|log₁₀|log₂"
+        },
+        {
+          "name": "keyword.operator.arithmetic.goth",
+          "match": "[+\\-×÷%^±]|\\*|/"
+        },
+        {
+          "name": "keyword.operator.comparison.goth",
+          "match": "[<>≤≥≠=]|<=|>=|/=|=="
+        },
+        {
+          "name": "keyword.operator.logical.goth",
+          "match": "[∧∨¬]|&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.composition.goth",
+          "match": "[∘↦▸⤇⊗⊕]|\\.:|-:|\\|>|>>=|<\\*>"
+        },
+        {
+          "name": "keyword.operator.tensor.goth",
+          "match": "[⍳]|iota|range"
+        },
+        {
+          "name": "keyword.operator.spec.goth",
+          "match": "[⊢⊨]|\\|-|\\|="
+        },
+        {
+          "name": "keyword.operator.colon.goth",
+          "match": ":"
+        }
+      ]
+    },
+    "de-bruijn": {
+      "patterns": [
+        {
+          "name": "variable.parameter.de-bruijn.goth",
+          "match": "[₀₁₂₃₄₅₆₇₈₉]+"
+        },
+        {
+          "name": "variable.parameter.de-bruijn-underscore.goth",
+          "match": "_[0-9]+"
+        }
+      ]
+    },
+    "quantifiers": {
+      "patterns": [
+        {
+          "name": "keyword.operator.quantifier.goth",
+          "match": "[∀∃]|forall|exists"
+        }
+      ]
+    },
+    "delimiters": {
+      "patterns": [
+        {
+          "name": "punctuation.bracket.round.goth",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.bracket.square.goth",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.bracket.curly.goth",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.bracket.floor.goth",
+          "match": "[⌊⌋]"
+        },
+        {
+          "name": "punctuation.bracket.ceil.goth",
+          "match": "[⌈⌉]"
+        },
+        {
+          "name": "punctuation.bracket.norm.goth",
+          "match": "‖"
+        },
+        {
+          "name": "punctuation.separator.comma.goth",
+          "match": ","
+        },
+        {
+          "name": "punctuation.separator.semicolon.goth",
+          "match": ";"
+        }
+      ]
+    }
+  }
+}

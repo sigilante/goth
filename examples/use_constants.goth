@@ -1,0 +1,4 @@
+use "lib/constants.goth"
+
+╭─ main : F → F
+╰─ ₀ × tau

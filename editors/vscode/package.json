@@ -1,0 +1,35 @@
+{
+  "name": "goth-lang",
+  "displayName": "Goth Language",
+  "description": "Syntax highlighting for the Goth programming language",
+  "version": "0.1.0",
+  "publisher": "sigilante",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "goth",
+        "aliases": ["Goth", "goth"],
+        "extensions": [".goth"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "goth",
+        "scopeName": "source.goth",
+        "path": "./syntaxes/goth.tmLanguage.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sigilante/goth"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,10 @@
+# Math utilities library
+
+╭─ square : F → F
+╰─ ₀ × ₀
+
+╭─ cube : F → F
+╰─ ₀ × ₀ × ₀
+
+╭─ double : F → F
+╰─ ₀ × 2.0

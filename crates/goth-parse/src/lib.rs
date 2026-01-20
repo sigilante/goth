@@ -14,11 +14,13 @@
 pub mod lexer;
 pub mod parser;
 pub mod resolve;
+pub mod loader;
 
 pub mod prelude {
     pub use crate::lexer::{Token, Lexer, Loc, Spanned};
     pub use crate::parser::{Parser, ParseError, ParseResult, parse_expr, parse_type, parse_pattern, parse_module};
     pub use crate::resolve::{resolve_expr, resolve_module};
+    pub use crate::loader::{Loader, LoadError, LoadResult, load_file, load_source};
 }
 
 #[cfg(test)]
@@ -880,6 +882,67 @@ mod tests {
         let source = "╭─ measure : F → F → (F ± F)\n╰─ ₀ ± ₁";
         let module = parse_module(source, "test").unwrap();
         assert_eq!(module.decls.len(), 1);
+    }
+
+    #[test]
+    fn test_enum_decl_simple() {
+        // Simple enum with no type parameters
+        let source = "enum Color where Red | Green | Blue";
+        let module = parse_module(source, "test").unwrap();
+        assert_eq!(module.decls.len(), 1);
+        match &module.decls[0] {
+            goth_ast::decl::Decl::Enum(e) => {
+                assert_eq!(e.name.as_ref(), "Color");
+                assert!(e.params.is_empty());
+                assert_eq!(e.variants.len(), 3);
+                assert_eq!(e.variants[0].name.as_ref(), "Red");
+                assert!(e.variants[0].payload.is_none());
+                assert_eq!(e.variants[1].name.as_ref(), "Green");
+                assert!(e.variants[1].payload.is_none());
+                assert_eq!(e.variants[2].name.as_ref(), "Blue");
+                assert!(e.variants[2].payload.is_none());
+            }
+            _ => panic!("Expected Enum decl"),
+        }
+    }
+
+    #[test]
+    fn test_enum_decl_with_payload() {
+        // Enum with payload types
+        let source = "enum Option τ where Some τ | None";
+        let module = parse_module(source, "test").unwrap();
+        assert_eq!(module.decls.len(), 1);
+        match &module.decls[0] {
+            goth_ast::decl::Decl::Enum(e) => {
+                assert_eq!(e.name.as_ref(), "Option");
+                assert_eq!(e.params.len(), 1);
+                assert_eq!(e.params[0].name.as_ref(), "τ");
+                assert_eq!(e.variants.len(), 2);
+                assert_eq!(e.variants[0].name.as_ref(), "Some");
+                assert!(e.variants[0].payload.is_some());
+                assert_eq!(e.variants[1].name.as_ref(), "None");
+                assert!(e.variants[1].payload.is_none());
+            }
+            _ => panic!("Expected Enum decl"),
+        }
+    }
+
+    #[test]
+    fn test_enum_decl_either() {
+        // Either type with two type parameters
+        let source = "enum Either a b where Left a | Right b";
+        let module = parse_module(source, "test").unwrap();
+        assert_eq!(module.decls.len(), 1);
+        match &module.decls[0] {
+            goth_ast::decl::Decl::Enum(e) => {
+                assert_eq!(e.name.as_ref(), "Either");
+                assert_eq!(e.params.len(), 2);
+                assert_eq!(e.variants.len(), 2);
+                assert_eq!(e.variants[0].name.as_ref(), "Left");
+                assert_eq!(e.variants[1].name.as_ref(), "Right");
+            }
+            _ => panic!("Expected Enum decl"),
+        }
     }
 }
 

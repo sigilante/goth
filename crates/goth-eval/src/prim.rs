@@ -22,15 +22,32 @@ pub fn apply_binop(op: &goth_ast::op::BinOp, left: Value, right: Value) -> EvalR
 
 pub fn apply_unaryop(op: &goth_ast::op::UnaryOp, value: Value) -> EvalResult<Value> {
     use goth_ast::op::UnaryOp::*;
-    match op { 
-        Neg => negate(value), 
-        Not => logical_not(value), 
-        Sum => sum(value), 
-        Prod => product(value), 
+    match op {
+        Neg => negate(value),
+        Not => logical_not(value),
+        Sum => sum(value),
+        Prod => product(value),
         Scan => scan(value),
         Sqrt => sqrt(value),
         Floor => floor(value),
         Ceil => ceil(value),
+        Round => round(value),
+        Gamma => gamma(value),
+        Ln => ln(value),
+        Log10 => log10(value),
+        Log2 => log2(value),
+        Exp => exp(value),
+        Sin => sin(value),
+        Cos => cos(value),
+        Tan => tan(value),
+        Asin => asin(value),
+        Acos => acos(value),
+        Atan => atan(value),
+        Sinh => sinh(value),
+        Cosh => cosh(value),
+        Tanh => tanh(value),
+        Abs => abs(value),
+        Sign => sign(value),
     }
 }
 
@@ -71,6 +88,30 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
                 }
             }
             Ok(Value::string(&line))
+        }
+        PrimFn::ReadFile => {
+            if args.len() != 1 { return Err(EvalError::ArityMismatch { expected: 1, got: args.len() }); }
+            let path = match &args[0] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[0]))?,
+                _ => return Err(EvalError::type_error("String", &args[0])),
+            };
+            use std::fs;
+            let contents = fs::read_to_string(&path).map_err(|e| EvalError::IoError(format!("Failed to read '{}': {}", path, e)))?;
+            Ok(Value::string(&contents))
+        }
+        PrimFn::WriteFile => {
+            if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
+            let path = match &args[0] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[0]))?,
+                _ => return Err(EvalError::type_error("String", &args[0])),
+            };
+            let contents = match &args[1] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[1]))?,
+                _ => return Err(EvalError::type_error("String", &args[1])),
+            };
+            use std::fs;
+            fs::write(&path, &contents).map_err(|e| EvalError::IoError(format!("Failed to write '{}': {}", path, e)))?;
+            Ok(Value::Unit)
         }
         PrimFn::Iota => unary_args(&args, iota),
         PrimFn::Range => binary_args(&args, range),
@@ -187,13 +228,65 @@ fn abs(value: Value) -> EvalResult<Value> {
 
 fn exp(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.exp()))) }
 fn ln(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("ln requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.ln()))) } }
+fn log10(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log10 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log10()))) } }
+fn log2(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log2 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log2()))) } }
 fn sqrt(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < 0.0 { Err(EvalError::type_error_msg("sqrt requires non-negative argument")) } else { Ok(Value::Float(OrderedFloat(f.sqrt()))) } }
 fn sin(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sin()))) }
 fn cos(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cos()))) }
 fn tan(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tan()))) }
+fn asin(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("asin requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.asin()))) } }
+fn acos(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("acos requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.acos()))) } }
+fn atan(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.atan()))) }
+fn sinh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sinh()))) }
+fn cosh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cosh()))) }
+fn tanh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tanh()))) }
 fn floor(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.floor() as i128)) }
 fn ceil(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.ceil() as i128)) }
 fn round(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.round() as i128)) }
+fn sign(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(if f > 0.0 { 1.0 } else if f < 0.0 { -1.0 } else { 0.0 }))) }
+
+// Gamma function using Lanczos approximation
+fn gamma(value: Value) -> EvalResult<Value> {
+    let x = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+    if x <= 0.0 && x.fract() == 0.0 {
+        return Err(EvalError::type_error_msg("gamma undefined for non-positive integers"));
+    }
+    // Lanczos approximation coefficients
+    let g = 7.0_f64;
+    let c = [
+        0.99999999999980993,
+        676.5203681218851,
+        -1259.1392167224028,
+        771.32342877765313,
+        -176.61502916214059,
+        12.507343278686905,
+        -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7,
+    ];
+
+    let result = if x < 0.5 {
+        // Use reflection formula: Γ(1-z) * Γ(z) = π / sin(πz)
+        let z = 1.0 - x;
+        let mut sum = c[0];
+        for i in 1..9 {
+            sum += c[i] / (z + (i as f64) - 1.0);
+        }
+        let t = z + g - 0.5;
+        let gamma_z = (2.0 * std::f64::consts::PI).sqrt() * t.powf(z - 0.5) * (-t).exp() * sum;
+        std::f64::consts::PI / ((std::f64::consts::PI * x).sin() * gamma_z)
+    } else {
+        let z = x - 1.0;
+        let mut sum = c[0];
+        for i in 1..9 {
+            sum += c[i] / (z + (i as f64));
+        }
+        let t = z + g + 0.5;
+        (2.0 * std::f64::consts::PI).sqrt() * t.powf(z + 0.5) * (-t).exp() * sum
+    };
+
+    Ok(Value::Float(OrderedFloat(result)))
+}
 
 fn compare_lt(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {

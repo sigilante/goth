@@ -72,18 +72,42 @@ struct Args {
     /// Don't look for or execute main function (just load declarations)
     #[arg(long)]
     no_main: bool,
+
+    /// Emit MIR (Middle IR) instead of evaluating
+    #[arg(long)]
+    emit_mir: bool,
+
+    /// Emit MLIR instead of evaluating
+    #[arg(long)]
+    emit_mlir: bool,
+}
+
+/// Output mode for compilation
+#[derive(Clone, Copy, PartialEq)]
+enum EmitMode {
+    Evaluate,
+    Mir,
+    Mlir,
 }
 
 fn main() {
     let args = Args::parse();
 
+    let emit_mode = if args.emit_mlir {
+        EmitMode::Mlir
+    } else if args.emit_mir {
+        EmitMode::Mir
+    } else {
+        EmitMode::Evaluate
+    };
+
     if let Some(expr) = args.eval {
         // Evaluate expression from command line
-        run_expr(&expr, args.trace, args.parse_only, args.ast, args.check);
+        run_expr(&expr, args.trace, args.parse_only, args.ast, args.check, emit_mode);
         return;
     } else if let Some(file) = args.file {
         // Run file
-        run_file(&file, args.trace, args.parse_only, args.ast, args.no_main, &args.program_args);
+        run_file(&file, args.trace, args.parse_only, args.ast, args.no_main, &args.program_args, emit_mode);
     } else {
         // Start REPL
         if let Err(e) = run_repl(args.trace) {
@@ -92,7 +116,7 @@ fn main() {
     }
 }
 
-fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: bool) {
+fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: bool, emit_mode: EmitMode) {
     use colored::Colorize;
 
     // Parse
@@ -103,16 +127,16 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
             return;
         }
     };
-    
+
     // Show AST if requested
     if show_ast {
         println!("{}", "AST:".cyan().bold());
         println!("{:#?}", parsed);
     }
-    
+
     // Resolve
     let resolved = resolve_expr(parsed);
-    
+
     // Type check if --check flag is set
     if check {
         let mut type_checker = TypeChecker::new();
@@ -126,9 +150,33 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
             }
         }
     }
-    
+
     if parse_only {
         return;
+    }
+
+    // Handle emit modes
+    match emit_mode {
+        EmitMode::Mir => {
+            match goth_mir::lower_expr(&resolved) {
+                Ok(program) => println!("{}", program),
+                Err(e) => eprintln!("{}: {:?}", "MIR lowering error".red().bold(), e),
+            }
+            return;
+        }
+        EmitMode::Mlir => {
+            match goth_mir::lower_expr(&resolved) {
+                Ok(mir_program) => {
+                    match goth_mlir::emit_program(&mir_program) {
+                        Ok(mlir) => println!("{}", mlir),
+                        Err(e) => eprintln!("{}: {:?}", "MLIR emission error".red().bold(), e),
+                    }
+                }
+                Err(e) => eprintln!("{}: {:?}", "MIR lowering error".red().bold(), e),
+            }
+            return;
+        }
+        EmitMode::Evaluate => {}
     }
 
     // Evaluate
@@ -137,7 +185,7 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
     } else {
         Evaluator::new()
     };
-    
+
     match evaluator.eval(&resolved) {
         Ok(value) => {
             println!("{}", value);
@@ -148,7 +196,7 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
     }
 }
 
-fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool, no_main: bool, program_args: &[String]) {
+fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool, no_main: bool, program_args: &[String], emit_mode: EmitMode) {
     match fs::read_to_string(path) {
         Ok(source) => {
             let name = path.file_stem()
@@ -170,6 +218,30 @@ fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool, no_ma
                     let module = resolve_module(module);
                     if show_ast {
                         println!("{} {:#?}", "Resolved AST:".cyan().bold(), module);
+                    }
+
+                    // Handle emit modes for modules
+                    match emit_mode {
+                        EmitMode::Mir => {
+                            match goth_mir::lower_module(&module) {
+                                Ok(program) => println!("{}", program),
+                                Err(e) => eprintln!("{}: {:?}", "MIR lowering error".red().bold(), e),
+                            }
+                            return;
+                        }
+                        EmitMode::Mlir => {
+                            match goth_mir::lower_module(&module) {
+                                Ok(mir_program) => {
+                                    match goth_mlir::emit_program(&mir_program) {
+                                        Ok(mlir) => println!("{}", mlir),
+                                        Err(e) => eprintln!("{}: {:?}", "MLIR emission error".red().bold(), e),
+                                    }
+                                }
+                                Err(e) => eprintln!("{}: {:?}", "MIR lowering error".red().bold(), e),
+                            }
+                            return;
+                        }
+                        EmitMode::Evaluate => {}
                     }
 
                     if no_main {

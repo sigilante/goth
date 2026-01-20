@@ -27,8 +27,10 @@ pub struct Function {
     pub params: Vec<Type>,
     /// Return type
     pub ret_ty: Type,
-    /// Function body
+    /// Function body (single block for simple functions)
     pub body: Block,
+    /// Additional blocks for control flow (if/match)
+    pub blocks: Vec<(BlockId, Block)>,
     /// Is this a closure? If so, first param is environment
     pub is_closure: bool,
 }
@@ -141,6 +143,34 @@ pub enum Rhs {
         value: Operand,
         uncertainty: Operand,
     },
+
+    /// Primitive operation (built-in function)
+    Prim {
+        name: String,
+        args: Vec<Operand>,
+    },
+
+    /// Iota: generate sequence [0, 1, ..., n-1]
+    Iota(Operand),
+
+    /// Range: generate sequence [start, start+1, ..., end-1]
+    Range(Operand, Operand),
+
+    /// Create a variant (tagged union): MakeVariant { tag: 0, constructor: "Some", payload: Some(value) }
+    MakeVariant {
+        /// Tag index (assigned by enum definition order)
+        tag: u32,
+        /// Constructor name (for debugging/display)
+        constructor: String,
+        /// Optional payload value
+        payload: Option<Operand>,
+    },
+
+    /// Get the tag of a variant value (returns integer)
+    GetTag(Operand),
+
+    /// Get the payload of a variant value (assumes tag is already checked)
+    GetPayload(Operand),
 }
 
 /// Reduction operations
@@ -194,6 +224,7 @@ pub enum Constant {
     Int(i64),
     Float(f64),
     Bool(bool),
+    String(String),
     Unit,
 }
 

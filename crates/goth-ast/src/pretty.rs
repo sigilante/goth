@@ -85,11 +85,40 @@ impl Pretty {
         match decl {
             Decl::Fn(f) => self.print_fn(f),
             Decl::Type(t) => self.print_type_decl(t),
+            Decl::Enum(e) => self.print_enum_decl(e),
             Decl::Class(c) => self.print_class(c),
             Decl::Impl(i) => self.print_impl(i),
             Decl::Let(l) => self.print_let_decl(l),
             Decl::Op(_) => todo!("op decl pretty printing"),
+            Decl::Use(u) => {
+                self.write("use \"");
+                self.write(&u.path);
+                self.write("\"");
+                self.newline();
+            }
         }
+    }
+
+    /// Pretty print an enum declaration
+    pub fn print_enum_decl(&mut self, e: &crate::decl::EnumDecl) {
+        self.write("enum ");
+        self.write(&e.name);
+        for param in &e.params {
+            self.write(" ");
+            self.write(&param.name);
+        }
+        self.write(" where ");
+        for (i, variant) in e.variants.iter().enumerate() {
+            if i > 0 {
+                self.write(" | ");
+            }
+            self.write(&variant.name);
+            if let Some(payload) = &variant.payload {
+                self.write(" ");
+                self.print_type(payload);
+            }
+        }
+        self.newline();
     }
 
     /// Pretty print a function declaration
@@ -671,6 +700,23 @@ fn unop_str(op: &crate::op::UnaryOp, unicode: bool) -> &'static str {
         UnaryOp::Sum => if unicode { "Σ" } else { "sum " },
         UnaryOp::Prod => if unicode { "Π" } else { "prod " },
         UnaryOp::Scan => if unicode { "⍀" } else { "scan " },
+        UnaryOp::Gamma => if unicode { "Γ" } else { "gamma " },
+        UnaryOp::Ln => "ln ",
+        UnaryOp::Log10 => if unicode { "log₁₀ " } else { "log10 " },
+        UnaryOp::Log2 => if unicode { "log₂ " } else { "log2 " },
+        UnaryOp::Exp => "exp ",
+        UnaryOp::Sin => "sin ",
+        UnaryOp::Cos => "cos ",
+        UnaryOp::Tan => "tan ",
+        UnaryOp::Asin => "asin ",
+        UnaryOp::Acos => "acos ",
+        UnaryOp::Atan => "atan ",
+        UnaryOp::Sinh => "sinh ",
+        UnaryOp::Cosh => "cosh ",
+        UnaryOp::Tanh => "tanh ",
+        UnaryOp::Abs => "abs ",
+        UnaryOp::Sign => "sign ",
+        UnaryOp::Round => "round ",
     }
 }
 

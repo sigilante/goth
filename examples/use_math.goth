@@ -1,0 +1,5 @@
+# Example using imports
+use "lib/math_utils.goth"
+
+╭─ main : F → F
+╰─ square (double ₀)

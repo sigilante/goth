@@ -263,6 +263,9 @@ dependencies = [
  "goth-ast",
  "goth-check",
  "goth-eval",
+ "goth-llvm",
+ "goth-mir",
+ "goth-mlir",
  "goth-parse",
  "rustyline",
 ]
@@ -278,11 +281,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "goth-llvm"
+version = "0.1.0"
+dependencies = [
+ "goth-ast",
+ "goth-mir",
+ "thiserror",
+]
+
+[[package]]
 name = "goth-mir"
 version = "0.1.0"
 dependencies = [
  "goth-ast",
  "goth-check",
+ "goth-mlir",
  "goth-parse",
  "thiserror",
 ]

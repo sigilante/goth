@@ -77,7 +77,8 @@ pub fn emit_type(ty: &Type) -> Result<String> {
         Type::Prim(PrimType::I64) => Ok("i64".to_string()),
         Type::Prim(PrimType::F64) => Ok("f64".to_string()),
         Type::Prim(PrimType::Bool) => Ok("i1".to_string()),
-        
+        Type::Prim(PrimType::String) => Ok("!llvm.ptr<i8>".to_string()),
+
         Type::Tuple(fields) if fields.is_empty() => Ok("()".to_string()),
         
         Type::Tuple(fields) => {
@@ -111,7 +112,18 @@ pub fn emit_type(ty: &Type) -> Result<String> {
             let ret_ty = emit_type(ret)?;
             Ok(format!("({}) -> {}", arg_ty, ret_ty))
         }
-        
+
+        // Type variables - map to concrete MLIR types
+        Type::Var(name) => {
+            match name.as_ref() {
+                "I" | "Int" | "ℤ" => Ok("i64".to_string()),
+                "F" | "Float" => Ok("f64".to_string()),
+                "B" | "Bool" => Ok("i1".to_string()),
+                "N" | "Nat" | "ℕ" => Ok("i64".to_string()),  // Naturals as i64
+                _ => Ok("i64".to_string()),  // Default to i64
+            }
+        }
+
         _ => Err(MlirError::UnsupportedType(format!("{:?}", ty))),
     }
 }
@@ -136,8 +148,13 @@ fn emit_constant(ctx: &mut MlirContext, constant: &Constant, ty: &Type) -> Resul
                 ctx.indent_str(), ssa, val, mlir_ty)
         }
         Constant::Unit => {
-            format!("{}{} = arith.constant () : ()", 
+            format!("{}{} = arith.constant () : ()",
                 ctx.indent_str(), ssa)
+        }
+        Constant::String(s) => {
+            // Use memref for string literals
+            format!("{}{} = arith.constant \"{}\" : !llvm.ptr<i8>",
+                ctx.indent_str(), ssa, s.escape_default())
         }
     };
     
@@ -154,6 +171,7 @@ fn emit_operand(ctx: &mut MlirContext, op: &Operand, output: &mut String) -> Res
                 Constant::Int(_) => Type::Prim(PrimType::I64),
                 Constant::Float(_) => Type::Prim(PrimType::F64),
                 Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                Constant::String(_) => Type::Prim(PrimType::String),
                 Constant::Unit => Type::Tuple(vec![]),
             };
             
@@ -172,14 +190,32 @@ fn emit_operand(ctx: &mut MlirContext, op: &Operand, output: &mut String) -> Res
     }
 }
 
+/// Check if a type is integer-like (i64, I, Int, etc.)
+fn is_int_type(ty: &Type) -> bool {
+    match ty {
+        Type::Prim(PrimType::I64) => true,
+        Type::Var(name) => matches!(name.as_ref(), "I" | "Int" | "ℤ" | "N" | "Nat" | "ℕ"),
+        _ => false,
+    }
+}
+
+/// Check if a type is float-like (f64, F, Float, etc.)
+fn is_float_type(ty: &Type) -> bool {
+    match ty {
+        Type::Prim(PrimType::F64) => true,
+        Type::Var(name) => matches!(name.as_ref(), "F" | "Float"),
+        _ => false,
+    }
+}
+
 /// Emit binary operation
-fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp, 
+fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
               left: String, right: String, ty: &Type) -> Result<String> {
     let ssa = ctx.fresh_ssa();
     let mlir_ty = emit_type(ty)?;
-    
-    let op_name = match ty {
-        Type::Prim(PrimType::I64) => match op {
+
+    let op_name = if is_int_type(ty) {
+        match op {
             goth_ast::op::BinOp::Add => "arith.addi",
             goth_ast::op::BinOp::Sub => "arith.subi",
             goth_ast::op::BinOp::Mul => "arith.muli",
@@ -192,8 +228,9 @@ fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
             goth_ast::op::BinOp::Eq => "arith.cmpi eq,",
             goth_ast::op::BinOp::Neq => "arith.cmpi ne,",
             _ => return Err(MlirError::UnsupportedOp(format!("{:?}", op))),
-        },
-        Type::Prim(PrimType::F64) => match op {
+        }
+    } else if is_float_type(ty) {
+        match op {
             goth_ast::op::BinOp::Add => "arith.addf",
             goth_ast::op::BinOp::Sub => "arith.subf",
             goth_ast::op::BinOp::Mul => "arith.mulf",
@@ -205,8 +242,9 @@ fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
             goth_ast::op::BinOp::Eq => "arith.cmpf oeq,",
             goth_ast::op::BinOp::Neq => "arith.cmpf one,",
             _ => return Err(MlirError::UnsupportedOp(format!("{:?}", op))),
-        },
-        _ => return Err(MlirError::UnsupportedType(format!("{:?}", ty))),
+        }
+    } else {
+        return Err(MlirError::UnsupportedType(format!("{:?}", ty)));
     };
     
     Ok(format!("{}{} = {} {}, {} : {}\n", 
@@ -214,33 +252,59 @@ fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
 }
 
 /// Emit unary operation
-fn emit_unary(ctx: &mut MlirContext, op: &goth_ast::op::UnaryOp, 
+fn emit_unary(ctx: &mut MlirContext, op: &goth_ast::op::UnaryOp,
               operand: String, ty: &Type) -> Result<String> {
     let ssa = ctx.fresh_ssa();
     let mlir_ty = emit_type(ty)?;
-    
+
+    // Handle reduction operations specially (they reduce tensor to scalar)
+    match op {
+        goth_ast::op::UnaryOp::Sum => {
+            return Ok(format!("{}{} = goth.reduce_sum {} : {}\n",
+                ctx.indent_str(), ssa, operand, mlir_ty));
+        }
+        goth_ast::op::UnaryOp::Prod => {
+            return Ok(format!("{}{} = goth.reduce_prod {} : {}\n",
+                ctx.indent_str(), ssa, operand, mlir_ty));
+        }
+        _ => {}
+    }
+
     let op_name = match op {
-        goth_ast::op::UnaryOp::Neg => match ty {
-            Type::Prim(PrimType::I64) => "arith.subi",
-            Type::Prim(PrimType::F64) => "arith.negf",
-            _ => return Err(MlirError::UnsupportedType(format!("{:?}", ty))),
+        goth_ast::op::UnaryOp::Neg => {
+            if is_int_type(ty) {
+                "arith.subi"
+            } else if is_float_type(ty) {
+                "arith.negf"
+            } else {
+                return Err(MlirError::UnsupportedType(format!("{:?}", ty)));
+            }
         },
         goth_ast::op::UnaryOp::Sqrt => "math.sqrt",
         goth_ast::op::UnaryOp::Floor => "math.floor",
         goth_ast::op::UnaryOp::Ceil => "math.ceil",
+        goth_ast::op::UnaryOp::Not => "arith.xori",  // XOR with 1 for boolean NOT
         _ => return Err(MlirError::UnsupportedOp(format!("{:?}", op))),
     };
-    
-    if matches!(op, goth_ast::op::UnaryOp::Neg) && matches!(ty, Type::Prim(PrimType::I64)) {
+
+    if matches!(op, goth_ast::op::UnaryOp::Neg) && is_int_type(ty) {
         // Integer negation: 0 - x
         let zero = ctx.fresh_ssa();
-        let mut code = format!("{}{} = arith.constant 0 : {}\n", 
+        let mut code = format!("{}{} = arith.constant 0 : {}\n",
             ctx.indent_str(), zero, mlir_ty);
-        code.push_str(&format!("{}{} = {} {}, {} : {}\n", 
+        code.push_str(&format!("{}{} = {} {}, {} : {}\n",
             ctx.indent_str(), ssa, op_name, zero, operand, mlir_ty));
         Ok(code)
+    } else if matches!(op, goth_ast::op::UnaryOp::Not) {
+        // Boolean NOT: XOR with 1
+        let one = ctx.fresh_ssa();
+        let mut code = format!("{}{} = arith.constant true : {}\n",
+            ctx.indent_str(), one, mlir_ty);
+        code.push_str(&format!("{}{} = {} {}, {} : {}\n",
+            ctx.indent_str(), ssa, op_name, operand, one, mlir_ty));
+        Ok(code)
     } else {
-        Ok(format!("{}{} = {} {} : {}\n", 
+        Ok(format!("{}{} = {} {} : {}\n",
             ctx.indent_str(), ssa, op_name, operand, mlir_ty))
     }
 }
@@ -336,7 +400,7 @@ fn emit_stmt(ctx: &mut MlirContext, stmt: &Stmt, output: &mut String) -> Result<
             for arg in args {
                 arg_ssas.push(emit_operand(ctx, arg, output)?);
             }
-            
+
             // Indirect call through closure
             let code = format!("{}{} = func.call_indirect {}({}) : {} -> {}\n",
                 ctx.indent_str(), ssa, closure_ssa,
@@ -345,7 +409,77 @@ fn emit_stmt(ctx: &mut MlirContext, stmt: &Stmt, output: &mut String) -> Result<
                 emit_type(&stmt.ty)?);
             (ssa, code)
         }
-        
+
+        Rhs::Iota(n) => {
+            let ssa = ctx.fresh_ssa();
+            let n_ssa = emit_operand(ctx, n, output)?;
+            // Use linalg.index or custom dialect for iota
+            let code = format!("{}{} = goth.iota {} : {}\n",
+                ctx.indent_str(), ssa, n_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::Range(start, end) => {
+            let ssa = ctx.fresh_ssa();
+            let start_ssa = emit_operand(ctx, start, output)?;
+            let end_ssa = emit_operand(ctx, end, output)?;
+            let code = format!("{}{} = goth.range {}, {} : {}\n",
+                ctx.indent_str(), ssa, start_ssa, end_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::Prim { name, args } => {
+            let ssa = ctx.fresh_ssa();
+            let mut arg_ssas = Vec::new();
+            for arg in args {
+                arg_ssas.push(emit_operand(ctx, arg, output)?);
+            }
+            let code = format!("{}{} = goth.{} {} : {}\n",
+                ctx.indent_str(), ssa, name, arg_ssas.join(", "), emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::TensorReduce { tensor, op } => {
+            let ssa = ctx.fresh_ssa();
+            let tensor_ssa = emit_operand(ctx, tensor, output)?;
+            let op_name = match op {
+                goth_mir::mir::ReduceOp::Sum => "sum",
+                goth_mir::mir::ReduceOp::Prod => "prod",
+                goth_mir::mir::ReduceOp::Min => "min",
+                goth_mir::mir::ReduceOp::Max => "max",
+            };
+            let code = format!("{}{} = goth.reduce_{} {} : {}\n",
+                ctx.indent_str(), ssa, op_name, tensor_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::TensorMap { tensor, func } => {
+            let ssa = ctx.fresh_ssa();
+            let tensor_ssa = emit_operand(ctx, tensor, output)?;
+            let func_ssa = emit_operand(ctx, func, output)?;
+            let code = format!("{}{} = goth.map {}, {} : {}\n",
+                ctx.indent_str(), ssa, tensor_ssa, func_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::TensorFilter { tensor, pred } => {
+            let ssa = ctx.fresh_ssa();
+            let tensor_ssa = emit_operand(ctx, tensor, output)?;
+            let pred_ssa = emit_operand(ctx, pred, output)?;
+            let code = format!("{}{} = goth.filter {}, {} : {}\n",
+                ctx.indent_str(), ssa, tensor_ssa, pred_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
+        Rhs::Index(arr, idx) => {
+            let ssa = ctx.fresh_ssa();
+            let arr_ssa = emit_operand(ctx, arr, output)?;
+            let idx_ssa = emit_operand(ctx, idx, output)?;
+            let code = format!("{}{} = tensor.extract {}[{}] : {}\n",
+                ctx.indent_str(), ssa, arr_ssa, idx_ssa, emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
         _ => {
             return Err(MlirError::UnsupportedOp(
                 format!("Statement: {:?}", stmt.rhs)
@@ -359,13 +493,18 @@ fn emit_stmt(ctx: &mut MlirContext, stmt: &Stmt, output: &mut String) -> Result<
     Ok(())
 }
 
-/// Emit block
-fn emit_block(ctx: &mut MlirContext, block: &Block, output: &mut String) -> Result<()> {
+/// Emit block with optional label
+fn emit_block_with_label(ctx: &mut MlirContext, block: &Block, label: Option<&str>, output: &mut String) -> Result<()> {
+    // Emit label if provided
+    if let Some(lbl) = label {
+        output.push_str(&format!("{}^{}:\n", ctx.indent_str(), lbl));
+    }
+
     // Emit statements
     for stmt in &block.stmts {
         emit_stmt(ctx, stmt, output)?;
     }
-    
+
     // Emit terminator
     match &block.term {
         Terminator::Return(op) => {
@@ -373,65 +512,88 @@ fn emit_block(ctx: &mut MlirContext, block: &Block, output: &mut String) -> Resu
             output.push_str(&format!("{}func.return {} : {}\n",
                 ctx.indent_str(), ret_ssa, "?"));
         }
-        
-        Terminator::Goto(_) => {
-            output.push_str(&format!("{}// TODO: Goto\n", ctx.indent_str()));
+
+        Terminator::Goto(block_id) => {
+            output.push_str(&format!("{}cf.br ^bb{}\n",
+                ctx.indent_str(), block_id.0));
         }
-        
-        Terminator::If { .. } => {
-            output.push_str(&format!("{}// TODO: If\n", ctx.indent_str()));
+
+        Terminator::If { cond, then_block, else_block } => {
+            let cond_ssa = emit_operand(ctx, cond, output)?;
+            output.push_str(&format!("{}cf.cond_br {}, ^bb{}, ^bb{}\n",
+                ctx.indent_str(), cond_ssa, then_block.0, else_block.0));
         }
-        
-        Terminator::Switch { .. } => {
-            output.push_str(&format!("{}// TODO: Switch\n", ctx.indent_str()));
+
+        Terminator::Switch { scrutinee, cases, default } => {
+            let scrut_ssa = emit_operand(ctx, scrutinee, output)?;
+            let case_str: Vec<String> = cases.iter()
+                .map(|(c, b)| format!("{}: ^bb{}", c, b.0))
+                .collect();
+            output.push_str(&format!("{}cf.switch {}, [{}], ^bb{}\n",
+                ctx.indent_str(), scrut_ssa, case_str.join(", "), default.0));
         }
-        
+
         Terminator::Unreachable => {
             output.push_str(&format!("{}// Unreachable\n", ctx.indent_str()));
         }
     }
-    
+
     Ok(())
+}
+
+/// Emit block (backwards compatible)
+fn emit_block(ctx: &mut MlirContext, block: &Block, output: &mut String) -> Result<()> {
+    emit_block_with_label(ctx, block, None, output)
 }
 
 /// Emit function
 pub fn emit_function(func: &Function) -> Result<String> {
     let mut ctx = MlirContext::new();
     let mut output = String::new();
-    
+
     // Function signature
     let param_types: Result<Vec<_>> = func.params.iter()
         .map(|ty| emit_type(ty))
         .collect();
     let param_types = param_types?;
-    
+
     let ret_type = emit_type(&func.ret_ty)?;
-    
+
     // Emit function header
     output.push_str(&format!("func.func @{}(", func.name));
-    
+
     for (i, ty) in param_types.iter().enumerate() {
         if i > 0 {
             output.push_str(", ");
         }
         let param_ssa = ctx.fresh_ssa();
         output.push_str(&format!("{}: {}", param_ssa, ty));
-        
+
         // Register parameter as local
         let local_id = LocalId::new(i as u32);
         ctx.register_local(local_id, param_ssa.clone(), func.params[i].clone());
     }
-    
+
     output.push_str(&format!(") -> {} {{\n", ret_type));
-    
+
     ctx.push_indent();
-    
-    // Emit body
-    emit_block(&mut ctx, &func.body, &mut output)?;
-    
+
+    // Emit entry block (with label if there are more blocks)
+    if func.blocks.is_empty() {
+        emit_block(&mut ctx, &func.body, &mut output)?;
+    } else {
+        emit_block_with_label(&mut ctx, &func.body, Some("entry"), &mut output)?;
+
+        // Emit additional blocks
+        for (block_id, block) in &func.blocks {
+            let label = format!("bb{}", block_id.0);
+            emit_block_with_label(&mut ctx, block, Some(&label), &mut output)?;
+        }
+    }
+
     ctx.pop_indent();
     output.push_str("}\n");
-    
+
     Ok(output)
 }
 
@@ -497,7 +659,8 @@ mod tests {
                 ],
                 term: Terminator::Return(Operand::Local(LocalId::new(1))),
             },
-            is_closure: false,
+            blocks: vec![],
+                is_closure: false,
         };
         
         let mlir = emit_function(&func).unwrap();
@@ -515,7 +678,8 @@ mod tests {
             params: vec![],
             ret_ty: Type::Prim(PrimType::I64),
             body: Block::with_return(Operand::Const(Constant::Int(42))),
-            is_closure: false,
+            blocks: vec![],
+                is_closure: false,
         };
         
         let mlir = emit_function(&func).unwrap();
@@ -544,7 +708,8 @@ mod tests {
                 ],
                 term: Terminator::Return(Operand::Local(LocalId::new(0))),
             },
-            is_closure: false,
+            blocks: vec![],
+                is_closure: false,
         };
         
         let mlir = emit_function(&func).unwrap();
@@ -572,7 +737,8 @@ mod tests {
                 ],
                 term: Terminator::Return(Operand::Local(LocalId::new(0))),
             },
-            is_closure: false,
+            blocks: vec![],
+                is_closure: false,
         };
         
         let mlir = emit_function(&func).unwrap();
@@ -589,7 +755,8 @@ mod tests {
                     params: vec![],
                     ret_ty: Type::Prim(PrimType::I64),
                     body: Block::with_return(Operand::Const(Constant::Int(42))),
-                    is_closure: false,
+                    blocks: vec![],
+                is_closure: false,
                 },
             ],
             entry: "main".to_string(),
@@ -636,7 +803,8 @@ mod tests {
                 ],
                 term: Terminator::Return(Operand::Local(LocalId::new(2))),
             },
-            is_closure: false,
+            blocks: vec![],
+                is_closure: false,
         };
         
         let mlir = emit_function(&func).unwrap();
@@ -716,7 +884,8 @@ mod tests {
                         ],
                         term: Terminator::Return(Operand::Local(LocalId::new(2))),
                     },
-                    is_closure: false,
+                    blocks: vec![],
+                is_closure: false,
                 },
             ],
             entry: "add".to_string(),

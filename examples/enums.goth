@@ -1,0 +1,22 @@
+-- Example: Algebraic Data Types (Enums) in Goth
+-- Demonstrates sum types, constructors, and pattern matching
+
+-- Simple enum without type parameters
+enum Color where Red | Green | Blue
+
+-- Generic Option type
+enum Option τ where Some τ | None
+
+-- Generic Either type
+enum Either α β where Left α | Right β
+
+-- Result type for error handling
+enum Result τ where Ok τ | Err I
+
+-- Example function using Option
+╭─ safeDiv : I → I → I
+╰─ if ₁ == 0 then 0 else ₀ / ₁
+
+-- Example function with variant constructors
+╭─ makeOption : I → I
+╰─ if ₀ > 0 then ₀ else 0

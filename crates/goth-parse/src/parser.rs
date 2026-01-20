@@ -192,6 +192,91 @@ impl<'a> Parser<'a> {
                 self.expect(Token::CeilClose)?;
                 Ok(Expr::UnaryOp(UnaryOp::Ceil, Box::new(operand)))
             }
+            Some(Token::Gamma) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Gamma, Box::new(operand)))
+            }
+            Some(Token::Ln) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Ln, Box::new(operand)))
+            }
+            Some(Token::Exp) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Exp, Box::new(operand)))
+            }
+            Some(Token::Sin) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Sin, Box::new(operand)))
+            }
+            Some(Token::Cos) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Cos, Box::new(operand)))
+            }
+            Some(Token::Abs) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Abs, Box::new(operand)))
+            }
+            Some(Token::Tan) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Tan, Box::new(operand)))
+            }
+            Some(Token::Asin) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Asin, Box::new(operand)))
+            }
+            Some(Token::Acos) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Acos, Box::new(operand)))
+            }
+            Some(Token::Atan) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Atan, Box::new(operand)))
+            }
+            Some(Token::Sinh) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Sinh, Box::new(operand)))
+            }
+            Some(Token::Cosh) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Cosh, Box::new(operand)))
+            }
+            Some(Token::Tanh) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Tanh, Box::new(operand)))
+            }
+            Some(Token::Log10) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Log10, Box::new(operand)))
+            }
+            Some(Token::Log2) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Log2, Box::new(operand)))
+            }
+            Some(Token::Round) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Round, Box::new(operand)))
+            }
+            Some(Token::Sign) => {
+                self.next();
+                let operand = self.parse_prefix()?;
+                Ok(Expr::UnaryOp(UnaryOp::Sign, Box::new(operand)))
+            }
             _ => self.parse_atom(),
         }
     }
@@ -206,6 +291,8 @@ impl<'a> Parser<'a> {
             Some(Token::Char(c)) => { self.next(); Expr::Lit(Literal::Char(c)) }
             Some(Token::True) => { self.next(); Expr::Lit(Literal::True) }
             Some(Token::False) => { self.next(); Expr::Lit(Literal::False) }
+            Some(Token::Pi) => { self.next(); Expr::Lit(Literal::Float(std::f64::consts::PI)) }
+            Some(Token::Euler) => { self.next(); Expr::Lit(Literal::Float(std::f64::consts::E)) }
 
             // De Bruijn index
             Some(Token::Index(i)) => { self.next(); Expr::Idx(i) }
@@ -666,6 +753,8 @@ impl<'a> Parser<'a> {
             Some(Token::String(s)) => { self.next(); Ok(Pattern::Lit(Literal::String(s.into()))) }
             Some(Token::True) => { self.next(); Ok(Pattern::Lit(Literal::True)) }
             Some(Token::False) => { self.next(); Ok(Pattern::Lit(Literal::False)) }
+            Some(Token::Pi) => { self.next(); Ok(Pattern::Lit(Literal::Float(std::f64::consts::PI))) }
+            Some(Token::Euler) => { self.next(); Ok(Pattern::Lit(Literal::Float(std::f64::consts::E))) }
 
             Some(Token::Ident(name)) | Some(Token::TyVar(name)) | Some(Token::AplIdent(name)) => {
                 self.next();
@@ -787,6 +876,7 @@ impl<'a> Parser<'a> {
             Some(Token::TyBool) => { self.next(); Ok(Type::Prim(PrimType::Bool)) }
             Some(Token::TyChar) => { self.next(); Ok(Type::Prim(PrimType::Char)) }
             Some(Token::TyByte) => { self.next(); Ok(Type::Prim(PrimType::Byte)) }
+            Some(Token::TyString) => { self.next(); Ok(Type::Prim(PrimType::String)) }
             Some(Token::TyNat) => { self.next(); Ok(Type::Prim(PrimType::Nat)) }
             Some(Token::TyInt) => { self.next(); Ok(Type::Prim(PrimType::Int)) }
             Some(Token::TyUnit) => { self.next(); Ok(Type::Tuple(vec![])) }
@@ -978,7 +1068,23 @@ impl<'a> Parser<'a> {
             Some(Token::FnStart) => Ok(Some(self.parse_fn_decl()?)),
             Some(Token::Let) => Ok(Some(self.parse_let_decl()?)),
             Some(Token::Type) => Ok(Some(self.parse_type_decl()?)),
+            Some(Token::Enum) => Ok(Some(self.parse_enum_decl()?)),
+            Some(Token::Use) => Ok(Some(self.parse_use_decl()?)),
             _ => Ok(None),
+        }
+    }
+
+    /// Parse use declaration: use "path/to/file.goth"
+    fn parse_use_decl(&mut self) -> ParseResult<Decl> {
+        self.expect(Token::Use)?;
+        match self.next() {
+            Some(Token::String(path)) => {
+                Ok(Decl::Use(goth_ast::decl::UseDecl::new(path)))
+            }
+            other => Err(ParseError::Unexpected {
+                found: other,
+                expected: "string path".to_string()
+            }),
         }
     }
 
@@ -1082,6 +1188,75 @@ impl<'a> Parser<'a> {
             params,
             definition: def,
         }))
+    }
+
+    /// Parse enum declaration: enum Name τ where Variant₁ T₁ | Variant₂ T₂ | ...
+    /// Examples:
+    ///   enum Bool where True | False
+    ///   enum Option τ where Some τ | None
+    ///   enum Either α β where Left α | Right β
+    fn parse_enum_decl(&mut self) -> ParseResult<Decl> {
+        use goth_ast::decl::{EnumDecl, EnumVariant};
+
+        self.expect(Token::Enum)?;
+        let name = self.expect_ident()?;
+
+        // Parse optional type parameters (lowercase identifiers or Greek letters)
+        let mut params = Vec::new();
+        while let Some(Token::Ident(p)) | Some(Token::TyVar(p)) | Some(Token::AplIdent(p)) = self.peek().cloned() {
+            // Only accept lowercase type variables
+            if p.chars().next().map(|c| c.is_lowercase() || c == 'τ' || c == 'α' || c == 'β' || c == 'σ').unwrap_or(false) {
+                self.next();
+                params.push(TypeParam { name: p.into(), kind: TypeParamKind::Type });
+            } else {
+                break;
+            }
+        }
+
+        self.expect(Token::Where)?;
+
+        // Parse variants separated by |
+        let mut variants = Vec::new();
+        loop {
+            // Variant name must start with uppercase
+            let variant_name = self.expect_ident()?;
+
+            // Optional payload type (check if next token could start a type)
+            let payload = if self.peek_is_type_start() {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+
+            variants.push(EnumVariant {
+                name: variant_name.into(),
+                payload,
+            });
+
+            // Check for more variants
+            if !self.eat(&Token::Pipe) {
+                break;
+            }
+        }
+
+        Ok(Decl::Enum(EnumDecl {
+            name: name.into(),
+            params,
+            variants,
+        }))
+    }
+
+    /// Check if the next token could start a type (for optional payload parsing)
+    fn peek_is_type_start(&mut self) -> bool {
+        match self.peek() {
+            Some(Token::Ident(s)) => {
+                // Type names start with uppercase, type variables with lowercase
+                s.chars().next().map(|c| c.is_uppercase() || c.is_lowercase()).unwrap_or(false)
+            }
+            Some(Token::TyVar(_)) | Some(Token::AplIdent(_)) => true,
+            Some(Token::LParen) | Some(Token::LBracket) | Some(Token::LAngle) => true,
+            _ => false,
+        }
     }
 }
 

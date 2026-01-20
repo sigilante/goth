@@ -21,6 +21,9 @@ pub enum Decl {
     /// Type alias
     Type(TypeDecl),
 
+    /// Enum/sum type definition
+    Enum(EnumDecl),
+
     /// Typeclass definition
     Class(ClassDecl),
 
@@ -32,6 +35,16 @@ pub enum Decl {
 
     /// Operator definition
     Op(OpDecl),
+
+    /// Use/import declaration (resolved at load time)
+    /// use "path/to/file.goth"
+    Use(UseDecl),
+}
+
+/// Use declaration - imports another file's declarations
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UseDecl {
+    pub path: Box<str>,
 }
 
 /// Function declaration
@@ -60,6 +73,26 @@ pub struct TypeDecl {
     pub name: Box<str>,
     pub params: Vec<TypeParam>,
     pub definition: Type,
+}
+
+/// Enum/sum type declaration
+/// enum Name τ where Constructor₁ T₁ | Constructor₂ T₂ | ...
+///
+/// Example:
+///   enum Option τ where Some τ | None
+///   enum Either α β where Left α | Right β
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EnumDecl {
+    pub name: Box<str>,
+    pub params: Vec<TypeParam>,
+    pub variants: Vec<EnumVariant>,
+}
+
+/// A single variant in an enum
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EnumVariant {
+    pub name: Box<str>,
+    pub payload: Option<Type>,
 }
 
 /// Typeclass declaration
@@ -193,6 +226,48 @@ impl TypeDecl {
     }
 }
 
+impl EnumDecl {
+    pub fn new(name: impl Into<Box<str>>, variants: Vec<EnumVariant>) -> Self {
+        EnumDecl {
+            name: name.into(),
+            params: vec![],
+            variants,
+        }
+    }
+
+    pub fn generic(name: impl Into<Box<str>>, params: Vec<TypeParam>, variants: Vec<EnumVariant>) -> Self {
+        EnumDecl {
+            name: name.into(),
+            params,
+            variants,
+        }
+    }
+
+    pub fn with_variant(mut self, name: impl Into<Box<str>>, payload: Option<Type>) -> Self {
+        self.variants.push(EnumVariant {
+            name: name.into(),
+            payload,
+        });
+        self
+    }
+}
+
+impl EnumVariant {
+    pub fn unit(name: impl Into<Box<str>>) -> Self {
+        EnumVariant {
+            name: name.into(),
+            payload: None,
+        }
+    }
+
+    pub fn with_payload(name: impl Into<Box<str>>, payload: Type) -> Self {
+        EnumVariant {
+            name: name.into(),
+            payload: Some(payload),
+        }
+    }
+}
+
 impl ClassDecl {
     pub fn new(name: impl Into<Box<str>>, param: TypeParam) -> Self {
         ClassDecl {
@@ -274,6 +349,10 @@ impl From<TypeDecl> for Decl {
     fn from(t: TypeDecl) -> Self { Decl::Type(t) }
 }
 
+impl From<EnumDecl> for Decl {
+    fn from(e: EnumDecl) -> Self { Decl::Enum(e) }
+}
+
 impl From<ClassDecl> for Decl {
     fn from(c: ClassDecl) -> Self { Decl::Class(c) }
 }
@@ -284,4 +363,14 @@ impl From<ImplDecl> for Decl {
 
 impl From<LetDecl> for Decl {
     fn from(l: LetDecl) -> Self { Decl::Let(l) }
+}
+
+impl From<UseDecl> for Decl {
+    fn from(u: UseDecl) -> Self { Decl::Use(u) }
+}
+
+impl UseDecl {
+    pub fn new(path: impl Into<Box<str>>) -> Self {
+        UseDecl { path: path.into() }
+    }
 }
