@@ -37,9 +37,20 @@ The interpreted version of the language is the canonical language.
 ./target/release/goth -e "Σ [1, 2, 3, 4, 5]"
 ```
 
+#### Examples
+
+[`add_main.goth`](./examples/add_main.goth)
+[`factorial.goth`](./examples/factorial.goth)
+[`fibonacci.goth`](./examples/fibonacci.goth)
+[`math_comprehensive.goth`](./examples/math_comprehensive.goth)
+[`matmul.goth`](./examples/matmul.goth)
+[`primes.goth`](./examples/primes.goth)
+[`test_iota.goth`](./examples/test_iota.goth)
+[`use_math.goth`](./examples/use_math.goth)
+
 ### Compiler
 
-The compiler is based on LLVM.  It is still somewhat experimental and may not support all language features.
+The compiler is based on LLVM.  It is still somewhat experimental and may not support all language features.  Feel free to file bug reports.
 
 ```sh
 # Compile to native executable
