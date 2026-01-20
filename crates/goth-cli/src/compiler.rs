@@ -1,12 +1,12 @@
-//! gothc - The Goth compiler
+//! gothic - The Goth compiler
 //!
 //! Compiles Goth source files to native executables via LLVM.
 //!
 //! Usage:
-//!   gothc input.goth              # Compile to ./input
-//!   gothc input.goth -o output    # Compile to ./output
-//!   gothc input.goth --emit-llvm  # Output LLVM IR only
-//!   gothc input.goth --emit-mir   # Output MIR only
+//!   gothic input.goth              # Compile to ./input
+//!   gothic input.goth -o output    # Compile to ./output
+//!   gothic input.goth --emit-llvm  # Output LLVM IR only
+//!   gothic input.goth --emit-mir   # Output MIR only
 
 use clap::Parser;
 use colored::*;
@@ -20,7 +20,7 @@ use goth_mir::lower_module;
 use goth_llvm::emit_program;
 
 #[derive(Parser, Debug)]
-#[command(name = "gothc")]
+#[command(name = "gothic")]
 #[command(author = "Goth Authors")]
 #[command(version = "0.1.0")]
 #[command(about = "The Goth compiler - compile Goth source to native executables")]

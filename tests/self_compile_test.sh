@@ -4,7 +4,7 @@
 
 set -e
 
-GOTHC="${GOTHC:-./crates/target/release/gothc}"
+GOTHIC="${GOTHIC:-./crates/target/release/gothic}"
 GOTH="${GOTH:-./crates/target/release/goth}"
 
 # Color output
@@ -67,7 +67,7 @@ cat > /tmp/hello.goth << 'EOF'
 ╰─ 42
 EOF
 
-$GOTHC /tmp/hello.goth -o /tmp/hello 2>/dev/null
+$GOTHIC /tmp/hello.goth -o /tmp/hello 2>/dev/null
 result=$(/tmp/hello)
 if [ "$result" = "42" ]; then
     pass "Compile: hello world returns 42"
@@ -82,7 +82,7 @@ cat > /tmp/arith.goth << 'EOF'
 ╰─ (3 + 4) × 5
 EOF
 
-$GOTHC /tmp/arith.goth -o /tmp/arith 2>/dev/null
+$GOTHIC /tmp/arith.goth -o /tmp/arith 2>/dev/null
 result=$(/tmp/arith)
 if [ "$result" = "35" ]; then
     pass "Compile: (3 + 4) × 5 = 35"
@@ -97,7 +97,7 @@ cat > /tmp/lambda.goth << 'EOF'
 ╰─ (λ→ ₀ × ₀) ₀
 EOF
 
-$GOTHC /tmp/lambda.goth -o /tmp/lambda 2>/dev/null
+$GOTHIC /tmp/lambda.goth -o /tmp/lambda 2>/dev/null
 result=$(/tmp/lambda 7)
 if [ "$result" = "49" ]; then
     pass "Compile: lambda square 7 = 49"
@@ -115,7 +115,7 @@ cat > /tmp/cross_fn.goth << 'EOF'
 ╰─ square 9
 EOF
 
-$GOTHC /tmp/cross_fn.goth -o /tmp/cross_fn 2>/dev/null
+$GOTHIC /tmp/cross_fn.goth -o /tmp/cross_fn 2>/dev/null
 result=$(/tmp/cross_fn)
 if [ "$result" = "81" ]; then
     pass "Compile: cross-function call square 9 = 81"
@@ -135,7 +135,7 @@ enum Maybe τ where Just τ | Nothing
   }
 EOF
 
-$GOTHC /tmp/enum_test.goth -o /tmp/enum_test 2>/dev/null
+$GOTHIC /tmp/enum_test.goth -o /tmp/enum_test 2>/dev/null
 result=$(/tmp/enum_test)
 if [ "$result" = "100" ]; then
     pass "Compile: enum pattern match = 100"
@@ -150,7 +150,7 @@ cat > /tmp/filter_test.goth << 'EOF'
 ╰─ Σ (ι 10 ▸ λ→ ₀ > 5)
 EOF
 
-$GOTHC /tmp/filter_test.goth -o /tmp/filter_test 2>/dev/null
+$GOTHIC /tmp/filter_test.goth -o /tmp/filter_test 2>/dev/null
 result=$(/tmp/filter_test)
 if [ "$result" = "30" ]; then
     pass "Compile: filter ι 10 (x > 5) sum = 30"

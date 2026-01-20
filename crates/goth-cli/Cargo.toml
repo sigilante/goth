@@ -11,7 +11,7 @@ name = "goth"
 path = "src/main.rs"
 
 [[bin]]
-name = "gothc"
+name = "gothic"
 path = "src/compiler.rs"
 
 [dependencies]
