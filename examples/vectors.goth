@@ -1,0 +1,5 @@
+# Vector operations
+# Sum of squares: 3² + 4² = 9 + 16 = 25
+
+╭─ main : () → I
+╰─ Σ ([3, 4] ↦ λ→ ₀ × ₀)

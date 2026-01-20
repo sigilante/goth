@@ -1,0 +1,98 @@
+# Goth Standard Library - Prelude
+# Core functions imported by default
+
+# ============ Core Combinators ============
+
+# Identity function
+╭─ id : α → α
+╰─ ₀
+
+# Constant function (returns first argument, ignores second)
+╭─ const : α → β → α
+╰─ ₁
+
+# Flip arguments of a binary function
+╭─ flip : (α → β → γ) → β → α → γ
+╰─ ₂ ₀ ₁
+
+# Function composition: (f ∘ g)(x) = f(g(x))
+╭─ compose : (β → γ) → (α → β) → α → γ
+╰─ ₂ (₁ ₀)
+
+# ============ Boolean Operations ============
+
+╭─ not : Bool → Bool
+╰─ if ₀ then ⊥ else ⊤
+
+╭─ and : Bool → Bool → Bool
+╰─ if ₁ then ₀ else ⊥
+
+╭─ or : Bool → Bool → Bool
+╰─ if ₁ then ⊤ else ₀
+
+# ============ Numeric Operations ============
+
+╭─ double : F → F
+╰─ ₀ × 2.0
+
+╭─ square : F → F
+╰─ ₀ × ₀
+
+╭─ cube : F → F
+╰─ ₀ × ₀ × ₀
+
+╭─ inc : ℤ → ℤ
+╰─ ₀ + 1
+
+╭─ dec : ℤ → ℤ
+╰─ ₀ - 1
+
+╭─ isZero : ℤ → Bool
+╰─ ₀ = 0
+
+╭─ isPositive : ℤ → Bool
+╰─ ₀ > 0
+
+╭─ isNegative : ℤ → Bool
+╰─ ₀ < 0
+
+# ============ Comparison Operations ============
+
+╭─ min : F → F → F
+╰─ if ₁ < ₀ then ₁ else ₀
+
+╭─ max : F → F → F
+╰─ if ₁ > ₀ then ₁ else ₀
+
+╭─ clamp : F → F → F → F
+╰─ max ₂ (min ₁ ₀)
+
+# ============ Array/List Operations ============
+
+╭─ head : [n]α → α
+╰─ ₀[0]
+
+╭─ length : [n]α → ℤ
+╰─ len ₀
+
+╭─ isEmpty : [n]α → Bool
+╰─ len ₀ = 0
+
+╭─ replicate : ℤ → α → [n]α
+╰─ [₁; ₀]
+
+# ============ Reduction Operations ============
+
+╭─ sum : [n]F → F
+╰─ Σ ₀
+
+╭─ product : [n]F → F
+╰─ */ ₀
+
+╭─ mean : [n]F → F
+╰─ Σ ₀ / len ₀
+
+# ============ Mathematical Constants ============
+# These are built-in: π (pi), 𝕖 (e)
+# tau is 2π
+let tau = 2.0 × 3.14159265358979323846

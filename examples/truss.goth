@@ -1,0 +1,7 @@
+# Simple truss analysis
+# Displacement = Force / Stiffness
+
+╭─ main : () → I
+╰─ let force ← 100 in
+   let stiffness ← 1 in
+   force / stiffness

@@ -1,0 +1,14 @@
+{
+    "argv": [
+        "python3",
+        "-m",
+        "goth_kernel",
+        "-f",
+        "{connection_file}"
+    ],
+    "display_name": "Goth",
+    "language": "goth",
+    "metadata": {
+        "debugger": false
+    }
+}

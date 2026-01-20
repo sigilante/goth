@@ -1,0 +1,18 @@
+# Goth Standard Library - I/O Operations
+# File and console I/O
+
+# Print with newline (wrapper around print primitive)
+╭─ println : String → ()
+╰─ print ₀
+
+# Print integer
+╭─ printInt : I → ()
+╰─ print (toString ₀)
+
+# Print float
+╭─ printFloat : F → ()
+╰─ print (toString ₀)
+
+# Print bool
+╭─ printBool : Bool → ()
+╰─ if ₀ then print "true" else print "false"

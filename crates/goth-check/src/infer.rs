@@ -115,11 +115,55 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
         }
         
         // ============ Binary/Unary Operations ============
-        
+
         Expr::BinOp(op, left, right) => {
-            let left_ty = infer(ctx, left)?;
-            let right_ty = infer(ctx, right)?;
-            binop_type(op.clone(), &left_ty, &right_ty)
+            use goth_ast::op::BinOp;
+
+            // Special handling for Map and Filter with lambda right operand
+            match (op, right.as_ref()) {
+                (BinOp::Map, Expr::Lam(body)) => {
+                    // arr ↦ λ→ body: infer arr type, use element as lambda arg
+                    let left_ty = infer(ctx, left)?;
+                    match &left_ty {
+                        Type::Tensor(shape, elem_ty) => {
+                            // Infer body with element type bound to ₀
+                            let ret_ty = ctx.with_binding(*elem_ty.clone(), |ctx| {
+                                infer(ctx, body)
+                            })?;
+                            // Result is tensor with same shape, new element type
+                            Ok(Type::Tensor(shape.clone(), Box::new(ret_ty)))
+                        }
+                        _ => Err(TypeError::NotATensor(left_ty))
+                    }
+                }
+
+                (BinOp::Filter, Expr::Lam(body)) => {
+                    // arr ▸ λ→ body: infer arr type, lambda must return Bool
+                    let left_ty = infer(ctx, left)?;
+                    match &left_ty {
+                        Type::Tensor(_, elem_ty) => {
+                            // Infer body, should be Bool
+                            let pred_ty = ctx.with_binding(*elem_ty.clone(), |ctx| {
+                                infer(ctx, body)
+                            })?;
+                            check(ctx, &Expr::Lit(Literal::True), &pred_ty)?;
+                            // Result has unknown length but same element type
+                            Ok(Type::Tensor(
+                                goth_ast::shape::Shape(vec![goth_ast::shape::Dim::Var("m".into())]),
+                                elem_ty.clone(),
+                            ))
+                        }
+                        _ => Err(TypeError::NotATensor(left_ty))
+                    }
+                }
+
+                _ => {
+                    // Default: infer both sides
+                    let left_ty = infer(ctx, left)?;
+                    let right_ty = infer(ctx, right)?;
+                    binop_type(op.clone(), &left_ty, &right_ty)
+                }
+            }
         }
         
         Expr::UnaryOp(op, operand) => {

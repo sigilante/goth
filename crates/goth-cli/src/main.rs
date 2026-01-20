@@ -220,6 +220,13 @@ fn run_file(path: &PathBuf, trace: bool, parse_only: bool, show_ast: bool, no_ma
                         println!("{} {:#?}", "Resolved AST:".cyan().bold(), module);
                     }
 
+                    // Type check the module
+                    let mut type_checker = TypeChecker::new();
+                    if let Err(e) = type_checker.check_module(&module) {
+                        eprintln!("{}: {}", "Type error".red().bold(), e);
+                        return;
+                    }
+
                     // Handle emit modes for modules
                     match emit_mode {
                         EmitMode::Mir => {

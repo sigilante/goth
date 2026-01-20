@@ -1,0 +1,100 @@
+# Goth Standard Library - List Operations
+# Common operations on arrays/lists
+
+# ============ Access Operations ============
+
+# Get first element
+╭─ head : [n]α → α
+╰─ ₀[0]
+
+# Get last element
+╭─ last : [n]α → α
+╰─ ₀[len ₀ - 1]
+
+# Get all but first
+╭─ tail : [n]α → [m]α
+╰─ drop 1 ₀
+
+# Get all but last
+╭─ init : [n]α → [m]α
+╰─ take (len ₀ - 1) ₀
+
+# Safe index with default
+╭─ getOr : [n]α → ℤ → α → α
+╰─ if ₁ ≥ 0 ∧ ₁ < len ₂ then ₂[₁] else ₀
+
+# ============ Construction Operations ============
+
+# Prepend element (cons)
+╭─ cons : α → [n]α → [m]α
+╰─ [₁] ⧺ ₀
+
+# Append element (snoc)
+╭─ snoc : [n]α → α → [m]α
+╰─ ₁ ⧺ [₀]
+
+# Concatenate two lists
+╭─ append : [n]α → [m]α → [k]α
+╰─ ₁ ⧺ ₀
+
+# ============ Transformation Operations ============
+
+# Map function over list
+╭─ map : [n]α → (α → β) → [n]β
+╰─ ₁ ↦ ₀
+
+# Filter list by predicate
+╭─ filter : [n]α → (α → Bool) → [m]α
+╰─ ₁ ▸ ₀
+
+# Reverse list
+╭─ rev : [n]α → [n]α
+╰─ reverse ₀
+
+# Zip two lists into pairs
+╭─ zip : [n]α → [n]β → [n]⟨α, β⟩
+╰─ ₁ ⊗ ₀
+
+# ============ Reduction Operations ============
+
+# Sum of numbers
+╭─ sum : [n]F → F
+╰─ Σ ₀
+
+# Product of numbers
+╭─ product : [n]F → F
+╰─ Π ₀
+
+# Check if all elements satisfy predicate
+╭─ all : [n]α → (α → Bool) → Bool
+╰─ len (₁ ▸ ₀) = len ₁
+
+# Check if any element satisfies predicate
+╭─ any : [n]α → (α → Bool) → Bool
+╰─ len (₁ ▸ ₀) > 0
+
+# Count elements satisfying predicate
+╭─ count : [n]α → (α → Bool) → ℤ
+╰─ len (₁ ▸ ₀)
+
+# ============ Statistics ============
+
+╭─ mean : [n]F → F
+╰─ Σ ₀ / len ₀
+
+╭─ minimum : [n]F → F
+╰─ min/ ₀
+
+╭─ maximum : [n]F → F
+╰─ max/ ₀
+
+# ============ Search Operations ============
+
+# Check if element is in list
+╭─ elem : α → [n]α → Bool
+╰─ len (₀ ▸ λ→ ₀ = ₁) > 0
+
+# Find first index of element (returns -1 if not found)
+╭─ indexOf : α → [n]α → ℤ
+╰─ let matches = iota (len ₀) ▸ λ→ ₁[₀] = ₂
+   in if len matches > 0 then matches[0] else -1

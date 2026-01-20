@@ -15,7 +15,7 @@ enum Result τ where Ok τ | Err I
 
 -- Example function using Option
 ╭─ safeDiv : I → I → I
-╰─ if ₁ == 0 then 0 else ₀ / ₁
+╰─ if ₁ = 0 then 0 else ₀ / ₁
 
 -- Example function with variant constructors
 ╭─ makeOption : I → I

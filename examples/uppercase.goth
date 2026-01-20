@@ -1,0 +1,7 @@
+# Case conversion
+# Usage: goth uppercase.goth <char_code>
+# Example: goth uppercase.goth 104  →  72  (h → H)
+# Lowercase letters (97-122) subtract 32 to become uppercase
+
+╭─ main : I64 → I64
+╰─ if (₀ ≥ 97) ∧ (₀ ≤ 122) then ₀ - 32 else ₀

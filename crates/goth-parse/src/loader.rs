@@ -2,6 +2,10 @@
 //!
 //! Resolves `use "path"` declarations by loading and inlining referenced files.
 //! Handles circular import detection and deduplication.
+//! Supports three file formats:
+//! - `.goth` - Unicode text source
+//! - `.gast` - JSON AST (via serde_json)
+//! - `.gbin` - Binary AST (via bincode)
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -25,6 +29,12 @@ pub enum LoadError {
 
     #[error("Circular import detected: {0}")]
     CircularImport(PathBuf),
+
+    #[error("JSON deserialization error in {path}: {source}")]
+    JsonError { path: PathBuf, source: serde_json::Error },
+
+    #[error("Binary deserialization error in {path}: {source}")]
+    BinaryError { path: PathBuf, source: bincode::Error },
 }
 
 pub type LoadResult<T> = Result<T, LoadError>;
@@ -50,6 +60,7 @@ impl Loader {
     }
 
     /// Load and resolve a module from a file path
+    /// Supports .goth (text), .gast (JSON), and .gbin (binary) formats
     pub fn load_file(&mut self, path: impl AsRef<Path>) -> LoadResult<Module> {
         let path = self.resolve_path(path.as_ref())?;
 
@@ -63,16 +74,8 @@ impl Loader {
             return Ok(Module::new(vec![])); // Return empty, already included
         }
 
-        // Read and parse the file
-        let source = fs::read_to_string(&path)
-            .map_err(|e| LoadError::IoError { path: path.clone(), source: e })?;
-
-        let name = path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("module");
-
-        let module = parse_module(&source, name)
-            .map_err(|e| LoadError::ParseError { path: path.clone(), source: e })?;
+        // Load module based on file extension
+        let module = self.load_module_by_format(&path)?;
 
         // Mark as loaded and push to import stack
         self.loaded.insert(path.clone());
@@ -85,6 +88,38 @@ impl Loader {
         self.import_stack.pop();
 
         Ok(resolved)
+    }
+
+    /// Load a module based on file extension
+    fn load_module_by_format(&self, path: &Path) -> LoadResult<Module> {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("module");
+
+        match ext {
+            "gast" => {
+                // JSON AST format
+                let bytes = fs::read(path)
+                    .map_err(|e| LoadError::IoError { path: path.to_path_buf(), source: e })?;
+                serde_json::from_slice(&bytes)
+                    .map_err(|e| LoadError::JsonError { path: path.to_path_buf(), source: e })
+            }
+            "gbin" => {
+                // Binary AST format
+                let bytes = fs::read(path)
+                    .map_err(|e| LoadError::IoError { path: path.to_path_buf(), source: e })?;
+                bincode::deserialize(&bytes)
+                    .map_err(|e| LoadError::BinaryError { path: path.to_path_buf(), source: e })
+            }
+            _ => {
+                // Default: text source (.goth or unknown)
+                let source = fs::read_to_string(path)
+                    .map_err(|e| LoadError::IoError { path: path.to_path_buf(), source: e })?;
+                parse_module(&source, name)
+                    .map_err(|e| LoadError::ParseError { path: path.to_path_buf(), source: e })
+            }
+        }
     }
 
     /// Load and resolve a module from source string
@@ -177,6 +212,39 @@ pub fn load_file(path: impl AsRef<Path>) -> LoadResult<Module> {
 pub fn load_source(source: &str, name: &str, base_dir: impl AsRef<Path>) -> LoadResult<Module> {
     let mut loader = Loader::new(base_dir);
     loader.load_source(source, name)
+}
+
+/// Save a module to a file (format determined by extension)
+/// Supports .goth (text), .gast (JSON), and .gbin (binary) formats
+pub fn save_file(module: &Module, path: impl AsRef<Path>) -> LoadResult<()> {
+    use std::io::Write;
+
+    let path = path.as_ref();
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+
+    let bytes = match ext {
+        "gast" => {
+            // JSON AST format (pretty-printed)
+            serde_json::to_vec_pretty(module)
+                .map_err(|e| LoadError::JsonError { path: path.to_path_buf(), source: e })?
+        }
+        "gbin" => {
+            // Binary AST format
+            bincode::serialize(module)
+                .map_err(|e| LoadError::BinaryError { path: path.to_path_buf(), source: e })?
+        }
+        _ => {
+            // Default: text source (.goth)
+            goth_ast::pretty::print_module(module).into_bytes()
+        }
+    };
+
+    let mut file = fs::File::create(path)
+        .map_err(|e| LoadError::IoError { path: path.to_path_buf(), source: e })?;
+    file.write_all(&bytes)
+        .map_err(|e| LoadError::IoError { path: path.to_path_buf(), source: e })?;
+
+    Ok(())
 }
 
 #[cfg(test)]

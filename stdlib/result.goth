@@ -1,0 +1,26 @@
+# Goth Standard Library - Result Type
+# For computations that may succeed or fail
+
+# Result type definition
+enum Result ok err where Ok ok | Err err
+
+# Check if result is success (monomorphic for now)
+╭─ isOkI : I → Bool
+╰─ match ₀ {
+    Ok _ → ⊤;
+    Err _ → ⊥
+  }
+
+# Check if result is error
+╭─ isErrI : I → Bool
+╰─ match ₀ {
+    Ok _ → ⊥;
+    Err _ → ⊤
+  }
+
+# Get success value or default
+╭─ unwrapOrI : I → I → I
+╰─ match ₁ {
+    Ok x → x;
+    Err _ → ₀
+  }

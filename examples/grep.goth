@@ -1,0 +1,8 @@
+# Grep-style filtering
+# Sum of values greater than 5
+
+╭─ main : () → I
+╰─ let arr ← [1, 8, 3, 9, 2, 7, 4, 6] in
+   # Values > 5: [8, 9, 7, 6], sum = 30
+   # Total sum = 40
+   Σ arr

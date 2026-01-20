@@ -59,9 +59,23 @@ pub fn emit_runtime_declarations() -> String {
     out.push_str("declare i64 @goth_sum_i64(i8*, i64)\n");
     out.push_str("declare double @goth_sum_f64(i8*, i64)\n");
     out.push_str("declare i64 @goth_prod_i64(i8*, i64)\n");
+    out.push_str("declare i64 @goth_min_i64(i8*, i64)\n");
+    out.push_str("declare i64 @goth_max_i64(i8*, i64)\n");
     out.push_str("declare i64 @goth_len(i8*)\n");
     out.push_str("declare i8* @goth_reverse(i8*, i64)\n");
     out.push_str("declare i64 @goth_index_i64(i8*, i64)\n");
+    out.push_str("declare i8* @goth_map_i64(i8*, i8*, i64)\n");
+    out.push_str("declare i8* @goth_filter_i64(i8*, i8*, i64)\n");
+    out.push_str("\n");
+
+    // Matrix/vector operations (F64)
+    out.push_str("; Matrix/vector operations\n");
+    out.push_str("declare double @goth_dot_f64(i8*, i8*, i64)\n");
+    out.push_str("declare double @goth_norm_f64(i8*, i64)\n");
+    out.push_str("declare i8* @goth_matmul_f64(i8*, i8*, i64, i64, i64)\n");
+    out.push_str("declare i8* @goth_transpose_f64(i8*, i64, i64)\n");
+    out.push_str("declare void @goth_print_array_f64(i8*, i64)\n");
+    out.push_str("declare void @goth_print_array_i64(i8*, i64)\n");
     out.push_str("\n");
 
     out

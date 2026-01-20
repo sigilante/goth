@@ -1,0 +1,9 @@
+# Matrix trace (sum of diagonal)
+# 2x2 matrix stored as [a, b, c, d]
+
+╭─ main : () → I
+╰─ let m ← [1, 2, 3, 4] in
+   # Matrix: | 1 2 |
+   #         | 3 4 |
+   # Trace = 1 + 4 = 5
+   m[0] + m[3]

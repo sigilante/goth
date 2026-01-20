@@ -20,7 +20,7 @@ pub mod prelude {
     pub use crate::lexer::{Token, Lexer, Loc, Spanned};
     pub use crate::parser::{Parser, ParseError, ParseResult, parse_expr, parse_type, parse_pattern, parse_module};
     pub use crate::resolve::{resolve_expr, resolve_module};
-    pub use crate::loader::{Loader, LoadError, LoadResult, load_file, load_source};
+    pub use crate::loader::{Loader, LoadError, LoadResult, load_file, load_source, save_file};
 }
 
 #[cfg(test)]

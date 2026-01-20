@@ -1,30 +1,65 @@
-# 🌸☠︎ 𝔊𝔬𝔱𝔥 𓂀🖤
-### the `goth` language for machine spirits
+# 🦇 𝔊𝔬𝔱𝔥
 
-`goth` is an LLM-native programming language designed for efficient code generation, editing, and comprehension by large language models.
+A functional programming language with Unicode syntax, dependent types, and tensor operations.
+
+## Quick Start
 
 ```sh
-$ cargo build
-$ cargo test
+cd crates
+cargo build --release
 ```
 
-© 2026 Sigilante.  Goth is made available under the MIT License.
+### Example Program
 
-## Usage
+```goth
+╭─ factorial : I64 → I64
+╰─ if ₀ ≤ 1 then 1 else ₀ × factorial (₀ - 1)
 
-REPL shell:
-
-```sh
-$ goth
+╭─ main : () → I64
+╰─ factorial 10
 ```
 
-Examples:
+### Interpreter
 
 ```sh
-cd goth/crates
-cargo run --package goth-ast --example json_ast_demo
-cargo run --package goth-ast --example roundtrip_validation
-cargo run --package goth-mlir --example end-to-end-example
+# REPL
+./target/release/goth
+
+# Run a file
+./target/release/goth ../examples/factorial.goth
+
+# Evaluate expression
+./target/release/goth -e "Σ [1, 2, 3, 4, 5]"
+```
+
+### Compiler
+
+```sh
+# Compile to native executable
+./target/release/gothic ../examples/hello_main.goth -o hello
+./hello
+
+# Emit LLVM IR
+./target/release/gothic program.goth --emit-llvm
+
+# Emit MIR
+./target/release/gothic program.goth --emit-mir
+```
+
+### Tests
+
+```sh
+# Unit tests
+cargo test
+
+# Integration tests (interpreter + compiler)
+cd .. && bash tests/self_compile_test.sh
+```
+
+### Jupyter Kernel
+
+```sh
+cd jupyter && ./install.sh
 ```
 
 ## Status
@@ -96,51 +131,11 @@ representation of the program.  There is a one-to-one mapping
 between source code and AST nodes (barring whitespace).  This
 is more efficient for the LLM to generate and edit.
 
-Here's the target compilation pipeline:
+## Documentation
 
-```
-┌──────────────────────────────────────┐
-│            GOTH TOOLCHAIN            │
-└──────────────────────────────────────┘
-                                     
-┌─────────┐  ┌─────────┐  ┌─────────┐                      
-│ .goth   │  │ .gast   │  │ .gbin   │    ← Source formats  
-└────┬────┘  └────┬────┘  └────┬────┘                      
-     │            │            │                           
-     └────────────┼────────────┘                           
-                  ↓                                        
-           ┌──────────────┐                                
-           │   GOTH AST   │  ← Canonical in-memory repr    
-           │    (DAG)     │                                
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐    ┌───────┐                   
-           │  Typecheck   │←──→│  Z3   │  ← SMT for        
-           │  + Constrain │    └───────┘    intervals,     
-           └──────┬───────┘                 shapes,        
-                  ↓                         refinements    
-           ┌──────────────┐                                
-           │  Typed AST   │  ← All types resolved          
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐                                
-           │  Monomorph   │  ← Specialize generics         
-           │  + Closure   │    Convert closures            
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐                                
-           │   GOTH MIR   │  ← Low-level, explicit         
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐                                
-           │     MLIR     │  ← tensor, affine, scf         
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐                                
-           │   LLVM IR    │                                
-           └──────┬───────┘                                
-                  ↓                                        
-           ┌──────────────┐                                
-           │   Machine    │                                
-           └──────────────┘
-```
+- [Language Specification](./LANGUAGE.md) — Full syntax and semantics
+- [Philosophy](./docs/PHILOSOPHY.md) — Design rationale
+
+## License
+
+MIT © 2026 Sigilante

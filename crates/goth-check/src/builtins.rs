@@ -387,6 +387,79 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 )),
             ))
         }
+        // Matrix operations with shape checking
+        "dot" | "·" => {
+            // ∀n. [n]F64 → [n]F64 → F64 (dot product)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::F64))),
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::F64))),
+                    ],
+                    Type::Prim(PrimType::F64),
+                )),
+            ))
+        }
+        "matmul" => {
+            // ∀m n p. [m n]F64 → [n p]F64 → [m p]F64 (matrix multiplication)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "m".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "p".into(), kind: TypeParamKind::Shape },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::Tensor(Shape(vec![Dim::Var("m".into()), Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::F64))),
+                        Type::Tensor(Shape(vec![Dim::Var("n".into()), Dim::Var("p".into())]), Box::new(Type::Prim(PrimType::F64))),
+                    ],
+                    Type::Tensor(Shape(vec![Dim::Var("m".into()), Dim::Var("p".into())]), Box::new(Type::Prim(PrimType::F64))),
+                )),
+            ))
+        }
+        "transpose" | "⍉" => {
+            // ∀m n. [m n]F64 → [n m]F64 (matrix transpose)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "m".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                ],
+                Box::new(Type::func(
+                    Type::Tensor(Shape(vec![Dim::Var("m".into()), Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::F64))),
+                    Type::Tensor(Shape(vec![Dim::Var("n".into()), Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::F64))),
+                )),
+            ))
+        }
+        "norm" => {
+            // ∀n. [n]F64 → F64 (vector norm)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                ],
+                Box::new(Type::func(
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::F64))),
+                    Type::Prim(PrimType::F64),
+                )),
+            ))
+        }
+        // Sequence generation
+        "iota" | "ι" | "⍳" => {
+            // I64 → [n]I64 (generate 0..n-1)
+            Some(Type::func(
+                Type::Prim(PrimType::I64),
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
+        "range" => {
+            // I64 → I64 → [m]I64 (generate start..end-1)
+            Some(Type::func_n(
+                [Type::Prim(PrimType::I64), Type::Prim(PrimType::I64)],
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
         _ => None,
     }
 }

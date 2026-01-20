@@ -1,0 +1,18 @@
+# Check if a number is prime (returns 1 if prime, 0 if not)
+# Usage: goth primes.goth <n>
+# Example: goth primes.goth 7  →  1  (7 is prime)
+# Example: goth primes.goth 9  →  0  (9 is not prime)
+# Simple trial division for small numbers (checks divisibility by 2,3,5,7)
+
+╭─ main : I64 → I64
+╰─ if ₀ < 2 then 0
+   else if ₀ = 2 then 1
+   else if (₀ % 2) = 0 then 0
+   else if ₀ = 3 then 1
+   else if (₀ % 3) = 0 then 0
+   else if ₀ = 5 then 1
+   else if (₀ % 5) = 0 then 0
+   else if ₀ = 7 then 1
+   else if (₀ % 7) = 0 then 0
+   else if ₀ < 121 then 1
+   else 0

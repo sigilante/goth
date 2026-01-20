@@ -366,10 +366,12 @@ pub enum Token {
 
     // ============ Primitive Types ============
     #[token("F64")]
+    #[token("F", priority = 3)]
     TyF64,
     #[token("F32")]
     TyF32,
     #[token("I64")]
+    #[token("I", priority = 3)]
     TyI64,
     #[token("I32")]
     TyI32,

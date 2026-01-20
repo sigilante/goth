@@ -1,0 +1,26 @@
+# Goth Standard Library - Option Type
+# For optional values that may or may not be present
+
+# Option type definition
+enum Option τ where Some τ | None
+
+# Check if option has a value (monomorphic for now)
+╭─ isSomeI : I → Bool
+╰─ match ₀ {
+    Some _ → ⊤;
+    None → ⊥
+  }
+
+# Check if option is empty
+╭─ isNoneI : I → Bool
+╰─ match ₀ {
+    Some _ → ⊥;
+    None → ⊤
+  }
+
+# Get value or default (for integer options)
+╭─ getOrElseI : I → I → I
+╰─ match ₁ {
+    Some x → x;
+    None → ₀
+  }

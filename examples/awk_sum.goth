@@ -1,0 +1,7 @@
+# AWK-style column sum
+# Sum numeric data
+
+╭─ main : () → I
+╰─ let data ← [10, 20, 30, 40, 50] in
+   # Sum = 150
+   Σ data

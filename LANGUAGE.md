@@ -1,96 +1,72 @@
-# Goth Language Overview
+# Goth Language Specification
 
-**Goth** is a functional programming language with first-class support for tensor operations, dependent types, and effect tracking. It combines elements from APL/J (array programming), Haskell (type system), and ML (pattern matching) with a distinctive visual syntax using Unicode glyphs.
+**Goth** is a functional programming language with first-class tensor operations, algebraic data types, and effect tracking. It uses Unicode glyphs for a compact, mathematical syntax.
 
-## Table of Contents
+## Contents
 
-1. [Basic Syntax](#basic-syntax)
+1. [Literals](#literals)
 2. [De Bruijn Indices](#de-bruijn-indices)
 3. [Types](#types)
 4. [Tensor Shapes](#tensor-shapes)
 5. [Functions](#functions)
 6. [Operators](#operators)
-7. [Effects](#effects)
-8. [Pattern Matching](#pattern-matching)
-9. [Primitives Reference](#primitives-reference)
+7. [Enums and Pattern Matching](#enums-and-pattern-matching)
+8. [Effects](#effects)
+9. [Modules](#modules)
+10. [Primitives Reference](#primitives-reference)
+11. [Examples](#examples)
 
 ---
 
-## Basic Syntax
+## Literals
 
-### Literals
+| Type | Example | Notes |
+|------|---------|-------|
+| Integer | `42`, `-7` | 64-bit signed |
+| Float | `3.14`, `2.718` | 64-bit |
+| Boolean | `true`, `false` or `⊤`, `⊥` | |
+| Char | `'a'`, `'\n'` | Unicode |
+| String | `"hello"` | UTF-8 |
+| Unit | `()` or `⟨⟩` | |
+| Array | `[1, 2, 3]` | Homogeneous |
+| Tuple | `⟨1, "hi", true⟩` | Heterogeneous |
+| Record | `⟨x: 10, y: 20⟩` | Named fields |
 
-| Type | Unicode | ASCII | Example |
-|------|---------|-------|---------|
-| Integer | - | - | `42`, `-7` |
-| Float | - | - | `3.14`, `2.718` |
-| Boolean | `⊤`, `⊥` | `true`, `false` | `⊤` |
-| Char | - | - | `'a'`, `'\n'` |
-| String | - | - | `"hello"` |
-| Unit | `⟨⟩` | `<\|>` | `⟨⟩` |
-
-### Arrays and Tuples
-
+Comments use `--` or `#`:
 ```goth
-# Array (tensor) literal
-[1, 2, 3, 4, 5]
-
-# Tuple
-⟨1, "hello", ⊤⟩    # or <|1, "hello", true|>
-
-# Record (labeled tuple)
-⟨x: 10, y: 20⟩
-```
-
-### Comments
-
-```goth
-# This is a comment (to end of line)
+-- This is a comment
+# So is this
 ```
 
 ---
 
 ## De Bruijn Indices
 
-Goth uses **de Bruijn indices** for variable binding instead of named variables. This eliminates issues with variable shadowing and alpha-equivalence.
+Goth uses de Bruijn indices instead of named variables. This eliminates shadowing ambiguity.
 
-| Unicode | ASCII | Meaning |
-|---------|-------|---------|
-| `₀` | `_0` | Innermost binding |
-| `₁` | `_1` | One level out |
-| `₂` | `_2` | Two levels out |
-| ... | `_n` | n levels out |
+| Syntax | Meaning |
+|--------|---------|
+| `₀` or `_0` | Innermost binding |
+| `₁` or `_1` | One level out |
+| `₂` or `_2` | Two levels out |
 
 ```goth
-# Lambda that returns its argument
-λ→ ₀           # \-> _0
-
-# Lambda that adds two arguments
-λ→ λ→ ₁ + ₀   # outer arg is ₁, inner arg is ₀
+λ→ ₀              -- identity: returns its argument
+λ→ λ→ ₁ + ₀      -- add: ₁ is first arg, ₀ is second
 ```
 
-### Index Binding Rules
-
-**In function declarations** with multiple arguments, indices are bound in order:
+In function declarations, arguments bind left-to-right:
 ```goth
-╭─ f : A → B → C
-╰─ ...          # ₀ = first arg (A), ₁ = second arg (B)
+╭─ add : I64 → I64 → I64
+╰─ ₀ + ₁            -- ₀ = first arg, ₁ = second arg
 ```
 
-**In nested lambdas**, the innermost lambda's argument is ₀:
+Let bindings shift indices:
 ```goth
-λ→ λ→ body    # ₀ = second/inner arg, ₁ = first/outer arg
-```
-
-**Important: Let bindings shift indices.** After `let x ← expr in body`, within `body`:
-- `x` is bound at ₀
-- All previous bindings shift up by 1
-
-```goth
-╭─ f : ⟨I, I⟩ → I
-╰─ let a ← ₀.0 in   # ₀ = the tuple argument
-   let b ← ₁.1 in   # After first let: ₀ = a, ₁ = original tuple
-   a + b            # After second let: ₀ = b, ₁ = a, ₂ = tuple
+╭─ example : I64 → I64
+╰─ let x ← ₀ × 2 in    -- ₀ = argument
+   let y ← ₁ + 1 in    -- ₀ = x, ₁ = argument
+   ₀ + ₁               -- ₀ = y, ₁ = x
 ```
 
 ---
@@ -99,120 +75,110 @@ Goth uses **de Bruijn indices** for variable binding instead of named variables.
 
 ### Primitive Types
 
-| Type | Unicode | Description |
-|------|---------|-------------|
-| `F64` | - | 64-bit floating point |
-| `F32` | - | 32-bit floating point |
-| `I64` | - | 64-bit signed integer |
-| `I32` | - | 32-bit signed integer |
-| `Bool` | - | Boolean |
-| `Char` | - | Unicode character |
-| `Nat` | `ℕ` | Natural number (arbitrary precision) |
-| `Int` | `ℤ` | Integer (arbitrary precision) |
-| `I` | - | Alias for Int (common shorthand) |
+| Type | Description |
+|------|-------------|
+| `I64` | 64-bit signed integer |
+| `I32` | 32-bit signed integer |
+| `F64` | 64-bit float |
+| `F32` | 32-bit float |
+| `Bool` | Boolean |
+| `Char` | Unicode character |
+| `()` | Unit type |
 
 ### Composite Types
 
 ```goth
-# Function type
-I → I                    # Function from Int to Int
-I → I → I               # Curried two-argument function
+I64 → I64                -- Function type
+I64 → I64 → I64          -- Curried function
+[n]I64                   -- Vector of n integers
+[m n]F64                 -- m×n matrix of floats
+⟨I64, Bool⟩              -- Tuple (product)
+⟨x: I64, y: I64⟩         -- Record
+```
 
-# Tensor type with shape
-[n]I                    # Vector of n integers
-[m n]F64                # m×n matrix of floats
-[3]Bool                 # Vector of 3 booleans
+### Type Variables
 
-# Tuple type
-⟨I, Bool, Char⟩        # Product of three types
-
-# Variant type (sum)
-⟨None | Some I⟩        # Option type
-
-# Optional type shorthand
-I?                      # Same as ⟨None | Some I⟩
+Lowercase names are type variables:
+```goth
+α → α                    -- Polymorphic identity
+[n]α → [n]α              -- Shape-preserving map
 ```
 
 ---
 
 ## Tensor Shapes
 
-Shapes define the dimensions of tensors and are a core part of Goth's type system.
-
-### Shape Syntax
+Shapes are part of the type system and checked at compile time.
 
 ```goth
-[]                      # Scalar (rank 0)
-[n]                     # Vector of length n
-[m n]                   # Matrix m×n
-[a b c]                 # 3D tensor
-
-# Concrete shapes
-[3]I                    # Exactly 3 integers
-[2 3]F64                # 2×3 matrix
-
-# Symbolic shapes (type variables)
-[n]I                    # Vector of any length n
-[m]I → [n]I → [m n]F64  # Function with shape polymorphism
+[3]I64                   -- Exactly 3 integers
+[2 3]F64                 -- 2×3 matrix
+[n]I64                   -- Vector of unknown length n
+[m n]F64                 -- m×n matrix (shape variables)
 ```
 
-### Shape Variables
+Shape checking catches dimension mismatches:
+```goth
+-- Error: Dimension mismatch at position 0: expected 5, found 3
+╭─ bad : [3]I64 → [5]I64
+╰─ ₀
+```
 
-Shape variables like `n`, `m` are inferred or declared in type signatures. They allow writing shape-polymorphic functions.
+Shape variables unify:
+```goth
+-- OK: input and output have same shape
+╭─ double : [n]I64 → [n]I64
+╰─ ₀ ↦ (λ→ ₀ × 2)
+```
 
 ---
 
 ## Functions
 
-### Function Declarations
-
-Functions use a distinctive box-drawing syntax:
+### Declaration Syntax
 
 ```goth
-╭─ name : TypeSignature
-│  ◇effect           # Optional effect annotation
-│  where Constraints # Optional constraints
-│  ⊢ Precondition    # Optional precondition
-│  ⊨ Postcondition   # Optional postcondition
+╭─ name : Type
 ╰─ body
 ```
 
-ASCII alternative: `/-` for `╭─`
+ASCII alternative: `/-` for `╭─`, `\-` for `╰─`
 
 ### Examples
 
 ```goth
-# Simple function: double an integer
-╭─ double : I → I
-╰─ ₀ × 2
+╭─ square : I64 → I64
+╰─ ₀ × ₀
 
-# Function with IO effect
-╭─ greet : () → ()
-│  ◇io
-╰─ print "Hello, World!"
+╭─ add : I64 → I64 → I64
+╰─ ₀ + ₁
 
-# Identity function
-╭─ id : α → α
-╰─ ₀
-
-# Map over array (using the map operator)
-╭─ squares : [n]I → [n]I
-╰─ ₀ ↦ (λ→ ₀ × ₀)
+╭─ sumSquares : [n]I64 → I64
+╰─ Σ (₀ ↦ (λ→ ₀ × ₀))
 ```
 
 ### Lambda Expressions
 
 ```goth
-λ→ body              # Single argument lambda (arg is ₀)
-λ→ λ→ body          # Two argument lambda (₁ is first, ₀ is second)
+λ→ body                  -- Single argument
+λ→ λ→ body              -- Two arguments (curried)
 ```
 
-### Application
+ASCII: `\->` for `λ→`
+
+### Recursive Functions
+
+Functions can call themselves by name:
+```goth
+╭─ factorial : I64 → I64
+╰─ if ₀ ≤ 1 then 1 else ₀ × factorial (₀ - 1)
+```
+
+### Let Bindings
 
 ```goth
-f x                   # Apply f to x
-f x y                 # Apply f to x, then apply result to y (curried)
-(f x)                # Parentheses for grouping
+let x ← expr in body     -- Bind x, use in body
+let x ← a; y ← b in c    -- Sequential bindings
 ```
 
 ---
@@ -227,15 +193,14 @@ f x y                 # Apply f to x, then apply result to y (curried)
 | `-` | `-` | Subtraction |
 | `×` | `*` | Multiplication |
 | `/` | `/` | Division |
-| `^` | `^` | Power |
 | `%` | `%` | Modulo |
-| `±` | `+-` | Uncertain value |
+| `^` | `^` | Power |
 
 ### Comparison
 
 | Unicode | ASCII | Operation |
 |---------|-------|-----------|
-| `=` | `=` | Equality |
+| `=` or `==` | `==` | Equality |
 | `≠` | `/=` | Inequality |
 | `<` | `<` | Less than |
 | `>` | `>` | Greater than |
@@ -255,112 +220,105 @@ f x y                 # Apply f to x, then apply result to y (curried)
 | Unicode | ASCII | Operation | Example |
 |---------|-------|-----------|---------|
 | `↦` | `-:` | Map | `arr ↦ (λ→ ₀ × 2)` |
-| `▸` | `\|>_` | Filter | `arr ▸ (λ→ ₀ > 0)` |
-| `⤇` | `=>>` | Bind (flatMap) | `arr ⤇ f` |
-| `⊗` | `*:` | ZipWith | `a ⊗ b` |
-| `⊕` | `+:` | Concat | `a ⊕ b` |
-| `∘` | `.:` | Compose | `f ∘ g` |
+| `▸` | `\|>` | Filter | `arr ▸ (λ→ ₀ > 5)` |
+| `Σ` | `+/` | Sum | `Σ [1, 2, 3]` |
+| `Π` | `*/` | Product | `Π [1, 2, 3]` |
 
-### Reduction Operators
+### Indexing
 
-| Unicode | ASCII | Operation |
-|---------|-------|-----------|
-| `Σ` | `+/` | Sum |
-| `Π` | `*/` | Product |
-| `⍀` | `\\/` | Scan (prefix sum) |
-| `‖x‖` | `\|\|_x_\|\|` | Norm |
+```goth
+arr[0]                   -- First element
+arr[i]                   -- Element at index i
+tuple.0                  -- First tuple field
+record.x                 -- Named field x
+```
 
-### Unary Operators
+---
 
-| Unicode | ASCII | Operation |
-|---------|-------|-----------|
-| `-` | `-` | Negation |
-| `√` | `sqrt` | Square root |
-| `⌊x⌋` | `floor` | Floor |
-| `⌈x⌉` | `ceil` | Ceiling |
+## Enums and Pattern Matching
+
+### Enum Declarations
+
+```goth
+enum Color where Red | Green | Blue
+
+enum Option α where
+  | Some α
+  | None
+
+enum Either α β where
+  | Left α
+  | Right β
+```
+
+### Pattern Matching
+
+```goth
+match expr {
+  Pattern1 → result1
+  Pattern2 → result2
+  _ → default
+}
+```
+
+Patterns:
+- `_` — wildcard
+- `x` — variable binding
+- `42`, `true` — literals
+- `⟨a, b⟩` — tuple destructuring
+- `[h | t]` — list head/tail
+- `Some x` — enum variant
+- `None` — nullary variant
+
+### Example
+
+```goth
+enum Option α where Some α | None
+
+╭─ getOrDefault : I64 → I64
+╰─ match (Some ₀) {
+     Some x → x
+     None → 0
+   }
+```
 
 ---
 
 ## Effects
 
-Goth tracks computational effects in the type system. Pure functions (no effects) are the default.
+Effects are declared with `◇` annotations:
 
-### Effect Annotations
-
-| Effect | Symbol | Description |
-|--------|--------|-------------|
-| Pure | `□` | No effects (default) |
-| IO | `◇io` | Input/output |
-| Mutation | `◇mut` | Local mutation |
-| Random | `◇rand` | Randomness |
-| Divergence | `◇div` | May not terminate |
-| Exception | `◇exn⟨T⟩` | May throw exception |
-
-### Declaring Effects
+| Effect | Description |
+|--------|-------------|
+| `◇io` | Input/output |
+| `◇mut` | Mutation |
+| `◇rand` | Randomness |
 
 ```goth
-╭─ readNumber : () → I
+╭─ greet : () → ()
 │  ◇io
-╰─ toInt (read_line ⟨⟩)
-
-╭─ pureFunction : I → I
-╰─ ₀ × 2                    # No effect annotation = pure
+╰─ print "Hello!"
 ```
+
+Pure functions (no effects) need no annotation.
 
 ---
 
-## Pattern Matching
+## Modules
 
-### Match Expression
-
-```goth
-match expr with
-  | pattern₁ → body₁
-  | pattern₂ → body₂
-  | _ → default
-```
-
-### Pattern Types
+### Imports
 
 ```goth
-# Wildcard
-_
-
-# Variable binding (adds to environment)
-x
-
-# Literal
-42
-⊤
-
-# Tuple
-⟨a, b, c⟩
-
-# Array (exact length)
-[x, y, z]
-
-# Array with rest
-[head | tail]
-
-# Variant
-None
-Some x
-
-# Typed pattern
-x : I
-
-# Or pattern
-pattern₁ | pattern₂
-
-# Guard
-pattern if condition
+use stdlib.prelude
+use stdlib.option
+use mylib.utils
 ```
 
-### Let Binding
+### Module Files
 
-```goth
-let pattern ← value in body
-```
+Each `.goth` file is a module. The module path corresponds to the file path:
+- `stdlib/prelude.goth` → `stdlib.prelude`
+- `stdlib/option.goth` → `stdlib.option`
 
 ---
 
@@ -368,128 +326,120 @@ let pattern ← value in body
 
 ### Sequence Generation
 
-| Name | Alias | Signature | Description |
-|------|-------|-----------|-------------|
-| `iota` | `ι`, `⍳` | `I → [n]I` | Generate `[0, 1, 2, ..., n-1]` |
-| `range` | `…` | `I → I → [m]I` | Generate `[start, ..., end-1]` |
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `iota` | `I64 → [n]I64` | `[0, 1, ..., n-1]` |
+| `range` | `I64 → I64 → [m]I64` | `[start, ..., end-1]` |
 
-### Array Operations
-
-| Name | Alias | Signature | Description |
-|------|-------|-----------|-------------|
-| `len` | - | `[n]α → I` | Array length |
-| `sum` | - | `[n]I → I` | Sum elements |
-| `prod` | - | `[n]I → I` | Product elements |
-| `reverse` | `⌽` | `[n]α → [n]α` | Reverse array |
-| `concat` | - | `[n]α → [m]α → [n+m]α` | Concatenate |
-| `take` | `↑` | `I → [n]α → [m]α` | Take first k elements |
-| `drop` | `↓` | `I → [n]α → [m]α` | Drop first k elements |
-| `index` | - | `[n]α → I → α` | Get element at index |
-| `shape` | `ρ` | `[...]α → [n]I` | Get tensor shape |
-
-### Math Functions
+### Reductions
 
 | Name | Signature | Description |
 |------|-----------|-------------|
-| `abs` | `I → I` | Absolute value |
-| `neg` | `I → I` | Negation |
-| `sqrt` | `F64 → F64` | Square root |
-| `exp` | `F64 → F64` | Exponential |
-| `ln` | `F64 → F64` | Natural log |
-| `sin`, `cos`, `tan` | `F64 → F64` | Trigonometric |
-| `floor`, `ceil`, `round` | `F64 → I` | Rounding |
-| `pow` | `I → I → I` | Power |
+| `sum`, `Σ` | `[n]I64 → I64` | Sum elements |
+| `prod`, `Π` | `[n]I64 → I64` | Product elements |
+| `min` | `[n]I64 → I64` | Minimum |
+| `max` | `[n]I64 → I64` | Maximum |
+| `length` | `[n]α → I64` | Array length |
+
+### Transformations
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `map`, `↦` | `[n]α → (α → β) → [n]β` | Apply to each |
+| `filter`, `▸` | `[n]α → (α → Bool) → [m]α` | Keep matching |
+| `reverse` | `[n]α → [n]α` | Reverse order |
 
 ### Linear Algebra
 
-| Name | Alias | Signature | Description |
-|------|-------|-----------|-------------|
-| `dot` | `·` | `[n]F64 → [n]F64 → F64` | Dot product |
-| `norm` | - | `[n]F64 → F64` | Vector norm |
-| `matmul` | - | `[m n]F64 → [n p]F64 → [m p]F64` | Matrix multiply |
-| `transpose` | `⍉` | `[m n]α → [n m]α` | Transpose |
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `dot`, `·` | `[n]F64 → [n]F64 → F64` | Dot product |
+| `norm` | `[n]F64 → F64` | Euclidean norm |
+| `matmul` | `[m n]F64 → [n p]F64 → [m p]F64` | Matrix multiply |
+| `transpose`, `⍉` | `[m n]α → [n m]α` | Transpose |
 
-### Conversion
+### Math Functions
 
-| Name | Alias | Signature | Description |
-|------|-------|-----------|-------------|
-| `toInt` | - | `α → I` | Convert to integer |
-| `toFloat` | - | `α → F64` | Convert to float |
-| `toBool` | - | `α → Bool` | Convert to boolean |
-| `toChar` | - | `I → Char` | Integer to character |
-| `toString` | `str` | `α → [n]Char` | Convert to string |
-| `strConcat` | `⧺` | `[n]Char → [m]Char → [k]Char` | Concatenate strings |
+| Name | Signature |
+|------|-----------|
+| `sqrt`, `√` | `F64 → F64` |
+| `exp` | `F64 → F64` |
+| `ln` | `F64 → F64` |
+| `sin`, `cos`, `tan` | `F64 → F64` |
+| `floor`, `ceil`, `round` | `F64 → F64` |
+| `abs` | `I64 → I64` |
 
-### IO
+### I/O
 
 | Name | Signature | Description |
 |------|-----------|-------------|
-| `print` | `α → ()` | Print value |
-| `read_line` | `() → [n]Char` | Read line from stdin |
+| `print` | `α → ()` | Print to stdout |
+| `read_line` | `() → String` | Read line from stdin |
 
 ---
 
-## Example Programs
+## Examples
 
-### Hello World
-
-```goth
-╭─ main : () → ()
-│  ◇io
-╰─ print "Hello, World!"
-```
-
-### Echo Input
+### Factorial
 
 ```goth
-╭─ main : () → ()
-│  ◇io
-╰─ print (read_line ⟨⟩)
+╭─ factorial : I64 → I64
+╰─ if ₀ ≤ 1 then 1 else ₀ × factorial (₀ - 1)
+
+╭─ main : () → I64
+╰─ factorial 10
 ```
 
 ### Sum of Squares
 
 ```goth
-╭─ main : I → I
-╰─ Σ((iota ₀) ↦ (λ→ ₀ × ₀))
+╭─ main : () → I64
+╰─ Σ ((iota 10) ↦ (λ→ ₀ × ₀))
 ```
 
 ### Filter Even Numbers
 
 ```goth
-╭─ main : I → [m]I
-╰─ (iota ₀) ▸ (λ→ (₀ % 2) = 0)
+╭─ main : () → I64
+╰─ Σ ((iota 20) ▸ (λ→ (₀ % 2) == 0))
 ```
 
-### Find Syzygies
+### Cross-Function Calls
 
 ```goth
-# Find pairs (i, n-1-i) for i < n/2
-╭─ main : I → ()
-│  ◇io
-╰─ let count ← ₀ in
-   let indices ← iota (count / 2) in
-   indices ↦ (λ→ print ⟨₀, count - 1 - ₀⟩);
-   ⟨⟩
+╭─ square : I64 → I64
+╰─ ₀ × ₀
+
+╭─ main : () → I64
+╰─ square 9
+```
+
+### Enum Pattern Match
+
+```goth
+enum Option α where Some α | None
+
+╭─ main : () → I64
+╰─ match (Some 42) {
+     Some x → x × 2
+     None → 0
+   }
 ```
 
 ---
 
-## Running Goth Programs
+## Compilation
 
-```bash
-# Run a file
+The `gothic` compiler produces native executables via LLVM:
+
+```sh
+gothic program.goth -o program
+./program
+```
+
+The `goth` interpreter runs programs directly:
+
+```sh
 goth program.goth
-
-# Run with arguments (passed to main)
-goth program.goth 10
-
-# Evaluate an expression
-goth -e "Σ(iota 10)"
-
-# Parse only (show AST)
-goth -a program.goth
-
-# Enable trace output
-goth -t program.goth
+goth -e "Σ [1, 2, 3]"
 ```

@@ -1,12 +1,12 @@
-//! gothc - The Goth compiler
+//! gothic - The Goth compiler
 //!
 //! Compiles Goth source files to native executables via LLVM.
 //!
 //! Usage:
-//!   gothc input.goth              # Compile to ./input
-//!   gothc input.goth -o output    # Compile to ./output
-//!   gothc input.goth --emit-llvm  # Output LLVM IR only
-//!   gothc input.goth --emit-mir   # Output MIR only
+//!   gothic input.goth              # Compile to ./input
+//!   gothic input.goth -o output    # Compile to ./output
+//!   gothic input.goth --emit-llvm  # Output LLVM IR only
+//!   gothic input.goth --emit-mir   # Output MIR only
 
 use clap::Parser;
 use colored::*;
@@ -20,7 +20,7 @@ use goth_mir::lower_module;
 use goth_llvm::emit_program;
 
 #[derive(Parser, Debug)]
-#[command(name = "gothc")]
+#[command(name = "gothic")]
 #[command(author = "Goth Authors")]
 #[command(version = "0.1.0")]
 #[command(about = "The Goth compiler - compile Goth source to native executables")]
@@ -343,5 +343,219 @@ int64_t goth_max_i64(int64_t* arr, int64_t len) {
         if (arr[i + 1] > max) max = arr[i + 1];
     }
     return max;
+}
+
+// ============ String Operations ============
+
+// String length (C-string)
+int64_t goth_strlen(char* s) {
+    return (int64_t)strlen(s);
+}
+
+// String concatenation (allocates new string)
+char* goth_strconcat(char* a, char* b) {
+    size_t len_a = strlen(a);
+    size_t len_b = strlen(b);
+    char* result = (char*)malloc(len_a + len_b + 1);
+    strcpy(result, a);
+    strcat(result, b);
+    return result;
+}
+
+// Print string
+void goth_print_str(char* s) {
+    printf("%s", s);
+}
+
+// Print string with newline
+void goth_println_str(char* s) {
+    printf("%s\n", s);
+}
+
+// ============ File I/O ============
+
+// Read file contents as string (returns NULL on error)
+char* goth_read_file(char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return NULL;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char* contents = (char*)malloc(size + 1);
+    if (!contents) {
+        fclose(f);
+        return NULL;
+    }
+
+    size_t read = fread(contents, 1, size, f);
+    contents[read] = '\0';
+    fclose(f);
+
+    return contents;
+}
+
+// Write string to file (returns 0 on success, -1 on error)
+int64_t goth_write_file(char* path, char* contents) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return -1;
+
+    size_t len = strlen(contents);
+    size_t written = fwrite(contents, 1, len, f);
+    fclose(f);
+
+    return (written == len) ? 0 : -1;
+}
+
+// Read line from stdin (allocates new string)
+char* goth_read_line() {
+    char* line = NULL;
+    size_t len = 0;
+    ssize_t read = getline(&line, &len, stdin);
+
+    if (read == -1) {
+        free(line);
+        return strdup("");
+    }
+
+    // Remove trailing newline
+    if (read > 0 && line[read - 1] == '\n') {
+        line[read - 1] = '\0';
+    }
+
+    return line;
+}
+
+// ============ Memory Management ============
+
+// Free allocated memory
+void goth_free(void* ptr) {
+    free(ptr);
+}
+
+// Allocate memory
+void* goth_alloc(int64_t size) {
+    return malloc((size_t)size);
+}
+
+// ============ Higher-Order Functions ============
+
+// Function pointer type for i64 -> i64
+typedef int64_t (*fn_i64_i64)(int64_t);
+
+// Map: apply function to each element of array
+int64_t* goth_map_i64(int64_t* arr, fn_i64_i64 fn, int64_t len) {
+    int64_t* result = (int64_t*)malloc((len + 1) * sizeof(int64_t));
+    result[0] = len;
+    for (int64_t i = 0; i < len; i++) {
+        result[i + 1] = fn(arr[i + 1]);
+    }
+    return result;
+}
+
+// Function pointer type for i64 -> bool (i64)
+typedef int64_t (*fn_i64_bool)(int64_t);
+
+// Filter: keep elements where predicate returns true
+int64_t* goth_filter_i64(int64_t* arr, fn_i64_bool pred, int64_t len) {
+    // First pass: count matching elements
+    int64_t count = 0;
+    for (int64_t i = 0; i < len; i++) {
+        if (pred(arr[i + 1])) count++;
+    }
+
+    // Second pass: copy matching elements
+    int64_t* result = (int64_t*)malloc((count + 1) * sizeof(int64_t));
+    result[0] = count;
+    int64_t j = 1;
+    for (int64_t i = 0; i < len; i++) {
+        if (pred(arr[i + 1])) {
+            result[j++] = arr[i + 1];
+        }
+    }
+    return result;
+}
+
+// ============ Matrix/Vector Operations (F64) ============
+
+#include <math.h>
+
+// Dot product: [n]F64 → [n]F64 → F64
+double goth_dot_f64(double* a, double* b, int64_t len) {
+    double sum = 0.0;
+    for (int64_t i = 0; i < len; i++) {
+        sum += a[i + 1] * b[i + 1];
+    }
+    return sum;
+}
+
+// Vector norm (Euclidean): [n]F64 → F64
+double goth_norm_f64(double* arr, int64_t len) {
+    double sum = 0.0;
+    for (int64_t i = 0; i < len; i++) {
+        double v = arr[i + 1];
+        sum += v * v;
+    }
+    return sqrt(sum);
+}
+
+// Matrix multiplication: [m n]F64 → [n p]F64 → [m p]F64
+// Matrices stored row-major: arr[0] = total_elements, then data
+// For [m n] matrix: index (i, j) = arr[1 + i*n + j]
+double* goth_matmul_f64(double* a, double* b, int64_t m, int64_t n, int64_t p) {
+    // Result is [m p] matrix
+    int64_t result_size = m * p;
+    double* result = (double*)malloc((result_size + 1) * sizeof(double));
+    int64_t* len_ptr = (int64_t*)result;
+    len_ptr[0] = result_size;
+
+    for (int64_t i = 0; i < m; i++) {
+        for (int64_t j = 0; j < p; j++) {
+            double sum = 0.0;
+            for (int64_t k = 0; k < n; k++) {
+                // a[i, k] * b[k, j]
+                sum += a[1 + i*n + k] * b[1 + k*p + j];
+            }
+            result[1 + i*p + j] = sum;
+        }
+    }
+    return result;
+}
+
+// Matrix transpose: [m n]F64 → [n m]F64
+double* goth_transpose_f64(double* arr, int64_t m, int64_t n) {
+    int64_t size = m * n;
+    double* result = (double*)malloc((size + 1) * sizeof(double));
+    int64_t* len_ptr = (int64_t*)result;
+    len_ptr[0] = size;
+
+    for (int64_t i = 0; i < m; i++) {
+        for (int64_t j = 0; j < n; j++) {
+            // Transpose: result[j, i] = arr[i, j]
+            result[1 + j*m + i] = arr[1 + i*n + j];
+        }
+    }
+    return result;
+}
+
+// Print f64 array (for debugging)
+void goth_print_array_f64(double* arr, int64_t len) {
+    printf("[");
+    for (int64_t i = 0; i < len; i++) {
+        if (i > 0) printf(", ");
+        printf("%g", arr[i + 1]);
+    }
+    printf("]");
+}
+
+// Print i64 array (for debugging)
+void goth_print_array_i64(int64_t* arr, int64_t len) {
+    printf("[");
+    for (int64_t i = 0; i < len; i++) {
+        if (i > 0) printf(", ");
+        printf("%ld", arr[i + 1]);
+    }
+    printf("]");
 }
 "#;

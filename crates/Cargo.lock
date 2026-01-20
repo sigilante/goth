@@ -314,9 +314,11 @@ dependencies = [
 name = "goth-parse"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "goth-ast",
  "logos",
  "pretty_assertions",
+ "serde_json",
  "thiserror",
 ]
 

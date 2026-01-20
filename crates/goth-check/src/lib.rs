@@ -46,9 +46,11 @@ impl TypeChecker {
         let mut ctx = Context::new();
         
         // Add built-in primitives
-        for prim in ["sqrt", "exp", "ln", "sin", "cos", "tan", 
+        for prim in ["sqrt", "exp", "ln", "sin", "cos", "tan",
                      "asin", "acos", "atan", "sinh", "cosh", "tanh",
-                     "floor", "ceil", "round", "abs", "length"] {
+                     "floor", "ceil", "round", "abs", "length",
+                     "dot", "·", "matmul", "transpose", "⍉", "norm",
+                     "iota", "ι", "⍳", "range"] {
             if let Some(ty) = builtins::primitive_type(prim) {
                 ctx.define_global(prim, ty);
             }
@@ -87,31 +89,33 @@ impl TypeChecker {
                 Decl::Fn(fn_decl) => {
                     // Function signature is the declared type
                     let ty = fn_decl.signature.clone();
-                    
+
+                    // Define function globally BEFORE checking body (enables recursion)
+                    self.ctx.define_global(fn_decl.name.to_string(), ty.clone());
+
                     // Check body against return type
                     // For multi-argument functions F → F → F, we need to:
                     // 1. Collect all argument types
                     // 2. Push them all onto the context
                     // 3. Check body against final return type
-                    
+
                     let mut arg_types = Vec::new();
                     let mut current = &ty;
-                    
+
                     // Collect all argument types by traversing the chain
                     while let Type::Fn(arg_ty, ret_ty) = current {
                         arg_types.push(*arg_ty.clone());
                         current = ret_ty;
                     }
-                    
+
                     // current is now the final return type
                     let final_ret_ty = current;
-                    
+
                     // Check body with all arguments in context
                     self.ctx.with_bindings(&arg_types, |ctx| {
                         check::check(ctx, &fn_decl.body, final_ret_ty)
                     })?;
-                    
-                    self.ctx.define_global(fn_decl.name.to_string(), ty.clone());
+
                     results.push((fn_decl.name.to_string(), ty));
                 }
                 

@@ -1,0 +1,41 @@
+# Goth Standard Library - String Operations
+# Utilities for working with strings
+
+# String length
+╭─ strLen : String → ℤ
+╰─ len (chars ₀)
+
+# Check if string is empty
+╭─ strEmpty : String → Bool
+╰─ strLen ₀ = 0
+
+# String concatenation (uses strConcat primitive)
+╭─ concat : String → String → String
+╰─ strConcat ₁ ₀
+
+# Concatenate array of strings
+╭─ joinStrings : [n]String → String
+╰─ match len ₀ {
+    0 → "";
+    1 → ₀[0];
+    _ → strConcat (₀[0]) (joinStrings (drop 1 ₀))
+  }
+
+# Repeat a string n times
+╭─ repeatStr : String → ℤ → String
+╰─ match ₀ {
+    0 → "";
+    n → strConcat ₁ (repeatStr ₁ (n - 1))
+  }
+
+# Convert integer to string (uses toString primitive)
+╭─ intToStr : ℤ → String
+╰─ toString ₀
+
+# Convert float to string
+╭─ floatToStr : F → String
+╰─ toString ₀
+
+# Convert bool to string
+╭─ boolToStr : Bool → String
+╰─ if ₀ then "true" else "false"
