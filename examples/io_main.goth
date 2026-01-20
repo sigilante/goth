@@ -1,3 +1,4 @@
+# Echo with explicit IO effect
 ╭─ main : () → ()
 │  ◇io
-╰─ print (read_line ⟨⟩)
+╰─ print (readLine ⟨⟩)

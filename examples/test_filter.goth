@@ -1,3 +1,4 @@
-# Test filter: keep only even numbers from 0..9
-╭─ main : I → [m]I
-╰─ (iota ₀) ▸ (λ→ (₀ % 2) = 0)
+# Test filter: keep only even numbers from 0..n-1
+# Usage: goth test_filter.goth 10  →  [0 2 4 6 8]
+╭─ main : I64 → [m]I64
+╰─ (ι ₀) ▸ λ→ (₀ % 2) = 0

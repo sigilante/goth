@@ -1,2 +1,3 @@
+# Echo: read a line and print it back
 ╭─ main : () → ()
-╰─ print (read_line ⟨⟩)
+╰─ print (readLine ⟨⟩)

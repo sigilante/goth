@@ -1,2 +1,4 @@
-╭─ main : I → [m]I
-╰─ iota ₀
+# Generate sequence [0, 1, ..., n-1]
+# Usage: goth test_iota.goth 5  →  [0 1 2 3 4]
+╭─ main : I64 → [m]I64
+╰─ ι ₀
