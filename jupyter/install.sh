@@ -4,12 +4,34 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 KERNEL_DIR="${HOME}/.local/share/jupyter/kernels/goth"
 VENV_DIR="${HOME}/.local/share/goth-jupyter-venv"
 
 echo "Installing Goth Jupyter Kernel..."
 
-# Check dependencies
+# Find goth binary
+GOTH_PATH=""
+if command -v goth &> /dev/null; then
+    GOTH_PATH="$(which goth)"
+elif [ -x "$PROJECT_DIR/crates/target/release/goth" ]; then
+    GOTH_PATH="$PROJECT_DIR/crates/target/release/goth"
+elif [ -x "$PROJECT_DIR/crates/target/debug/goth" ]; then
+    GOTH_PATH="$PROJECT_DIR/crates/target/debug/goth"
+else
+    echo "Building goth..."
+    (cd "$PROJECT_DIR/crates" && cargo build --release -p goth-cli --bin goth)
+    GOTH_PATH="$PROJECT_DIR/crates/target/release/goth"
+fi
+
+if [ ! -x "$GOTH_PATH" ]; then
+    echo "Error: Could not find or build goth binary"
+    exit 1
+fi
+
+echo "Using goth at: $GOTH_PATH"
+
+# Check Python dependencies
 if ! command -v python3 &> /dev/null; then
     echo "Error: python3 not found"
     exit 1
@@ -28,8 +50,9 @@ fi
 # Create kernel directory
 mkdir -p "$KERNEL_DIR"
 
-# Copy kernel files
-cp "$SCRIPT_DIR/goth_kernel.py" "$KERNEL_DIR/"
+# Copy kernel files and embed goth path
+sed "s|self.goth_path = self._find_goth()|self.goth_path = '$GOTH_PATH'|" \
+    "$SCRIPT_DIR/goth_kernel.py" > "$KERNEL_DIR/goth_kernel.py"
 
 # Update kernel.json with correct path
 cat > "$KERNEL_DIR/kernel.json" << EOF
@@ -48,11 +71,9 @@ cat > "$KERNEL_DIR/kernel.json" << EOF
 }
 EOF
 
-echo "Kernel installed to: $KERNEL_DIR"
 echo ""
-echo "Make sure 'goth' is in your PATH, or build it first:"
-echo "  cd crates && cargo build --release"
-echo "  export PATH=\"\$PATH:\$(pwd)/target/release\""
+echo "Kernel installed to: $KERNEL_DIR"
+echo "Goth binary: $GOTH_PATH"
 echo ""
 echo "To verify installation:"
 echo "  jupyter kernelspec list"
