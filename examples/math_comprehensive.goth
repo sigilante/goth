@@ -1,2 +1,54 @@
-╭─ main : F → F
-╰─ asin (sin ₀)
+# Goth Standard Library: Math Functions Demo
+# Demonstrates all transcendental and math functions
+
+# Main: show output of every transcendental function
+╭─ main : () → ()
+╰─ let x = 0.5 in
+   let y = 2.0 in
+
+   let _ = print "=== Transcendental Functions ===" in
+   let _ = print "Input x = 0.5, y = 2.0" in
+   let _ = print "" in
+
+   # Exponential and logarithmic
+   let _ = print ⟨"exp(x)  =", exp x⟩ in
+   let _ = print ⟨"ln(y)   =", ln y⟩ in
+   let _ = print ⟨"sqrt(y) =", sqrt y⟩ in
+   let _ = print "" in
+
+   # Trigonometric
+   let _ = print ⟨"sin(x)  =", sin x⟩ in
+   let _ = print ⟨"cos(x)  =", cos x⟩ in
+   let _ = print ⟨"tan(x)  =", tan x⟩ in
+   let _ = print "" in
+
+   # Inverse trigonometric
+   let _ = print ⟨"asin(x) =", asin x⟩ in
+   let _ = print ⟨"acos(x) =", acos x⟩ in
+   let _ = print ⟨"atan(x) =", atan x⟩ in
+   let _ = print "" in
+
+   # Hyperbolic
+   let _ = print ⟨"sinh(x) =", sinh x⟩ in
+   let _ = print ⟨"cosh(x) =", cosh x⟩ in
+   let _ = print ⟨"tanh(x) =", tanh x⟩ in
+   let _ = print "" in
+
+   # Rounding
+   let _ = print ⟨"floor(2.7) =", floor 2.7⟩ in
+   let _ = print ⟨"ceil(2.3)  =", ceil 2.3⟩ in
+   let _ = print ⟨"round(2.5) =", round 2.5⟩ in
+   let _ = print "" in
+
+   # Absolute value
+   let _ = print ⟨"abs(-0.5) =", abs (0.0 - x)⟩ in
+   let _ = print "" in
+
+   # Identity checks
+   let _ = print "=== Identity Checks ===" in
+   let _ = print ⟨"asin(sin(x)) =", asin (sin x)⟩ in
+   let _ = print ⟨"exp(ln(y))   =", exp (ln y)⟩ in
+   let _ = print ⟨"sqrt(y)^2    =", (sqrt y) × (sqrt y)⟩ in
+   let _ = print "" in
+
+   print "Done!"
