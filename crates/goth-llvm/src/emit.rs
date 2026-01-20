@@ -949,9 +949,12 @@ fn emit_block(
         } => {
             let cond_ty = Type::Prim(PrimType::Bool);
             let cond_val = emit_operand(ctx, cond, &cond_ty, output)?;
+            // Condition might be i64 (from zext'd comparison), truncate to i1
+            let cond_i1 = ctx.fresh_ssa();
+            output.push_str(&format!("  {} = trunc i64 {} to i1\n", cond_i1, cond_val));
             output.push_str(&format!(
                 "  br i1 {}, label %bb{}, label %bb{}\n",
-                cond_val, then_block.0, else_block.0
+                cond_i1, then_block.0, else_block.0
             ));
         }
 
