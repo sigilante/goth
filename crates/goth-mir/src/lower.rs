@@ -33,6 +33,8 @@ pub struct LoweringContext {
     globals: std::collections::HashMap<String, Type>,
     /// Global constant values (from top-level let bindings)
     global_constants: std::collections::HashMap<String, (Constant, Type)>,
+    /// Enum constructors: name -> (tag, has_payload, enum_name)
+    enum_constructors: std::collections::HashMap<String, (u32, bool, String)>,
     /// Type information for locals (needed for de Bruijn lookup)
     pub local_types: std::collections::HashMap<LocalId, Type>,
     /// Pending entry block (set by if expressions)
@@ -51,6 +53,7 @@ impl LoweringContext {
             functions: Vec::new(),
             globals: std::collections::HashMap::new(),
             global_constants: std::collections::HashMap::new(),
+            enum_constructors: std::collections::HashMap::new(),
             local_types: std::collections::HashMap::new(),
             pending_entry_block: None,
         }
@@ -198,7 +201,26 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
             } else if let Some((constant, ty)) = ctx.global_constants.get(name.as_ref()) {
                 // It's a global constant - inline the value
                 Ok((Operand::Const(constant.clone()), ty.clone()))
-            } else if let Some(ty) = ctx.globals.get(name.as_ref()) {
+            } else if let Some((tag, has_payload, _enum_name)) = ctx.enum_constructors.get(name.as_ref()).cloned() {
+                // It's an enum constructor
+                if has_payload {
+                    // Constructor with payload - needs to be handled at application site
+                    // Return a marker that indicates pending constructor application
+                    let ty = Type::Prim(goth_ast::types::PrimType::I64); // Variant pointer
+                    Ok((Operand::Const(Constant::Int(tag as i64)), ty))
+                } else {
+                    // Nullary constructor - emit MakeVariant directly
+                    let result = ctx.fresh_local();
+                    let ty = Type::Prim(goth_ast::types::PrimType::I64); // Variant pointer
+                    ctx.emit(result, ty.clone(),
+                        Rhs::MakeVariant {
+                            tag,
+                            constructor: name.to_string(),
+                            payload: None,
+                        });
+                    Ok((Operand::Local(result), ty))
+                }
+            } else if let Some(_ty) = ctx.globals.get(name.as_ref()) {
                 // It's a global function - create a reference
                 // For MIR, we don't have first-class function values yet
                 // So we'll need to handle this specially
@@ -455,6 +477,82 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
             if let Expr::App(inner_func, first_arg) = func.as_ref() {
                 if let Some(prim_name) = get_primitive_name(inner_func) {
                     return lower_primitive_app2(ctx, prim_name, first_arg, arg);
+                }
+            }
+
+            // Check if this is an enum constructor with payload (e.g., Some 42)
+            if let Expr::Name(name) = func.as_ref() {
+                if let Some((tag, has_payload, _enum_name)) = ctx.enum_constructors.get(name.as_ref()).cloned() {
+                    if has_payload {
+                        let (payload_op, _payload_ty) = lower_expr_to_operand(ctx, arg)?;
+                        let result = ctx.fresh_local();
+                        let ty = Type::Prim(goth_ast::types::PrimType::I64); // Variant pointer
+                        ctx.emit(result, ty.clone(),
+                            Rhs::MakeVariant {
+                                tag,
+                                constructor: name.to_string(),
+                                payload: Some(payload_op),
+                            });
+                        return Ok((Operand::Local(result), ty));
+                    }
+                }
+            }
+
+            // Check if this is a direct call to a global function
+            if let Expr::Name(name) = func.as_ref() {
+                if let Some(func_ty) = ctx.globals.get(name.as_ref()).cloned() {
+                    // Direct function call
+                    let (arg_op, arg_ty) = lower_expr_to_operand(ctx, arg)?;
+
+                    // Get return type from function signature
+                    let ret_ty = match &func_ty {
+                        Type::Fn(_arg_ty, ret_ty) => (**ret_ty).clone(),
+                        _ => return Err(MirError::TypeError(
+                            format!("Expected function type for '{}', got {:?}", name, func_ty)
+                        )),
+                    };
+
+                    let result = ctx.fresh_local();
+                    ctx.emit(result, ret_ty.clone(),
+                        Rhs::Call {
+                            func: name.to_string(),
+                            args: vec![arg_op],
+                            arg_tys: vec![arg_ty],
+                        });
+
+                    return Ok((Operand::Local(result), ret_ty));
+                }
+            }
+
+            // Check for curried global function call (e.g., add 1 2)
+            if let Expr::App(inner_func, first_arg) = func.as_ref() {
+                if let Expr::Name(name) = inner_func.as_ref() {
+                    if let Some(func_ty) = ctx.globals.get(name.as_ref()).cloned() {
+                        // Curried function call with 2 args
+                        let (arg1_op, arg1_ty) = lower_expr_to_operand(ctx, first_arg)?;
+                        let (arg2_op, arg2_ty) = lower_expr_to_operand(ctx, arg)?;
+
+                        // Get return type (need to unwrap two function arrows)
+                        let ret_ty = match &func_ty {
+                            Type::Fn(_, ret1) => match ret1.as_ref() {
+                                Type::Fn(_, ret2) => (**ret2).clone(),
+                                other => other.clone(),
+                            },
+                            _ => return Err(MirError::TypeError(
+                                format!("Expected function type for '{}', got {:?}", name, func_ty)
+                            )),
+                        };
+
+                        let result = ctx.fresh_local();
+                        ctx.emit(result, ret_ty.clone(),
+                            Rhs::Call {
+                                func: name.to_string(),
+                                args: vec![arg1_op, arg2_op],
+                                arg_tys: vec![arg1_ty, arg2_ty],
+                            });
+
+                        return Ok((Operand::Local(result), ret_ty));
+                    }
                 }
             }
 
@@ -749,7 +847,12 @@ fn lower_match_expr(
             arm_blocks.push((arm_block_id, arm));
 
             if let Pattern::Variant { constructor, payload: _ } = &arm.pattern {
-                let tag = constructor_tag(constructor);
+                // Look up tag from registered enum constructors, fall back to heuristic
+                let tag = if let Some((tag, _, _)) = ctx.enum_constructors.get(constructor.as_ref()) {
+                    *tag
+                } else {
+                    constructor_tag(constructor)
+                };
                 cases.push((Constant::Int(tag as i64), arm_block_id));
             }
         }
@@ -1522,6 +1625,16 @@ pub fn lower_module(module: &Module) -> MirResult<Program> {
                     ctx.global_constants.insert(let_decl.name.to_string(), (constant, ty));
                 }
             }
+            Decl::Enum(enum_decl) => {
+                // Register each variant as a constructor
+                for (tag, variant) in enum_decl.variants.iter().enumerate() {
+                    let has_payload = variant.payload.is_some();
+                    ctx.enum_constructors.insert(
+                        variant.name.to_string(),
+                        (tag as u32, has_payload, enum_decl.name.to_string())
+                    );
+                }
+            }
             _ => {}
         }
     }
@@ -1534,6 +1647,7 @@ pub fn lower_module(module: &Module) -> MirResult<Program> {
                 let mut fn_ctx = LoweringContext::new();
                 fn_ctx.globals = ctx.globals.clone();
                 fn_ctx.global_constants = ctx.global_constants.clone();
+                fn_ctx.enum_constructors = ctx.enum_constructors.clone();
 
                 // Extract parameter types from signature
                 let mut param_types = Vec::new();

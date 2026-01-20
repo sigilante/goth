@@ -438,4 +438,42 @@ void goth_free(void* ptr) {
 void* goth_alloc(int64_t size) {
     return malloc((size_t)size);
 }
+
+// ============ Higher-Order Functions ============
+
+// Function pointer type for i64 -> i64
+typedef int64_t (*fn_i64_i64)(int64_t);
+
+// Map: apply function to each element of array
+int64_t* goth_map_i64(int64_t* arr, fn_i64_i64 fn, int64_t len) {
+    int64_t* result = (int64_t*)malloc((len + 1) * sizeof(int64_t));
+    result[0] = len;
+    for (int64_t i = 0; i < len; i++) {
+        result[i + 1] = fn(arr[i + 1]);
+    }
+    return result;
+}
+
+// Function pointer type for i64 -> bool (i64)
+typedef int64_t (*fn_i64_bool)(int64_t);
+
+// Filter: keep elements where predicate returns true
+int64_t* goth_filter_i64(int64_t* arr, fn_i64_bool pred, int64_t len) {
+    // First pass: count matching elements
+    int64_t count = 0;
+    for (int64_t i = 0; i < len; i++) {
+        if (pred(arr[i + 1])) count++;
+    }
+
+    // Second pass: copy matching elements
+    int64_t* result = (int64_t*)malloc((count + 1) * sizeof(int64_t));
+    result[0] = count;
+    int64_t j = 1;
+    for (int64_t i = 0; i < len; i++) {
+        if (pred(arr[i + 1])) {
+            result[j++] = arr[i + 1];
+        }
+    }
+    return result;
+}
 "#;

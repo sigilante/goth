@@ -105,8 +105,61 @@ else
     fail "Expected 49, got $result"
 fi
 
-# Test 8: Parse standard library files
-echo "Test 8: Parse standard library"
+# Test 8: Compile cross-function call
+echo "Test 8: Cross-function call"
+cat > /tmp/cross_fn.goth << 'EOF'
+╭─ square : I → I
+╰─ ₀ × ₀
+
+╭─ main : () → I
+╰─ square 9
+EOF
+
+$GOTHC /tmp/cross_fn.goth -o /tmp/cross_fn 2>/dev/null
+result=$(/tmp/cross_fn)
+if [ "$result" = "81" ]; then
+    pass "Compile: cross-function call square 9 = 81"
+else
+    fail "Expected 81, got $result"
+fi
+
+# Test 9: Compile enum/pattern matching
+echo "Test 9: Enum pattern matching"
+cat > /tmp/enum_test.goth << 'EOF'
+enum Maybe τ where Just τ | Nothing
+
+╭─ main : () → I
+╰─ match Just 100 {
+    Just x → x;
+    Nothing → 0
+  }
+EOF
+
+$GOTHC /tmp/enum_test.goth -o /tmp/enum_test 2>/dev/null
+result=$(/tmp/enum_test)
+if [ "$result" = "100" ]; then
+    pass "Compile: enum pattern match = 100"
+else
+    fail "Expected 100, got $result"
+fi
+
+# Test 10: Compile filter operation
+echo "Test 10: Filter operation"
+cat > /tmp/filter_test.goth << 'EOF'
+╭─ main : () → I
+╰─ Σ (ι 10 ▸ λ→ ₀ > 5)
+EOF
+
+$GOTHC /tmp/filter_test.goth -o /tmp/filter_test 2>/dev/null
+result=$(/tmp/filter_test)
+if [ "$result" = "30" ]; then
+    pass "Compile: filter ι 10 (x > 5) sum = 30"
+else
+    fail "Expected 30, got $result"
+fi
+
+# Test 11: Parse standard library files
+echo "Test 11: Parse standard library"
 for file in stdlib/*.goth; do
     $GOTH -p "$file" > /dev/null || fail "Failed to parse $file"
 done
@@ -114,6 +167,8 @@ pass "All stdlib files parse successfully"
 
 # Cleanup
 rm -f /tmp/hello.goth /tmp/hello /tmp/arith.goth /tmp/arith /tmp/lambda.goth /tmp/lambda
+rm -f /tmp/cross_fn.goth /tmp/cross_fn /tmp/enum_test.goth /tmp/enum_test
+rm -f /tmp/filter_test.goth /tmp/filter_test
 
 echo ""
 echo -e "${GREEN}All tests passed!${NC}"

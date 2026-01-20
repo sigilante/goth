@@ -74,7 +74,7 @@ impl fmt::Display for Rhs {
             Rhs::UnaryOp(op, operand) => {
                 write!(f, "UnaryOp({:?}, {})", op, operand)
             }
-            Rhs::Call { func, args } => {
+            Rhs::Call { func, args, arg_tys: _ } => {
                 write!(f, "Call({}",  func)?;
                 for arg in args {
                     write!(f, ", {}", arg)?;

@@ -74,6 +74,7 @@ pub enum Rhs {
     Call {
         func: String,
         args: Vec<Operand>,
+        arg_tys: Vec<Type>,
     },
     
     /// Closure call (first arg is closure value)

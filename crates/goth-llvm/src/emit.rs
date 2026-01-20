@@ -367,9 +367,74 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::BinOp(op, left, right) => {
-            let left_val = emit_operand(ctx, left, &stmt.ty, output)?;
-            let right_val = emit_operand(ctx, right, &stmt.ty, output)?;
-            emit_binop(ctx, op, &left_val, &right_val, &stmt.ty)?
+            // Handle tensor operations specially
+            match op {
+                goth_ast::op::BinOp::Map => {
+                    // Map: array ↦ closure
+                    // For now, call a runtime function with the closure
+                    let arr_ty = Type::Prim(PrimType::I64);
+                    let arr_val = emit_operand(ctx, left, &arr_ty, output)?;
+                    let closure_val = emit_operand(ctx, right, &arr_ty, output)?;
+
+                    // Get array length
+                    let len_ssa = ctx.fresh_ssa();
+                    output.push_str(&format!(
+                        "  {} = call i64 @goth_len(i8* {})\n",
+                        len_ssa, arr_val
+                    ));
+
+                    // Call map runtime function
+                    let ssa = ctx.fresh_ssa();
+                    let code = format!(
+                        "  {} = call i8* @goth_map_i64(i8* {}, i8* {}, i64 {})\n",
+                        ssa, arr_val, closure_val, len_ssa
+                    );
+                    (ssa, code)
+                }
+                goth_ast::op::BinOp::Filter => {
+                    // Filter: array ▸ closure
+                    let arr_ty = Type::Prim(PrimType::I64);
+                    let arr_val = emit_operand(ctx, left, &arr_ty, output)?;
+                    let closure_val = emit_operand(ctx, right, &arr_ty, output)?;
+
+                    // Get array length
+                    let len_ssa = ctx.fresh_ssa();
+                    output.push_str(&format!(
+                        "  {} = call i64 @goth_len(i8* {})\n",
+                        len_ssa, arr_val
+                    ));
+
+                    // Call filter runtime function
+                    let ssa = ctx.fresh_ssa();
+                    let code = format!(
+                        "  {} = call i8* @goth_filter_i64(i8* {}, i8* {}, i64 {})\n",
+                        ssa, arr_val, closure_val, len_ssa
+                    );
+                    (ssa, code)
+                }
+                _ => {
+                    let left_val = emit_operand(ctx, left, &stmt.ty, output)?;
+                    let right_val = emit_operand(ctx, right, &stmt.ty, output)?;
+                    let (ssa, code) = emit_binop(ctx, op, &left_val, &right_val, &stmt.ty)?;
+
+                    // If this is a comparison and dest type is i64, extend the result
+                    let is_comparison = matches!(op,
+                        goth_ast::op::BinOp::Lt | goth_ast::op::BinOp::Gt |
+                        goth_ast::op::BinOp::Leq | goth_ast::op::BinOp::Geq |
+                        goth_ast::op::BinOp::Eq | goth_ast::op::BinOp::Neq
+                    );
+                    let dest_is_i64 = matches!(&stmt.ty, Type::Prim(PrimType::I64));
+
+                    if is_comparison && dest_is_i64 {
+                        output.push_str(&code);
+                        let extended_ssa = ctx.fresh_ssa();
+                        let extend_code = format!("  {} = zext i1 {} to i64\n", extended_ssa, ssa);
+                        (extended_ssa, extend_code)
+                    } else {
+                        (ssa, code)
+                    }
+                }
+            }
         }
 
         Rhs::UnaryOp(op, operand) => {
@@ -495,16 +560,15 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
             }
         }
 
-        Rhs::Call { func, args } => {
+        Rhs::Call { func, args, arg_tys } => {
             let ssa = ctx.fresh_ssa();
             let ret_ty = emit_type(&stmt.ty)?;
 
             let mut arg_strs = Vec::new();
-            for arg in args {
-                // Need to infer arg type - for now assume i64
-                let arg_ty = Type::Prim(PrimType::I64);
-                let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
-                arg_strs.push(format!("i64 {}", arg_val));
+            for (arg, arg_ty) in args.iter().zip(arg_tys.iter()) {
+                let llvm_ty = emit_type(arg_ty)?;
+                let arg_val = emit_operand(ctx, arg, arg_ty, output)?;
+                arg_strs.push(format!("{} {}", llvm_ty, arg_val));
             }
 
             let code = format!(
@@ -782,7 +846,6 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::GetTag(variant) => {
-            let ssa = ctx.fresh_ssa();
             let variant_ty = Type::Prim(PrimType::I64); // Pointer type
             let variant_val = emit_operand(ctx, variant, &variant_ty, output)?;
 
@@ -793,6 +856,7 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 tag_ptr, variant_val
             ));
 
+            let ssa = ctx.fresh_ssa();
             let code = format!(
                 "  {} = load i64, i64* {}\n",
                 ssa, tag_ptr
@@ -802,7 +866,6 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::GetPayload(variant) => {
-            let ssa = ctx.fresh_ssa();
             let variant_ty = Type::Prim(PrimType::I64); // Pointer type
             let variant_val = emit_operand(ctx, variant, &variant_ty, output)?;
 
@@ -819,6 +882,7 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 payload_ptr, base_ptr
             ));
 
+            let ssa = ctx.fresh_ssa();
             let code = format!(
                 "  {} = load i64, i64* {}\n",
                 ssa, payload_ptr
