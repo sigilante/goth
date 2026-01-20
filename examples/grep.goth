@@ -1,8 +1,10 @@
-# Grep-style filtering
-# Sum of values greater than 5
+# Filter demonstration (grep-like)
+# Filter array elements greater than threshold
+# Usage: goth grep.goth <threshold>
+# Example: goth grep.goth 5  →  30  (sum of elements > 5)
 
-╭─ main : () → I
+╭─ main : I64 → I64
 ╰─ let arr ← [1, 8, 3, 9, 2, 7, 4, 6] in
-   # Values > 5: [8, 9, 7, 6], sum = 30
-   # Total sum = 40
-   Σ arr
+   # ₀ = arr, ₁ = threshold (CLI arg)
+   # In lambda: ₀ = element, ₂ = threshold
+   Σ (arr ▸ λ→ ₀ > ₂)

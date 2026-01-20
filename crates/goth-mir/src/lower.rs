@@ -1723,10 +1723,15 @@ pub fn lower_module(module: &Module) -> MirResult<Program> {
                 }
                 let ret_ty = current_ty.clone();
 
-                // Push parameters onto local stack
-                for (i, ty) in param_types.iter().enumerate() {
-                    let local = fn_ctx.fresh_local();
-                    fn_ctx.push_local(local, ty.clone());
+                // Allocate locals for parameters (in order)
+                for _ in 0..param_types.len() {
+                    fn_ctx.fresh_local();
+                }
+                // Push onto local stack in REVERSE order so that:
+                // ₀ = first param (Goth convention, not standard de Bruijn)
+                // This is because lookup_index does: locals[len - 1 - idx]
+                for i in (0..param_types.len()).rev() {
+                    fn_ctx.push_local(LocalId::new(i as u32), param_types[i].clone());
                 }
 
                 // Lower body

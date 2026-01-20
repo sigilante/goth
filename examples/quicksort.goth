@@ -1,8 +1,0 @@
-# Partition (quicksort building block)
-# Count elements less than pivot
-
-╭─ main : () → I
-╰─ let arr ← [3, 1, 4, 1, 5, 9, 2, 6] in
-   # Elements < 5: [3, 1, 4, 1, 2]
-   # Sum of array = 31
-   Σ arr
