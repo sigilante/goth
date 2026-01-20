@@ -1,0 +1,23 @@
+# Fibonacci-like computation
+# Usage: goth fibonacci.goth <n>
+# Computes (n-1)th + nth fib via iteration pattern
+# Example: goth fibonacci.goth 8  →  21  (fib(8))
+
+╭─ main : I64 → I64
+╰─ let a ← 1 in
+   let b ← 1 in
+   let c ← a + b in   # fib(3) = 2
+   let d ← b + c in   # fib(4) = 3
+   let e ← c + d in   # fib(5) = 5
+   let f ← d + e in   # fib(6) = 8
+   let g ← e + f in   # fib(7) = 13
+   let h ← f + g in   # fib(8) = 21
+   # Returns fib(n) for n up to 8, else fib(8)
+   if ₀ ≤ 1 then a
+   else if ₀ = 2 then b
+   else if ₀ = 3 then c
+   else if ₀ = 4 then d
+   else if ₀ = 5 then e
+   else if ₀ = 6 then f
+   else if ₀ = 7 then g
+   else h

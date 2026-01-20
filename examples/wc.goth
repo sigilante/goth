@@ -1,0 +1,7 @@
+# Word count - count spaces to get word count
+# Usage: goth wc.goth <space_count>
+# Returns word count = spaces + 1 (standard wc -w logic)
+# Example: goth wc.goth 2  →  3  (2 spaces = 3 words)
+
+╭─ main : I64 → I64
+╰─ ₀ + 1

@@ -1,0 +1,10 @@
+# ROT13 cipher - like sed 'y/a-z/n-za-m/'
+# Usage: goth sed_replace.goth <char_code>
+# Example: goth sed_replace.goth 104  →  117  (h → u)
+# Rotates lowercase letters by 13 positions
+
+╭─ main : I64 → I64
+╰─ if (₀ ≥ 97) ∧ (₀ ≤ 122) then
+     let shifted ← ₀ - 97 + 13 in
+     if shifted ≥ 26 then shifted - 26 + 97 else shifted + 97
+   else ₀

@@ -1,0 +1,15 @@
+# Newton's method for square root
+# Usage: goth newton_sqrt.goth <number>
+# Example: goth newton_sqrt.goth 144  →  12
+# Iterates: x_new = (x + n/x) / 2
+
+╭─ main : I64 → I64
+╰─ let n ← ₀ in
+   let x1 ← (n + n / n) / 2 in
+   let x2 ← (x1 + n / x1) / 2 in
+   let x3 ← (x2 + n / x2) / 2 in
+   let x4 ← (x3 + n / x3) / 2 in
+   let x5 ← (x4 + n / x4) / 2 in
+   let x6 ← (x5 + n / x5) / 2 in
+   let x7 ← (x6 + n / x6) / 2 in
+   x7

@@ -445,6 +445,21 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 )),
             ))
         }
+        // Sequence generation
+        "iota" | "ι" | "⍳" => {
+            // I64 → [n]I64 (generate 0..n-1)
+            Some(Type::func(
+                Type::Prim(PrimType::I64),
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
+        "range" => {
+            // I64 → I64 → [m]I64 (generate start..end-1)
+            Some(Type::func_n(
+                [Type::Prim(PrimType::I64), Type::Prim(PrimType::I64)],
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
         _ => None,
     }
 }

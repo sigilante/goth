@@ -1,0 +1,11 @@
+# Polynomial evaluation
+# Usage: goth polynomial.goth <x>
+# Evaluates 1 + 2x + 3x² at given x
+# Example: goth polynomial.goth 5  →  86  (1 + 10 + 75)
+
+╭─ main : I64 → I64
+╰─ let x ← ₀ in
+   let a0 ← 1 in
+   let a1 ← 2 in
+   let a2 ← 3 in
+   a0 + a1 × x + a2 × x × x

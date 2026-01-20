@@ -49,7 +49,8 @@ impl TypeChecker {
         for prim in ["sqrt", "exp", "ln", "sin", "cos", "tan",
                      "asin", "acos", "atan", "sinh", "cosh", "tanh",
                      "floor", "ceil", "round", "abs", "length",
-                     "dot", "·", "matmul", "transpose", "⍉", "norm"] {
+                     "dot", "·", "matmul", "transpose", "⍉", "norm",
+                     "iota", "ι", "⍳", "range"] {
             if let Some(ty) = builtins::primitive_type(prim) {
                 ctx.define_global(prim, ty);
             }
