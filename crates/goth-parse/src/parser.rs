@@ -113,6 +113,11 @@ impl<'a> Parser<'a> {
                     if t.is_binop() {
                         break; // Let infix handle it
                     }
+                    // Don't treat postfix operators as application arguments
+                    // Let parse_postfix handle them
+                    if matches!(t, Token::Sum | Token::Prod | Token::Scan) {
+                        break;
+                    }
                 }
                 let arg = self.parse_atom()?;
                 lhs = Expr::App(Box::new(lhs), Box::new(arg));
@@ -124,8 +129,11 @@ impl<'a> Parser<'a> {
         }
 
         // Handle postfix operators AFTER infix and application
-        // This ensures [1,2,3] ⊗ [4,5,6] Σ parses as ([1,2,3] ⊗ [4,5,6]) Σ
-        lhs = self.parse_postfix(lhs)?;
+        // Only at top level (min_bp == 0) to ensure they bind loosest
+        // This ensures [1,2,3] × [4,5,6] Σ parses as ([1,2,3] × [4,5,6]) Σ
+        if min_bp == 0 {
+            lhs = self.parse_postfix(lhs)?;
+        }
 
         Ok(lhs)
     }
