@@ -510,7 +510,9 @@ fn parse_and_eval(input: &str, evaluator: &mut Evaluator, type_checker: &mut Typ
     // Try parsing as let declaration first
     if input.starts_with("let ") {
         // Check if it's a top-level let (no 'in')
-        if !input.contains(" in ") {
+        // Must check for both " in " and " in\n" patterns
+        let has_in_body = input.contains(" in ") || input.contains(" in\n");
+        if !has_in_body {
             // Parse as declaration
             match parse_module(input, "repl") {
                 Ok(module) => {
@@ -782,15 +784,14 @@ fn is_complete(input: &str) -> bool {
         }
     }
     
-    // Check for incomplete let binding (let x = ... without in, or in without body)
+    // Check for incomplete let binding
+    // - `let x = 42` (no 'in') -> complete (top-level binding)
+    // - `let x = 42 in` (ends with 'in') -> incomplete (needs body)
+    // - `let x = 42 in expr` -> complete
     if input.starts_with("let ") && input.contains('=') {
-        // Check for 'in' keyword - could be " in " or "\nin " (at line start)
-        if !input.contains(" in ") && !input.contains("\nin ") {
-            return false;
-        }
-        // Also check if the input ends with " in" or "\nin" (no body after in)
         let trimmed = input.trim_end();
-        if trimmed.ends_with(" in") || trimmed.ends_with("\nin") {
+        // If input ends with " in", it's incomplete (waiting for body)
+        if trimmed.ends_with(" in") {
             return false;
         }
     }
