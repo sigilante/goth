@@ -3,6 +3,8 @@
 
 𝔤𝔬𝔱𝔥 is an LLM-friendly functional programming language with Unicode syntax, dependent types, and tensor operations.
 
+![](./img/header.png)
+
 ## Quick Start
 
 ```sh
