@@ -1,9 +1,38 @@
-# Matrix trace (sum of diagonal)
-# 2x2 matrix stored as [a, b, c, d]
+# Matrix Operations Demo
+# Demonstrates matrix operations using APL-style operators
+# Usage: goth matmul.goth
 
-╭─ main : () → I
-╰─ let m ← [1, 2, 3, 4] in
-   # Matrix: | 1 2 |
-   #         | 3 4 |
-   # Trace = 1 + 4 = 5
-   m[0] + m[3]
+╭─ main : () → ()
+╰─ let m = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]] in
+   let n = 3 in
+   let v = [1.0, 2.0, 3.0] in
+   let _ = print "=== Matrix Operations Demo ===" in
+   let _ = print "" in
+   let _ = print "Matrix M (3x3):" in
+   let _ = print m[0] in
+   let _ = print m[1] in
+   let _ = print m[2] in
+   let _ = print "" in
+   let diag = ι n ↦ λ→ m[₀][₀] in
+   let trace = Σ diag in
+   let _ = print "Diagonal: ι n ↦ λ→ m[i][i]" in
+   let _ = print ⟨"diag(M) =", diag⟩ in
+   let _ = print ⟨"trace(M) = Σ diag =", trace⟩ in
+   let _ = print "" in
+   let mv = m ↦ λ→ Σ (₀ × v) in
+   let _ = print "Matrix-vector: M ↦ λ→ Σ(row × v)" in
+   let _ = print ⟨"v =", v⟩ in
+   let _ = print ⟨"M × v =", mv⟩ in
+   let _ = print "" in
+   let rowsums = m ↦ λ→ Σ ₀ in
+   let _ = print "Row sums: M ↦ λ→ Σ row" in
+   let _ = print ⟨"Σ rows =", rowsums⟩ in
+   let _ = print "" in
+   let frob = sqrt (Σ (m ↦ λ→ Σ (₀ × ₀))) in
+   let _ = print "Frobenius: sqrt(Σ (M ↦ λ→ Σ(row × row)))" in
+   let _ = print ⟨"‖M‖_F =", frob⟩ in
+   let _ = print "" in
+   let antidiag = ι n ↦ λ→ m[₀][n - 1 - ₀] in
+   let _ = print "Anti-diagonal: ι n ↦ λ→ m[i][n-1-i]" in
+   let _ = print ⟨"antidiag(M) =", antidiag⟩ in
+   print "Done!"
