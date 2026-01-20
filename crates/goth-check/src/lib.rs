@@ -50,7 +50,16 @@ impl TypeChecker {
                      "asin", "acos", "atan", "sinh", "cosh", "tanh",
                      "floor", "ceil", "round", "abs", "length",
                      "dot", "·", "matmul", "transpose", "⍉", "norm",
-                     "iota", "ι", "⍳", "range"] {
+                     "iota", "ι", "⍳", "range",
+                     // Type conversions
+                     "toInt", "toFloat", "toBool", "toChar", "toString", "chars",
+                     "parseInt", "parseFloat",
+                     // Aggregation
+                     "sum", "Σ", "prod", "Π",
+                     // Array operations
+                     "reverse", "take", "drop", "concat", "⧺",
+                     // I/O
+                     "print", "readLine"] {
             if let Some(ty) = builtins::primitive_type(prim) {
                 ctx.define_global(prim, ty);
             }

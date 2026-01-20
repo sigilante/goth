@@ -64,6 +64,7 @@ pub enum PrimFn {
     Chars, ToString, StrConcat,
     Print, ReadLine, ReadFile, WriteFile,
     ToInt, ToFloat, ToBool, ToChar,
+    ParseInt, ParseFloat,  // String parsing
 }
 
 #[derive(Debug, Clone)]

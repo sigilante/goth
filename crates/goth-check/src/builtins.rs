@@ -296,19 +296,19 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
             }
         }
         
-        // Sum: [n]T → T (where T is numeric)
+        // Sum: [n]T → T (where T is numeric, type variable, or hole)
         Sum | Prod => {
             match operand {
                 Type::Tensor(_, elem) => {
-                    if let Type::Prim(p) = elem.as_ref() {
-                        if p.is_numeric() {
-                            return Ok(*elem.clone());
-                        }
+                    match elem.as_ref() {
+                        Type::Prim(p) if p.is_numeric() => Ok(*elem.clone()),
+                        // Allow type variables and holes (assume numeric at runtime)
+                        Type::Var(_) | Type::Hole => Ok(*elem.clone()),
+                        _ => Err(TypeError::InvalidUnaryOp {
+                            op: format!("{:?}", op),
+                            operand: operand.clone(),
+                        })
                     }
-                    Err(TypeError::InvalidUnaryOp {
-                        op: format!("{:?}", op),
-                        operand: operand.clone(),
-                    })
                 }
                 _ => Err(TypeError::InvalidUnaryOp {
                     op: format!("{:?}", op),
@@ -316,20 +316,20 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
                 })
             }
         }
-        
-        // Scan: [n]T → [n]T
+
+        // Scan: [n]T → [n]T (where T is numeric, type variable, or hole)
         Scan => {
             match operand {
                 Type::Tensor(_sh, elem) => {
-                    if let Type::Prim(p) = elem.as_ref() {
-                        if p.is_numeric() {
-                            return Ok(operand.clone());
-                        }
+                    match elem.as_ref() {
+                        Type::Prim(p) if p.is_numeric() => Ok(operand.clone()),
+                        // Allow type variables and holes (assume numeric at runtime)
+                        Type::Var(_) | Type::Hole => Ok(operand.clone()),
+                        _ => Err(TypeError::InvalidUnaryOp {
+                            op: "scan".to_string(),
+                            operand: operand.clone(),
+                        })
                     }
-                    Err(TypeError::InvalidUnaryOp {
-                        op: "scan".to_string(),
-                        operand: operand.clone(),
-                    })
                 }
                 _ => Err(TypeError::InvalidUnaryOp {
                     op: "scan".to_string(),
@@ -458,6 +458,171 @@ pub fn primitive_type(name: &str) -> Option<Type> {
             Some(Type::func_n(
                 [Type::Prim(PrimType::I64), Type::Prim(PrimType::I64)],
                 Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
+        // Type conversions
+        "toInt" => {
+            // ∀α. α → I64 (convert any type to integer)
+            Some(Type::Forall(
+                vec![TypeParam { name: "α".into(), kind: TypeParamKind::Type }],
+                Box::new(Type::func(Type::Var("α".into()), Type::Prim(PrimType::I64))),
+            ))
+        }
+        "toFloat" => {
+            // ∀α. α → F64 (convert any type to float)
+            Some(Type::Forall(
+                vec![TypeParam { name: "α".into(), kind: TypeParamKind::Type }],
+                Box::new(Type::func(Type::Var("α".into()), Type::Prim(PrimType::F64))),
+            ))
+        }
+        "toBool" => {
+            // ∀α. α → Bool (convert any type to boolean)
+            Some(Type::Forall(
+                vec![TypeParam { name: "α".into(), kind: TypeParamKind::Type }],
+                Box::new(Type::func(Type::Var("α".into()), Type::Prim(PrimType::Bool))),
+            ))
+        }
+        "toChar" => {
+            // I64 → Char (convert integer to character)
+            Some(Type::func(Type::Prim(PrimType::I64), Type::Prim(PrimType::Char)))
+        }
+        "parseInt" => {
+            // String → I64 (parse string as integer)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Prim(PrimType::I64),
+            ))
+        }
+        "parseFloat" => {
+            // String → F64 (parse string as float)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Prim(PrimType::F64),
+            ))
+        }
+        "toString" => {
+            // ∀α. α → String (convert any type to string)
+            Some(Type::Forall(
+                vec![TypeParam { name: "α".into(), kind: TypeParamKind::Type }],
+                Box::new(Type::func(
+                    Type::Var("α".into()),
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                )),
+            ))
+        }
+        "chars" => {
+            // String → [n]Char (convert string to array of characters)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
+        // Aggregation
+        "sum" | "Σ" => {
+            // ∀n α. [n]α → α (sum of numeric array)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func(
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                    Type::Var("α".into()),
+                )),
+            ))
+        }
+        "prod" | "Π" => {
+            // ∀n α. [n]α → α (product of numeric array)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func(
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                    Type::Var("α".into()),
+                )),
+            ))
+        }
+        // Array operations
+        "reverse" => {
+            // ∀n α. [n]α → [n]α (reverse array)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func(
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                )),
+            ))
+        }
+        "take" => {
+            // ∀n m α. I64 → [n]α → [m]α (take first k elements)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "m".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::Prim(PrimType::I64),
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                    ],
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Var("α".into()))),
+                )),
+            ))
+        }
+        "drop" => {
+            // ∀n m α. I64 → [n]α → [m]α (drop first k elements)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "m".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::Prim(PrimType::I64),
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                    ],
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Var("α".into()))),
+                )),
+            ))
+        }
+        "concat" | "⧺" => {
+            // ∀n m p α. [n]α → [m]α → [p]α (concatenate arrays)
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "n".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "m".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "p".into(), kind: TypeParamKind::Shape },
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("α".into()))),
+                        Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Var("α".into()))),
+                    ],
+                    Type::Tensor(Shape(vec![Dim::Var("p".into())]), Box::new(Type::Var("α".into()))),
+                )),
+            ))
+        }
+        // I/O
+        "print" => {
+            // ∀α. α → Unit (print value)
+            Some(Type::Forall(
+                vec![TypeParam { name: "α".into(), kind: TypeParamKind::Type }],
+                Box::new(Type::func(Type::Var("α".into()), Type::unit())),
+            ))
+        }
+        "readLine" => {
+            // Unit → String (read line from stdin)
+            Some(Type::func(
+                Type::unit(),
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
             ))
         }
         _ => None,

@@ -75,6 +75,7 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::MatMul => binary_args(&args, matmul), PrimFn::Transpose => unary_args(&args, transpose),
         PrimFn::ToInt => unary_args(&args, to_int), PrimFn::ToFloat => unary_args(&args, to_float),
         PrimFn::ToBool => unary_args(&args, to_bool), PrimFn::ToChar => unary_args(&args, to_char),
+        PrimFn::ParseInt => unary_args(&args, parse_int), PrimFn::ParseFloat => unary_args(&args, parse_float),
         PrimFn::Print => { for arg in &args { println!("{}", arg); } Ok(Value::Unit) }
         PrimFn::ReadLine => {
             use std::io::{self, BufRead};
@@ -442,6 +443,40 @@ fn to_char(value: Value) -> EvalResult<Value> {
         Value::Char(c) => Ok(Value::Char(c)),
         Value::Int(n) => if n >= 0 && n <= 0x10FFFF { char::from_u32(n as u32).map(Value::Char).ok_or_else(|| EvalError::type_error_msg("Invalid Unicode scalar")) } else { Err(EvalError::type_error_msg("Integer out of Unicode range")) },
         _ => Err(EvalError::type_error_msg(format!("Cannot convert {} to Char", value.type_name()))),
+    }
+}
+
+/// parseInt str: Parse a string as an integer
+fn parse_int(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            if let Some(s) = t.to_string_value() {
+                let s = s.trim();
+                s.parse::<i128>()
+                    .map(Value::Int)
+                    .map_err(|_| EvalError::type_error_msg(format!("Cannot parse '{}' as integer", s)))
+            } else {
+                Err(EvalError::type_error("String", &Value::Tensor(t)))
+            }
+        }
+        _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// parseFloat str: Parse a string as a float
+fn parse_float(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            if let Some(s) = t.to_string_value() {
+                let s = s.trim();
+                s.parse::<f64>()
+                    .map(|f| Value::Float(OrderedFloat(f)))
+                    .map_err(|_| EvalError::type_error_msg(format!("Cannot parse '{}' as float", s)))
+            } else {
+                Err(EvalError::type_error("String", &Value::Tensor(t)))
+            }
+        }
+        _ => Err(EvalError::type_error("String", &value)),
     }
 }
 

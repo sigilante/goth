@@ -198,6 +198,8 @@ pub enum Token {
     ZipWith,
     #[token("⊕")]
     #[token("+:")]
+    #[token("⧺")]
+    #[token("++")]
     Concat,
 
     // ============ Reduction ============
@@ -361,7 +363,8 @@ pub enum Token {
     TyVar(String),
 
     // ============ APL-style single character identifiers ============
-    #[regex(r"[⍳⍴⌽⍉⧺·…↑↓]", priority = 5, callback = |lex| lex.slice().to_string())]
+    // Note: ⧺ (concat) is now a dedicated token, not an identifier
+    #[regex(r"[⍳⍴⌽⍉·…↑↓]", priority = 5, callback = |lex| lex.slice().to_string())]
     AplIdent(String),
 
     // ============ Primitive Types ============

@@ -358,6 +358,19 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Some(Token::LBracket) => {
+                    // Only allow indexing on expressions that could be arrays:
+                    // names, field access, other indices, parenthesized, arrays themselves
+                    // Don't allow indexing on literals (e.g., 2[1,2] makes no sense)
+                    let can_index = matches!(
+                        &expr,
+                        Expr::Name(_) | Expr::Field(_, _) | Expr::Index(_, _) |
+                        Expr::App(_, _) | Expr::Array(_) | Expr::Tuple(_) |
+                        Expr::If { .. } | Expr::Let { .. } | Expr::LetRec { .. } |
+                        Expr::Match { .. } | Expr::Do { .. } | Expr::BinOp(_, _, _)
+                    );
+                    if !can_index {
+                        break; // Treat [..] as a separate array, not indexing
+                    }
                     self.next();
                     let mut indices = vec![self.parse_expr()?];
                     while self.eat(&Token::Comma) {
@@ -1159,7 +1172,13 @@ impl<'a> Parser<'a> {
             None
         };
 
-        self.expect(Token::Eq)?;
+        // Accept either = or ← for let declarations
+        if !self.eat(&Token::Eq) && !self.eat(&Token::BackArrow) {
+            return Err(ParseError::Unexpected {
+                found: self.peek().cloned(),
+                expected: "'=' or '←'".into(),
+            });
+        }
         let value = self.parse_expr()?;
 
         Ok(Decl::Let(goth_ast::decl::LetDecl {
