@@ -782,10 +782,15 @@ fn is_complete(input: &str) -> bool {
         }
     }
     
-    // Check for incomplete let binding (let x = ... without in)
+    // Check for incomplete let binding (let x = ... without in, or in without body)
     if input.starts_with("let ") && input.contains('=') {
         // Check for 'in' keyword - could be " in " or "\nin " (at line start)
         if !input.contains(" in ") && !input.contains("\nin ") {
+            return false;
+        }
+        // Also check if the input ends with " in" or "\nin" (no body after in)
+        let trimmed = input.trim_end();
+        if trimmed.ends_with(" in") || trimmed.ends_with("\nin") {
             return false;
         }
     }
