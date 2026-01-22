@@ -103,11 +103,11 @@ match x of
 
 ---
 
-### 3. **goth-check** (1,859 lines) ⚠️ **PARTIAL**
+### 3. **goth-check** (~2,100 lines) ✅ **WORKING**
 
 **Purpose:** Type checking and inference
 
-**Status:** Basic checking works, advanced features incomplete
+**Status:** Core type checking works including shape checking
 
 **What Works:**
 - ✅ Hindley-Milner type inference
@@ -116,30 +116,35 @@ match x of
 - ✅ Basic type checking for expressions
 - ✅ Unification
 - ✅ Type variable instantiation
+- ✅ **Tensor shape checking**
+- ✅ **Type annotations in let expressions**
+- ✅ Shape variable unification (`[n]F64 → [n]F64`)
 
-**Test Coverage:** 15 tests (needs more!)
+**Test Coverage:** 69 tests
+
+**Example (now works):**
+```goth
+# Shape mismatches are now caught:
+╭─ bad : [3]F64 → [5]F64
+╰─ ₀
+# → Type error: Shape mismatch: expected [5], found [3]
+
+# Typed let expressions:
+let x : [5]F64 = [1.0, 2.0, 3.0] in x
+# → Type error: Shape mismatch: expected [5], found [3]
+```
 
 **What's Missing:**
-- ❌ Tensor shape checking (critical!)
 - ❌ Refinement types
 - ❌ Effect system checking
 - ❌ Interval arithmetic
 - ❌ Typeclass/constraint resolution
-- ❌ Dependent types (if planned)
 - ⚠️ Polymorphism (partial)
 
-**Example Gap:**
-```goth
-# This SHOULD fail type checking but doesn't yet:
-╭─ bad : [3]F64 → [5]F64
-╰─ ₀  # Shape mismatch not caught!
-```
-
 **Priority Work:**
-1. **Shape checking** - This is THE killer feature
-2. Effect system - Pure by default
-3. Refinement types - For preconditions/postconditions
-4. Better error messages
+1. Effect system - Pure by default
+2. Refinement types - For preconditions/postconditions
+3. Better error messages with source locations
 
 ---
 

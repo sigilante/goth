@@ -177,8 +177,15 @@ Functions can call themselves by name:
 ### Let Bindings
 
 ```goth
-let x ← expr in body     -- Bind x, use in body
-let x ← a; y ← b in c    -- Sequential bindings
+let x ← expr in body         -- Bind x, use in body
+let x : Type ← expr in body  -- With type annotation
+let x ← a; y ← b in c        -- Sequential bindings
+```
+
+Type annotations enable compile-time shape checking:
+```goth
+let v : [3]F64 ← [1.0, 2.0, 3.0] in v    -- OK
+let v : [5]F64 ← [1.0, 2.0, 3.0] in v    -- Error: shape mismatch
 ```
 
 ---
