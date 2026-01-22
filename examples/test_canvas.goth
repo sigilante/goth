@@ -1,0 +1,9 @@
+use "../stdlib/canvas.goth"
+
+╭─ main : () → ()
+│  ◇io
+╰─ let _ = clear ⟨⟩ in
+   let _ = circle 15 40 10 "*" in
+   let _ = line 5 5 25 75 "#" in
+   let _ = box 2 2 20 10 in
+   print "Done!"
