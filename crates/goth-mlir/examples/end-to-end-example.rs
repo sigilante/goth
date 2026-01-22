@@ -57,6 +57,7 @@ fn example_2() {
     // Build AST: let x = 5 in x + 1
     let expr = Expr::Let {
         pattern: Pattern::Var(Some("x".into())),
+        type_: None,
         value: Box::new(Expr::Lit(Literal::Int(5))),
         body: Box::new(Expr::BinOp(
             BinOp::Add,

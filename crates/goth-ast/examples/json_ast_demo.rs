@@ -73,6 +73,7 @@ fn demo_lambda() {
     // let x = 10 in λ→ ₀ + x
     let expr = Expr::Let {
         pattern: Pattern::Var(Some("x".into())),
+        type_: None,
         value: Box::new(Expr::Lit(Literal::Int(10))),
         body: Box::new(Expr::Lam(Box::new(Expr::BinOp(
             BinOp::Add,
@@ -110,6 +111,7 @@ fn demo_complex() {
     // let f = λ→ λ→ ₀ + ₁ in f 5 3
     let expr = Expr::Let {
         pattern: Pattern::Var(Some("f".into())),
+        type_: None,
         value: Box::new(Expr::Lam(Box::new(Expr::Lam(Box::new(Expr::BinOp(
             BinOp::Add,
             Box::new(Expr::Idx(0)),

@@ -158,7 +158,7 @@ impl ResolveCtx {
             }
 
             // Let - resolve value, then body with pattern bindings in scope
-            Expr::Let { pattern, value, body } => {
+            Expr::Let { pattern, type_, value, body } => {
                 let value = self.resolve_expr(*value);
                 let names = self.pattern_names(&pattern);
                 self.push_many(names);
@@ -166,6 +166,7 @@ impl ResolveCtx {
                 self.pop();
                 Expr::Let {
                     pattern,
+                    type_,
                     value: Box::new(value),
                     body: Box::new(body),
                 }

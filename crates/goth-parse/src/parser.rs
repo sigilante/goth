@@ -562,6 +562,14 @@ impl<'a> Parser<'a> {
         } else {
             // Parse first binding
             let pattern = self.parse_pattern()?;
+
+            // Check for optional type annotation
+            let type_ = if self.eat(&Token::Colon) {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+
             // Accept either = or ← for let bindings
             if !self.eat(&Token::Eq) && !self.eat(&Token::BackArrow) {
                 return Err(ParseError::Unexpected {
@@ -570,15 +578,21 @@ impl<'a> Parser<'a> {
                 });
             }
             let value = self.parse_expr()?;
-            
+
             // Check for semicolon - indicates sequential bindings
             if self.eat(&Token::Semi) {
                 // Build nested let expressions from sequential bindings
-                let mut bindings = vec![(pattern, value)];
-                
+                // Each binding is (pattern, type_, value)
+                let mut bindings = vec![(pattern, type_, value)];
+
                 // Parse additional bindings until we see 'in'
                 while !self.at(&Token::In) && self.peek().is_some() {
                     let pat = self.parse_pattern()?;
+                    let ty = if self.eat(&Token::Colon) {
+                        Some(self.parse_type()?)
+                    } else {
+                        None
+                    };
                     if !self.eat(&Token::Eq) && !self.eat(&Token::BackArrow) {
                         return Err(ParseError::Unexpected {
                             found: self.peek().cloned(),
@@ -586,26 +600,27 @@ impl<'a> Parser<'a> {
                         });
                     }
                     let val = self.parse_expr()?;
-                    bindings.push((pat, val));
-                    
+                    bindings.push((pat, ty, val));
+
                     // Only continue if there's a semicolon
                     if !self.eat(&Token::Semi) {
                         break;
                     }
                 }
-                
+
                 self.expect(Token::In)?;
                 let mut body = self.parse_expr()?;
-                
+
                 // Build nested lets from right to left
-                for (pat, val) in bindings.into_iter().rev() {
+                for (pat, ty, val) in bindings.into_iter().rev() {
                     body = Expr::Let {
                         pattern: pat,
+                        type_: ty,
                         value: Box::new(val),
                         body: Box::new(body),
                     };
                 }
-                
+
                 Ok(body)
             } else {
                 // Single binding - original behavior
@@ -613,6 +628,7 @@ impl<'a> Parser<'a> {
                 let body = self.parse_expr()?;
                 Ok(Expr::Let {
                     pattern,
+                    type_,
                     value: Box::new(value),
                     body: Box::new(body),
                 })

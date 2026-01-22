@@ -394,17 +394,21 @@ impl Pretty {
                 if needs_parens { self.write(")"); }
             }
             
-            Expr::Let { pattern, value, body } => {
+            Expr::Let { pattern, type_, value, body } => {
                 let needs_parens = prec > 0;
                 if needs_parens { self.write("("); }
-                
+
                 self.write("let ");
                 self.print_pattern(pattern);
+                if let Some(ty) = type_ {
+                    self.write(" : ");
+                    self.print_type(ty);
+                }
                 self.write(if self.config.unicode { " ← " } else { " = " });
                 self.print_expr_prec(value, 0);
                 self.write(" in ");
                 self.print_expr_prec(body, 0);
-                
+
                 if needs_parens { self.write(")"); }
             }
             
@@ -797,6 +801,7 @@ mod tests {
         // let x = 5 in x + 1
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::BinOp(
                 BinOp::Add,
@@ -935,6 +940,7 @@ mod tests {
         // let f = λ→ ₀ + 1 in f 5
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("f".into())),
+            type_: None,
             value: Box::new(Expr::Lam(Box::new(Expr::BinOp(
                 BinOp::Add,
                 Box::new(Expr::Idx(0)),

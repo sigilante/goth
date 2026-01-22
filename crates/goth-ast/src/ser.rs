@@ -248,6 +248,7 @@ mod tests {
         // let x = 5 in x + 1
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::BinOp(
                 BinOp::Add,
@@ -255,7 +256,7 @@ mod tests {
                 Box::new(Expr::Lit(Literal::Int(1))),
             )),
         };
-        
+
         let json = expr_to_json(&expr).unwrap();
         let parsed = expr_from_json(&json).unwrap();
         assert_eq!(expr, parsed);
@@ -393,6 +394,7 @@ mod tests {
         // let x = 5 in λ→ ₀ + x
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::Lam(Box::new(Expr::BinOp(
                 BinOp::Add,
@@ -400,7 +402,7 @@ mod tests {
                 Box::new(Expr::Idx(1)),
             )))),
         };
-        
+
         let binary = expr_to_binary(&expr).unwrap();
         let parsed = expr_from_binary(&binary).unwrap();
         assert_eq!(expr, parsed);
@@ -473,6 +475,7 @@ mod tests {
         // Complex nested expression
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("f".into())),
+            type_: None,
             value: Box::new(Expr::Lam(Box::new(Expr::Lam(Box::new(Expr::BinOp(
                 BinOp::Add,
                 Box::new(Expr::Idx(0)),

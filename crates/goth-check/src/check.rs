@@ -63,8 +63,15 @@ pub fn check(ctx: &mut Context, expr: &Expr, expected: &Type) -> TypeResult<()> 
         
         // ============ Let ============
         
-        Expr::Let { pattern, value, body } => {
-            let val_ty = infer(ctx, value)?;
+        Expr::Let { pattern, type_, value, body } => {
+            let val_ty = if let Some(expected_ty) = type_ {
+                // Type annotation provided - check value against it
+                check(ctx, value, expected_ty)?;
+                expected_ty.clone()
+            } else {
+                // No annotation - infer from value
+                infer(ctx, value)?
+            };
             let bindings = pattern_types(pattern, &val_ty)?;
             ctx.with_bindings(&bindings, |ctx| {
                 check(ctx, body, expected)
@@ -93,7 +100,23 @@ pub fn check(ctx: &mut Context, expr: &Expr, expected: &Type) -> TypeResult<()> 
         
         Expr::Array(exprs) => {
             match expected {
-                Type::Tensor(_, elem) => {
+                Type::Tensor(shape, elem) => {
+                    // Check shape matches array length
+                    use goth_ast::shape::Dim;
+                    if shape.rank() == 1 {
+                        match &shape.0[0] {
+                            Dim::Const(n) => {
+                                if *n as usize != exprs.len() {
+                                    return Err(TypeError::ShapeMismatch {
+                                        expected: shape.clone(),
+                                        found: goth_ast::shape::Shape(vec![Dim::Const(exprs.len() as u64)]),
+                                    });
+                                }
+                            }
+                            _ => {} // Variable dimension - can't check statically
+                        }
+                    }
+                    // Check element types
                     for e in exprs {
                         check(ctx, e, elem)?;
                     }
