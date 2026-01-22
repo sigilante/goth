@@ -40,3 +40,16 @@
 # Convert bool to string
 ╭─ boolToStr : Bool → String
 ╰─ if ₀ then "true" else "false"
+
+# Take first n characters of a string (helper)
+# Args: count, char array. Returns String.
+╭─ strTakeHelper : I → [n]Char → String
+╰─ match len ₀ {
+     0 → "";
+     _ → if ₁ < 1 then ""
+         else strConcat (toString (₀[0])) (strTakeHelper (₁ - 1) (drop 1 ₀))
+   }
+
+# Take first n characters of a string
+╭─ strTake : I → String → String
+╰─ strTakeHelper ₁ (chars ₀)

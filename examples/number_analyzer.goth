@@ -292,7 +292,7 @@ use "../stdlib/canvas.goth"
    # Backspace = delete last character
    else if key = 127 then
      let newLen = strLen input - 1 in
-     let newInput = if newLen < 0 then "" else take newLen input in
+     let newInput = if newLen < 0 then "" else strTake newLen input in
      let _ = clearAnalysis ⟨⟩ in
      newInput
 
