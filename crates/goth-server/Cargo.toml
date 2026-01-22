@@ -1,0 +1,39 @@
+[package]
+name = "goth-server"
+version = "0.1.0"
+edition = "2021"
+description = "HTTP server for the Goth programming language - REST API and web interface"
+license = "MIT"
+repository = "https://github.com/goth-lang/goth"
+
+[[bin]]
+name = "goth-server"
+path = "src/main.rs"
+
+[dependencies]
+# Goth crates
+goth-ast = { path = "../goth-ast" }
+goth-eval = { path = "../goth-eval" }
+goth-parse = { path = "../goth-parse" }
+goth-check = { path = "../goth-check" }
+
+# Web server
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Utilities
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+reqwest = { version = "0.11", features = ["json"] }

@@ -9,6 +9,7 @@ members = [
     "goth-mir",
     "goth-mlir",
     "goth-llvm",
+    "goth-server",
 ]
 
 [workspace.package]
