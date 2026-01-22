@@ -191,7 +191,7 @@ mod tests {
     fn test_parse_let() {
         let expr = parse_expr("let x = 5 in x + 1").unwrap();
         match expr {
-            Expr::Let { pattern, value, body } => {
+            Expr::Let { pattern, value, body, .. } => {
                 assert!(matches!(pattern, Pattern::Var(_)));
                 assert!(matches!(*value, Expr::Lit(Literal::Int(5))));
                 assert!(matches!(*body, Expr::BinOp(BinOp::Add, _, _)));

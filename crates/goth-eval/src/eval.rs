@@ -95,7 +95,7 @@ impl Evaluator {
             Expr::App(func, arg) => { let func_val = self.eval_with_env(func, env)?; let arg_val = self.eval_with_env(arg, env)?; self.apply(func_val, arg_val) }
             Expr::Lam(body) => Ok(Value::Closure(Closure { arity: 1, body: (**body).clone(), env: env.capture(), preconditions: vec![], postconditions: vec![] })),
             Expr::LamN(n, body) => Ok(Value::Closure(Closure { arity: *n, body: (**body).clone(), env: env.capture(), preconditions: vec![], postconditions: vec![] })),
-            Expr::Let { pattern, value, body } => { let val = self.eval_with_env(value, env)?; let mut new_env = env.clone(); self.bind_pattern(pattern, val, &mut new_env)?; self.eval_with_env(body, &new_env) }
+            Expr::Let { pattern, type_: _, value, body } => { let val = self.eval_with_env(value, env)?; let mut new_env = env.clone(); self.bind_pattern(pattern, val, &mut new_env)?; self.eval_with_env(body, &new_env) }
             Expr::LetRec { bindings, body } => {
                 let mut new_env = env.clone();
                 for _ in bindings { new_env.push(Value::Error("uninitialized letrec".into())); }
