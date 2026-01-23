@@ -49,11 +49,13 @@
 pub mod bufferize;
 pub mod lower_goth;
 pub mod optimize;
+pub mod lower_llvm;
 
 // Re-exports
 pub use bufferize::{BufferizePass, BufferizeOptions, bufferize_module};
 pub use lower_goth::{LowerGothPass, lower_goth_dialect};
 pub use optimize::{OptimizePass, OptLevel, optimize_module};
+pub use lower_llvm::{LowerLlvmPass, lower_to_llvm};
 
 use crate::error::{MlirError, Result};
 
@@ -200,8 +202,8 @@ pub fn default_pipeline(level: OptLevel) -> PassManager {
 pub fn llvm_pipeline(level: OptLevel) -> PassManager {
     let mut pm = default_pipeline(level);
 
-    // Add additional passes for LLVM lowering would go here
-    // (requires melior integration for actual LLVM lowering)
+    // 4. Lower to LLVM dialect
+    pm.add_pass(LowerLlvmPass::new());
 
     pm
 }

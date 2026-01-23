@@ -10,6 +10,7 @@
 //! - `linalg`: Linear algebra operations (generic, reduce, matmul, etc.)
 //! - `memref`: Memory reference operations (alloc, load, store, etc.)
 //! - `goth`: Custom Goth dialect for domain-specific operations
+//! - `llvm`: LLVM dialect for final lowering to LLVM IR
 
 pub mod arith;
 pub mod func;
@@ -19,6 +20,7 @@ pub mod tensor;
 pub mod linalg;
 pub mod memref;
 pub mod goth;
+pub mod llvm;
 
 // Re-export commonly used items
 pub use arith::*;
@@ -26,3 +28,4 @@ pub use func::*;
 pub use scf::*;
 pub use linalg::{AffineMap, IteratorType, GenericBuilder};
 pub use memref::{MemRefBuilder, DimSize, type_to_memref_string};
+pub use llvm::{LlvmBuilder, LlvmType, IcmpPredicate, FcmpPredicate, mlir_type_to_llvm};

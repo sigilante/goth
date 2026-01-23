@@ -72,8 +72,11 @@ pub use builder::MlirBuilder;
 pub use emit::{emit_program, emit_function, emit_type};
 
 // Pass-related exports
-pub use passes::{Pass, PassManager, OptLevel, default_pipeline};
-pub use passes::{bufferize_module, lower_goth_dialect, optimize_module};
+pub use passes::{Pass, PassManager, OptLevel, default_pipeline, llvm_pipeline};
+pub use passes::{bufferize_module, lower_goth_dialect, optimize_module, lower_to_llvm};
+
+// LLVM dialect exports
+pub use dialects::llvm::{LlvmBuilder, LlvmType, mlir_type_to_llvm};
 
 #[cfg(feature = "melior")]
 pub use context::GothMlirContext;
