@@ -397,14 +397,44 @@ fn emit_binop(
         };
         (op_name, result_ty.to_string())
     } else if is_bool_type(ty) {
-        let op_name = match op {
-            goth_ast::op::BinOp::And => "and",
-            goth_ast::op::BinOp::Or => "or",
-            goth_ast::op::BinOp::Eq => "icmp eq",
-            goth_ast::op::BinOp::Neq => "icmp ne",
-            _ => return Err(LlvmError::UnsupportedOp(format!("{:?}", op))),
-        };
-        (op_name, "i1".to_string())
+        // Bool result type - either logical ops on bools, or comparison ops on integers
+        match op {
+            // Logical operations on Bool operands
+            goth_ast::op::BinOp::And => {
+                let code = format!("  {} = and i1 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Or => {
+                let code = format!("  {} = or i1 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            // Comparison operations - operands are i64, result is i1
+            goth_ast::op::BinOp::Lt => {
+                let code = format!("  {} = icmp slt i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Gt => {
+                let code = format!("  {} = icmp sgt i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Leq => {
+                let code = format!("  {} = icmp sle i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Geq => {
+                let code = format!("  {} = icmp sge i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Eq => {
+                let code = format!("  {} = icmp eq i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            goth_ast::op::BinOp::Neq => {
+                let code = format!("  {} = icmp ne i64 {}, {}\n", ssa, left, right);
+                return Ok((ssa, code));
+            }
+            _ => return Err(LlvmError::UnsupportedOp(format!("Bool {:?}", op))),
+        }
     } else if is_string_type(ty) {
         // String comparison - call strcmp and compare result
         match op {
@@ -1196,12 +1226,10 @@ fn emit_block(
         } => {
             let cond_ty = Type::Prim(PrimType::Bool);
             let cond_val = emit_operand(ctx, cond, &cond_ty, output)?;
-            // Condition might be i64 (from zext'd comparison), truncate to i1
-            let cond_i1 = ctx.fresh_ssa();
-            output.push_str(&format!("  {} = trunc i64 {} to i1\n", cond_i1, cond_val));
+            // Condition is already i1 (Bool type from comparison/logical ops)
             output.push_str(&format!(
                 "  br i1 {}, label %bb{}, label %bb{}\n",
-                cond_i1, then_block.0, else_block.0
+                cond_val, then_block.0, else_block.0
             ));
         }
 

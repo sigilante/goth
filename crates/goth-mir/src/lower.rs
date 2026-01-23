@@ -293,15 +293,31 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
         
         Expr::BinOp(op, left, right) => {
             let (left_op, left_ty) = lower_expr_to_operand(ctx, left)?;
-            let (right_op, right_ty) = lower_expr_to_operand(ctx, right)?;
-            
-            // Result type depends on operation
-            // TODO: Proper type inference
-            let result_ty = left_ty.clone();  // Simplified for now
-            
+            let (right_op, _right_ty) = lower_expr_to_operand(ctx, right)?;
+
+            // Result type depends on operation category
+            let result_ty = match op {
+                // Comparison operators always return Bool
+                goth_ast::op::BinOp::Eq
+                | goth_ast::op::BinOp::Neq
+                | goth_ast::op::BinOp::Lt
+                | goth_ast::op::BinOp::Gt
+                | goth_ast::op::BinOp::Leq
+                | goth_ast::op::BinOp::Geq => {
+                    Type::Prim(goth_ast::types::PrimType::Bool)
+                }
+                // Logical operators always return Bool
+                goth_ast::op::BinOp::And
+                | goth_ast::op::BinOp::Or => {
+                    Type::Prim(goth_ast::types::PrimType::Bool)
+                }
+                // Arithmetic and other operators preserve operand type
+                _ => left_ty.clone(),
+            };
+
             let dest = ctx.fresh_local();
             ctx.emit(dest, result_ty.clone(), Rhs::BinOp(op.clone(), left_op, right_op));
-            
+
             Ok((Operand::Local(dest), result_ty))
         }
         

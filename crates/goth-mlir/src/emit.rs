@@ -219,10 +219,62 @@ fn is_float_type(ty: &Type) -> bool {
     }
 }
 
+/// Check if type is boolean
+fn is_bool_type(ty: &Type) -> bool {
+    match ty {
+        Type::Prim(PrimType::Bool) => true,
+        Type::Var(name) => matches!(name.as_ref(), "B" | "Bool"),
+        _ => false,
+    }
+}
+
 /// Emit binary operation
 fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
               left: String, right: String, ty: &Type) -> Result<String> {
     let ssa = ctx.fresh_ssa();
+
+    // For Bool result type, handle logical ops and comparisons specially
+    if is_bool_type(ty) {
+        match op {
+            // Logical operations on Bool operands
+            goth_ast::op::BinOp::And => {
+                return Ok(format!("{}{} = arith.andi {}, {} : i1\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Or => {
+                return Ok(format!("{}{} = arith.ori {}, {} : i1\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            // Comparison operations - default to integer comparison
+            // (The operands are integers, result is Bool)
+            goth_ast::op::BinOp::Lt => {
+                return Ok(format!("{}{} = arith.cmpi slt, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Gt => {
+                return Ok(format!("{}{} = arith.cmpi sgt, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Leq => {
+                return Ok(format!("{}{} = arith.cmpi sle, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Geq => {
+                return Ok(format!("{}{} = arith.cmpi sge, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Eq => {
+                return Ok(format!("{}{} = arith.cmpi eq, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Neq => {
+                return Ok(format!("{}{} = arith.cmpi ne, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            _ => return Err(MlirError::UnsupportedOp(format!("Bool {:?}", op))),
+        }
+    }
+
     let mlir_ty = emit_type(ty)?;
 
     let op_name = if is_int_type(ty) {
@@ -257,8 +309,8 @@ fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
     } else {
         return Err(MlirError::UnsupportedType(format!("{:?}", ty)));
     };
-    
-    Ok(format!("{}{} = {} {}, {} : {}\n", 
+
+    Ok(format!("{}{} = {} {}, {} : {}\n",
         ctx.indent_str(), ssa, op_name, left, right, mlir_ty))
 }
 
