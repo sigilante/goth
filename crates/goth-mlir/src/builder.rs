@@ -9,7 +9,7 @@ use goth_mir::mir::*;
 
 use crate::context::TextMlirContext;
 use crate::types::{type_to_mlir_string, is_integer_type, is_float_type};
-use crate::dialects::{arith, func, cf, tensor, goth as goth_dialect};
+use crate::dialects::{arith, func, cf, scf, tensor, goth as goth_dialect};
 use crate::error::{MlirError, Result};
 
 /// High-level MLIR builder
@@ -109,6 +109,38 @@ impl<'a> MlirBuilder<'a> {
         self.ctx.emit(&code);
         // Return the SSA value that was just created
         Ok(format!("%{}", self.ctx.fresh_ssa().strip_prefix('%').unwrap_or("0").parse::<usize>().unwrap_or(0) - 1))
+    }
+
+    // ========== SCF (Structured Control Flow) Operations ==========
+
+    /// Create an scf.if builder for structured conditionals
+    pub fn if_builder(&mut self, result_types: Vec<Type>) -> scf::IfBuilder<'_> {
+        scf::IfBuilder::new(self.ctx, result_types)
+    }
+
+    /// Create an scf.for builder for counted loops
+    pub fn for_builder(&mut self) -> scf::ForBuilder<'_> {
+        scf::ForBuilder::new(self.ctx)
+    }
+
+    /// Emit a simple scf.if with then/else values (no region building needed)
+    pub fn emit_scf_if(
+        &mut self,
+        condition: &str,
+        then_value: &str,
+        else_value: &str,
+        result_type: &Type,
+    ) -> Result<String> {
+        let code = scf::emit_if_complete(self.ctx, condition, then_value, else_value, result_type)?;
+        self.ctx.emit(&code);
+        Ok(format!("%{}", self.ctx.fresh_ssa().strip_prefix('%').unwrap_or("0").parse::<usize>().unwrap_or(0) - 1))
+    }
+
+    /// Emit scf.yield to return values from a region
+    pub fn emit_scf_yield(&mut self, values: &[String], types: &[Type]) -> Result<()> {
+        let code = scf::emit_yield(self.ctx, values, types)?;
+        self.ctx.emit(&code);
+        Ok(())
     }
 
     /// Emit a unary operation
