@@ -1,43 +1,31 @@
 # Goth Compiler - Critical Gaps Quick Reference
 
-**TL;DR: 3 things stand between you and a working compiler:**
+**TL;DR: 2 things stand between you and a working compiler:**
 
 ---
 
-## 🔴 GAP 1: Shape Checking (CRITICAL)
+## ✅ ~~GAP 1: Shape Checking~~ (RESOLVED)
 
-**Problem:** Type checker ignores tensor shapes
+**Status:** Shape checking now works! Use `--check` flag or REPL.
 
-**Example Bug:**
+**Example (now correctly caught):**
 ```goth
-# This SHOULD fail but doesn't:
+# This now correctly fails:
 ╭─ bad : [3]F64 → [5]F64
-╰─ ₀  # Wrong! [3] ≠ [5]
+╰─ ₀
+# → Type error: Shape mismatch: expected [5], found [3]
+
+# Typed let expressions also check shapes:
+let x : [5]F64 = [1.0, 2.0, 3.0] in x
+# → Type error: Shape mismatch: expected [5], found [3]
 ```
 
-**What's Missing:**
-```rust
-// Need to add in goth-check/src/shapes.rs:
-
-pub fn check_shapes(
-    expected: &Shape,
-    actual: &Shape,
-) -> Result<(), ShapeError> {
-    match (expected, actual) {
-        (Shape::Const(a), Shape::Const(b)) if a != b => {
-            Err(ShapeError::Mismatch {
-                expected: a.clone(),
-                actual: b.clone(),
-            })
-        }
-        // ...
-    }
-}
-```
-
-**Fix Estimate:** 1-2 weeks  
-**Impact:** HIGH - This is THE Goth differentiator  
-**Priority:** #1
+**What Works:**
+- ✅ Shape unification with variables (`[n]F64 → [n]F64`)
+- ✅ Concrete shape checking (`[3] + [5]` fails)
+- ✅ Type annotations in let expressions
+- ✅ Function signature shape checking
+- ✅ 69 type checker tests passing
 
 ---
 

@@ -249,10 +249,11 @@ mod tests {
     #[test]
     fn test_infer_let() {
         use goth_ast::pattern::Pattern;
-        
+
         let mut checker = TypeChecker::new();
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::Idx(0)),  // x
         };
@@ -1063,5 +1064,89 @@ mod tests {
             }
             _ => panic!("Expected tensor type"),
         }
+    }
+
+    #[test]
+    fn test_typed_let_correct_shape() {
+        // let x : [3]F64 = [1.0, 2.0, 3.0] in x
+        use goth_ast::pattern::Pattern;
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let expr = Expr::Let {
+            pattern: Pattern::Var(Some("x".into())),
+            type_: Some(Type::Tensor(
+                Shape(vec![Dim::Const(3)]),
+                Box::new(Type::Prim(PrimType::F64)),
+            )),
+            value: Box::new(Expr::Array(vec![
+                Expr::Lit(Literal::Float(1.0)),
+                Expr::Lit(Literal::Float(2.0)),
+                Expr::Lit(Literal::Float(3.0)),
+            ])),
+            body: Box::new(Expr::Idx(0)),
+        };
+
+        let ty = checker.infer(&expr).unwrap();
+        match ty {
+            Type::Tensor(shape, elem) => {
+                assert_eq!(shape, Shape(vec![Dim::Const(3)]));
+                assert_eq!(*elem, Type::Prim(PrimType::F64));
+            }
+            _ => panic!("Expected tensor type"),
+        }
+    }
+
+    #[test]
+    fn test_typed_let_wrong_shape() {
+        // let x : [5]F64 = [1.0, 2.0, 3.0] in x  -- should FAIL
+        use goth_ast::pattern::Pattern;
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let expr = Expr::Let {
+            pattern: Pattern::Var(Some("x".into())),
+            type_: Some(Type::Tensor(
+                Shape(vec![Dim::Const(5)]),
+                Box::new(Type::Prim(PrimType::F64)),
+            )),
+            value: Box::new(Expr::Array(vec![
+                Expr::Lit(Literal::Float(1.0)),
+                Expr::Lit(Literal::Float(2.0)),
+                Expr::Lit(Literal::Float(3.0)),
+            ])),
+            body: Box::new(Expr::Idx(0)),
+        };
+
+        let result = checker.infer(&expr);
+        assert!(result.is_err(), "let x : [5]F64 = [1,2,3] should fail due to shape mismatch");
+    }
+
+    #[test]
+    fn test_typed_let_wrong_element_type() {
+        // let x : [3]I64 = [1.0, 2.0, 3.0] in x  -- should FAIL (F64 vs I64)
+        use goth_ast::pattern::Pattern;
+        use goth_ast::shape::{Shape, Dim};
+
+        let mut checker = TypeChecker::new();
+
+        let expr = Expr::Let {
+            pattern: Pattern::Var(Some("x".into())),
+            type_: Some(Type::Tensor(
+                Shape(vec![Dim::Const(3)]),
+                Box::new(Type::Prim(PrimType::I64)),
+            )),
+            value: Box::new(Expr::Array(vec![
+                Expr::Lit(Literal::Float(1.0)),
+                Expr::Lit(Literal::Float(2.0)),
+                Expr::Lit(Literal::Float(3.0)),
+            ])),
+            body: Box::new(Expr::Idx(0)),
+        };
+
+        let result = checker.infer(&expr);
+        assert!(result.is_err(), "let x : [3]I64 = [1.0, 2.0, 3.0] should fail due to element type mismatch");
     }
 }

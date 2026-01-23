@@ -54,8 +54,15 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
         
         // ============ Let ============
         
-        Expr::Let { pattern, value, body } => {
-            let val_ty = infer(ctx, value)?;
+        Expr::Let { pattern, type_, value, body } => {
+            let val_ty = if let Some(expected_ty) = type_ {
+                // Type annotation provided - check value against it
+                check(ctx, value, expected_ty)?;
+                expected_ty.clone()
+            } else {
+                // No annotation - infer from value
+                infer(ctx, value)?
+            };
             let bindings = pattern_types(pattern, &val_ty)?;
             ctx.with_bindings(&bindings, |ctx| infer(ctx, body))
         }

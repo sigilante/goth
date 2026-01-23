@@ -1,0 +1,15 @@
+# syzygy.goth - Generate syzygetic pairs for a number
+# Pairs sum to n-1: (0,n-1), (1,n-2), (2,n-3), ...
+
+╭─ generate_syzygies : I → [m]⟨I, I⟩
+│  ⊢ ₀ > 0
+╰─ let n ← ₀ ;
+       count ← (n + 1) / 2
+   in (iota count) ↦ (λ→ ⟨₀, n - 1 - ₀⟩)
+
+# Main entry point
+╭─ main : I → ()
+│  ◇io
+╰─ let n ← ₀ ;
+       pairs ← generate_syzygies n
+   in pairs ↦ (λ→ print ₀)

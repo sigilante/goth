@@ -111,6 +111,7 @@ fn let_expr() -> Expr {
     // let x = 5 in x + 1
     Expr::Let {
         pattern: Pattern::Var(Some("x".into())),
+        type_: None,
         value: Box::new(Expr::Lit(Literal::Int(5))),
         body: Box::new(Expr::BinOp(
             BinOp::Add,
@@ -124,9 +125,11 @@ fn nested_let_expr() -> Expr {
     // let x = 5 in let y = x + 3 in y * 2
     Expr::Let {
         pattern: Pattern::Var(Some("x".into())),
+        type_: None,
         value: Box::new(Expr::Lit(Literal::Int(5))),
         body: Box::new(Expr::Let {
             pattern: Pattern::Var(Some("y".into())),
+            type_: None,
             value: Box::new(Expr::BinOp(
                 BinOp::Add,
                 Box::new(Expr::Idx(0)),
@@ -172,6 +175,7 @@ fn complex_expr() -> Expr {
     // let f = λ→ λ→ ₀ + ₁ in f 5 3
     Expr::Let {
         pattern: Pattern::Var(Some("f".into())),
+        type_: None,
         value: Box::new(Expr::Lam(Box::new(Expr::Lam(Box::new(Expr::BinOp(
             BinOp::Add,
             Box::new(Expr::Idx(0)),

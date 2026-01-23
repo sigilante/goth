@@ -5,123 +5,88 @@
 
 ## Summary
 
-Working on MIR/LLVM lowering to get `tui_demo.goth` compiling. Made significant progress on multiple issues.
+LLVM backend now generates valid IR for all tested programs. Factorial example compiles and runs correctly:
+```bash
+$ goth examples/factorial.goth -o factorial
+$ ./factorial 5
+120
+```
+
+The tui_demo.goth generates valid LLVM IR but needs a complete runtime library to link.
 
 ---
 
-## Completed Work
+## Completed Work (This Session)
 
-### 1. Non-variant Match Lowering in MIR
-- **File:** `goth-mir/src/lower.rs`
-- **Issue:** Match expressions on literals/wildcards weren't supported
-- **Fix:** Implemented if-else chain approach for literal patterns, variable patterns, and wildcard patterns
-
-### 2. De Bruijn Index Convention Fix
-- **File:** `goth-mir/src/lower.rs` (line ~2460)
-- **Issue:** MIR was using reverse push order for params, but evaluator uses standard de Bruijn (most recent = 0)
-- **Fix:** Changed from reverse to forward push order:
-```rust
-// Push in FORWARD order so that:
-// ₀ = last param (standard de Bruijn, matching evaluator)
-for i in 0..param_types.len() {
-    fn_ctx.push_local(LocalId::new(i as u32), param_types[i].clone());
-}
-```
-
-### 3. Named Local Variables (Let Bindings)
-- **File:** `goth-mir/src/lower.rs`
-- **Issue:** Let bindings with named patterns (`let row = ...`) weren't resolving correctly
-- **Fix:** Added `named_locals: HashMap<String, (LocalId, Type)>` to LoweringContext to track name→local mappings
-
-### 4. ArrayFill Support in LLVM Backend
-- **Files:** `goth-mir/src/mir.rs`, `goth-mir/src/print.rs`, `goth-llvm/src/emit.rs`
-- **Issue:** ArrayFill (`[n]⊢v`) wasn't implemented in LLVM emission
-- **Fix:** Added Rhs::ArrayFill to MIR, implemented LLVM emission with loop for filling
-
-### 5. Void Return Type Handling
+### 10. Unit Type Handling in LLVM
 - **File:** `goth-llvm/src/emit.rs`
-- **Issue:** `ret void 0` was generated for void functions, `%result = call void ...` for void calls
+- **Issue:** `void 0` was being passed as function arguments, unit types weren't handled
 - **Fix:**
-  - Terminator::Return now checks for void and emits `ret void` without value
-  - emit_c_main skips capturing/printing result for void functions
+  - Added `is_unit_type()` helper function
+  - `Constant::Unit` now returns `"undef"` (never used in calls)
+  - Skip unit-typed arguments in `Rhs::Call` and `Rhs::ClosureCall`
 
-### 6. Sum/Prod Reduce Type Inference
-- **File:** `goth-mir/src/lower.rs`
-- **Issue:** `UnaryOp(Sum, tensor)` returned tensor type instead of element type
-- **Fix:** Added special case for Sum/Prod to extract element type from tensor:
-```rust
-goth_ast::op::UnaryOp::Sum | goth_ast::op::UnaryOp::Prod => {
-    match &op_ty {
-        Type::Tensor(_, elem_ty) => (**elem_ty).clone(),
-        _ => op_ty.clone(),
-    }
-}
-```
-
-### 7. Type Conversion Primitives
+### 11. Sum/Prod Float vs Integer Selection
 - **File:** `goth-llvm/src/emit.rs`
-- **Issue:** `toFloat`, `toInt`, `floor`, `ceil`, `sqrt` called nonexistent runtime functions
-- **Fix:** Added inline LLVM emission for these primitives:
-  - `toFloat` → `sitofp i64 to double`
-  - `toInt` → `fptosi double to i64`
-  - Math functions use LLVM intrinsics
+- **Issue:** Sum/Prod always called `goth_sum_i64`/`goth_prod_i64` even when result type was F64
+- **Fix:** Check `stmt.ty` and call `goth_sum_f64`/`goth_prod_f64` when appropriate
 
-### 8. Print Primitive Registration
+### 12. BinOp Type Coercion
 - **File:** `goth-llvm/src/emit.rs`
-- **Issue:** `print` primitive returned early without registering the local, causing UndefinedLocal errors
-- **Fix:** Removed early return, falls through to register the local
+- **Issue:** Integer/float operands weren't converted for mixed-type operations
+- **Fix:**
+  - When result is float and operand is int: `sitofp i64 to double`
+  - When result is int and operand is float: `fptosi double to i64`
 
-### 9. Extended Type Support in LLVM
+### 13. Print/Write Type Detection
 - **File:** `goth-llvm/src/emit.rs`
-- Added support for all Type variants in `emit_type`:
-  - All PrimType variants (I64, I32, Int, Nat, F64, F32, etc.)
-  - Type::Option, Type::Effectful, Type::Interval
-  - Type::Forall, Type::Exists, Type::App
-  - Type::Variant, Type::Refinement, Type::Uncertain, Type::Hole
+- **Issue:** print/write always used `goth_print_i64`, didn't detect string/float locals
+- **Fix:** Check local type from `ctx.local_types` for String, Float, Bool detection
 
----
+### 14. String Type Detection for Tensors
+- **File:** `goth-llvm/src/emit.rs`
+- **Issue:** `[n]Char` tensor type wasn't recognized as string
+- **Fix:** `is_string_type()` now checks `Type::Tensor(_, Char)` as string
 
-## Current Issue
+### 15. ClosureCall Argument Types
+- **File:** `goth-llvm/src/emit.rs`
+- **Issue:** All closure arguments were assumed to be i64
+- **Fix:** Look up actual type from `ctx.local_types` for each argument
 
-### ~~De Bruijn Index Resolution~~ ✅ FIXED (commit ee8a0bb)
-The wildcard pattern issue is resolved. vline MIR now correctly shows:
-```
-_14: I64 = BinOp(Add, _4, Const(1))   // row + 1 ✓
-_16: I64 = BinOp(Sub, _6, Const(1))   // len - 1 ✓
-```
+### 16. toInt Smart Conversion
+- **File:** `goth-llvm/src/emit.rs`
+- **Issue:** `toInt` always did `fptosi`, even when input was already i64
+- **Fix:** Check actual argument type, skip conversion if already integer
 
-### ~~Boolean Op Type Inference~~ ✅ FIXED (commit d251d2a)
-- Comparison ops (Lt, Gt, Leq, Geq, Eq, Neq) now return Bool type
-- Logical ops (And, Or) now return Bool type
-- MLIR/LLVM backends updated to handle Bool result types
-- Test: `if 3 < 5 then 1 else 0` compiles and runs correctly
+### 17. SSA Numbering Order
+- **File:** `goth-llvm/src/emit.rs`
+- **Issue:** SSA numbers allocated before operand emission caused out-of-order numbers
+- **Fix:** Emit operand first, then allocate result SSA (fixed in `len`, `reverse`)
 
-### ~~UndefinedLocal in tui_demo.goth~~ ✅ FIXED (commit 605ae19)
-- `find_multi_block_locals` now tracks both assignments AND uses
-- Locals used in different blocks from where defined get stack allocation
-- Fix: Added helper functions to collect local refs from Rhs/Terminators
+### 18. String Literal Collision Fix
+- **File:** `goth-llvm/src/emit.rs`
+- **Issue:** String replacement matched substrings (`@.str.1` in `@.str.10`)
+- **Fix:** Two-phase rename with unique temporary placeholders
 
-### Remaining LLVM Codegen Issues
-- **Error:** `clang failed with exit code: Some(1)` for tui_demo.goth
-- **Issues in generated LLVM IR:**
-  - `call void @cursorHide(void 0)` - void passed as argument
-  - `call void @goth_print_i64(i64 @.str.0)` - string global as i64
-  - Malformed function pointer types in curried calls
-- **Root cause:** LLVM emit doesn't handle unit type (`⟨⟩`) and higher-order functions properly
+### 19. Runtime Function Declarations
+- **File:** `goth-llvm/src/runtime.rs`
+- Added declarations for:
+  - String ops: `goth_chars`, `goth_strConcat`, `goth_strLen`, `goth_drop`, `goth_replicate`, `goth_joinStrings`
+  - Float reductions: `goth_sum_f64`, `goth_prod_f64`
 
 ---
 
 ## Test Results
 
 ### Passing
-- Simple expressions: `let x = 5 in x + 1` → 6 ✓
-- Float operations: `0.7 × (toFloat 30)` → 21 ✓
-- Basic functions with I64 return types ✓
-- vline MIR generation ✓
-- Wildcard pattern handling ✓
+- `factorial.goth` - Compiles and runs correctly ✓
+  - `./factorial 5` → 120
+  - `./factorial 6` → 720
+  - `./factorial 10` → 3628800
+- LLVM IR generation for tui_demo.goth ✓ (valid IR, needs runtime)
 
-### Failing
-- `tui_demo.goth` - Bool type inference for And/Or ops
+### Needs Runtime
+- `tui_demo.goth` - Valid LLVM IR, missing runtime library functions
 
 ---
 
@@ -129,21 +94,19 @@ _16: I64 = BinOp(Sub, _6, Const(1))   // len - 1 ✓
 
 | File | Changes |
 |------|---------|
-| `goth-mir/src/lower.rs` | Match lowering, de Bruijn fix, named_locals, Sum/Prod types |
-| `goth-mir/src/mir.rs` | Added ArrayFill variant |
-| `goth-mir/src/print.rs` | ArrayFill display |
-| `goth-llvm/src/emit.rs` | ArrayFill, void handling, type conversions, all type variants |
-| `goth-mlir/src/emit.rs` | ArrayFill emission |
-| `goth-mlir/src/builder.rs` | ArrayFill handling |
+| `goth-llvm/src/emit.rs` | Unit type handling, type coercion, closure args, SSA ordering, string renaming |
+| `goth-llvm/src/runtime.rs` | Added string ops, float reductions |
 
 ---
 
 ## Next Steps
 
-1. **Fix unit type handling in LLVM** - Don't emit `void 0` as arguments
-2. **Fix function pointer types** - Curried function calls generate malformed types
-3. **Add more primitive support** - toString, write, and TUI primitives
-4. **MLIR Phase 5** - CLI integration, comprehensive testing, error handling
+1. **Complete Runtime Library** - Implement missing functions:
+   - String: `goth_chars`, `goth_strConcat`, `goth_drop`, `goth_replicate`, `goth_joinStrings`
+   - I/O: `goth_print_string`, `goth_print_f64`, `goth_print_bool`
+   - Index: `goth_index_str`
+
+2. **MLIR Phase 5** - CLI integration, comprehensive testing, error handling
 
 ---
 
@@ -154,24 +117,24 @@ _16: I64 = BinOp(Sub, _6, Const(1))   // len - 1 ✓
 cargo run -q --bin gothic -- --emit-mir examples/tui_demo.goth
 
 # Emit LLVM IR to check codegen
-cargo run -q --bin gothic -- --emit-llvm /tmp/test.goth
+cargo run -q --bin gothic -- --emit-llvm examples/factorial.goth
 
-# Compile and run
-cargo run -q --bin gothic -- /tmp/test.goth -o /tmp/out && /tmp/out
+# Compile and run (with runtime)
+cargo run -q --bin gothic -- examples/factorial.goth -o /tmp/factorial
+clang /tmp/factorial.ll factorial.runtime.c -o /tmp/factorial
+/tmp/factorial 5
 ```
 
 ---
 
 ## Architecture Notes
 
-### De Bruijn Index Convention
-- Standard de Bruijn: ₀ = most recently bound
-- Function params pushed in order: param0, param1, ..., paramN
-- After push, ₀ = last param, ₁ = second-to-last, etc.
-- Each let binding shifts all indices by 1
+### Type Coercion in BinOp
+- Result F64, operand I64: `sitofp i64 %x to double`
+- Result I64, operand F64: `fptosi double %x to i64`
 
-### Named Locals Tracking
-- `named_locals` HashMap tracks name→(LocalId, Type)
-- Inserted when entering let scope with named pattern
-- Removed when exiting scope
-- Checked first in Expr::Name lowering before falling back to de Bruijn lookup
+### String Type Detection
+A type is considered a string if:
+1. `Type::Prim(PrimType::String)`
+2. `Type::Var("String" | "Str")`
+3. `Type::Tensor(_, Type::Prim(PrimType::Char))` - [n]Char

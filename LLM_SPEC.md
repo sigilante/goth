@@ -98,6 +98,12 @@ let b ← ₀ + 1 in    # ₀ = a (not ₁!)
 ₀ + ₁              # ₀ = b, ₁ = a
 ```
 
+### Typed let (for shape checking)
+```goth
+let v : [3]F64 ← [1.0, 2.0, 3.0] in v    # OK - shapes match
+let v : [5]F64 ← [1.0, 2.0, 3.0] in v    # Error: shape mismatch
+```
+
 ## Complete Program Template
 
 ```goth

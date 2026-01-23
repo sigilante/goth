@@ -118,6 +118,16 @@ fn is_string_type(ty: &Type) -> bool {
     match ty {
         Type::Prim(PrimType::String) => true,
         Type::Var(name) => matches!(name.as_ref(), "String" | "Str"),
+        // [n]Char is also a string type
+        Type::Tensor(_, elem_ty) => matches!(elem_ty.as_ref(), Type::Prim(PrimType::Char)),
+        _ => false,
+    }
+}
+
+/// Check if a type is unit/void (empty tuple)
+fn is_unit_type(ty: &Type) -> bool {
+    match ty {
+        Type::Tuple(fields) if fields.is_empty() => true,
         _ => false,
     }
 }
@@ -438,12 +448,21 @@ fn emit_constant(ctx: &mut LlvmContext, constant: &Constant, ty: &Type) -> Resul
             return Ok((val.to_string(), String::new()));
         }
         Constant::String(s) => {
-            // Add string to the global string literals and return the name
+            // Add string to the global string literals
+            // Return a GEP to get i8* from the array constant
             let name = ctx.add_string(s);
-            return Ok((name, String::new()));
+            let len = s.len() + 1; // Include null terminator
+            let ssa = ctx.fresh_ssa();
+            let code = format!(
+                "  {} = getelementptr [{} x i8], [{} x i8]* {}, i64 0, i64 0\n",
+                ssa, len, len, name
+            );
+            return Ok((ssa, code));
         }
         Constant::Unit => {
-            return Ok(("void".to_string(), String::new()));
+            // Unit/void type - return a marker that should be skipped in function calls
+            // Using "undef" as a placeholder that won't be used
+            return Ok(("undef".to_string(), String::new()));
         }
     };
 
@@ -468,7 +487,12 @@ fn emit_operand(
         Operand::Local(local) => {
             // If this is a stack-allocated local, emit a load
             if let Some(ptr) = ctx.get_stack_ptr(local).cloned() {
-                let llvm_ty = emit_type(ty)?;
+                // Use the local's actual type, not the expected type
+                let local_ty = ctx.local_types.get(local).cloned().unwrap_or_else(|| ty.clone());
+                let llvm_ty = emit_type(&local_ty)?;
+                if llvm_ty == "void" {
+                    return Ok("undef".to_string());
+                }
                 let ssa = ctx.fresh_ssa();
                 output.push_str(&format!("  {} = load {}, {}* {}\n", ssa, llvm_ty, llvm_ty, ptr));
                 Ok(ssa)
@@ -486,9 +510,11 @@ fn emit_binop(
     left: &str,
     right: &str,
     ty: &Type,
+    operand_ty: &Type,
 ) -> Result<(String, String)> {
     let ssa = ctx.fresh_ssa();
     let llvm_ty = emit_type(ty)?;
+    let operand_llvm_ty = emit_type(operand_ty)?;
 
     let (op_name, result_ty) = if is_int_type(ty) {
         let op_name = match op {
@@ -540,7 +566,8 @@ fn emit_binop(
         };
         (op_name, result_ty.to_string())
     } else if is_bool_type(ty) {
-        // Bool result type - either logical ops on bools, or comparison ops on integers
+        // Bool result type - either logical ops on bools, or comparison ops on integers/floats
+        let is_float_operand = is_float_type(operand_ty);
         match op {
             // Logical operations on Bool operands
             goth_ast::op::BinOp::And => {
@@ -551,29 +578,53 @@ fn emit_binop(
                 let code = format!("  {} = or i1 {}, {}\n", ssa, left, right);
                 return Ok((ssa, code));
             }
-            // Comparison operations - operands are i64, result is i1
+            // Comparison operations - use fcmp for floats, icmp for integers
             goth_ast::op::BinOp::Lt => {
-                let code = format!("  {} = icmp slt i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp olt {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp slt {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             goth_ast::op::BinOp::Gt => {
-                let code = format!("  {} = icmp sgt i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp ogt {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp sgt {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             goth_ast::op::BinOp::Leq => {
-                let code = format!("  {} = icmp sle i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp ole {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp sle {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             goth_ast::op::BinOp::Geq => {
-                let code = format!("  {} = icmp sge i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp oge {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp sge {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             goth_ast::op::BinOp::Eq => {
-                let code = format!("  {} = icmp eq i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp oeq {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp eq {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             goth_ast::op::BinOp::Neq => {
-                let code = format!("  {} = icmp ne i64 {}, {}\n", ssa, left, right);
+                let code = if is_float_operand {
+                    format!("  {} = fcmp one {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                } else {
+                    format!("  {} = icmp ne {} {}, {}\n", ssa, operand_llvm_ty, left, right)
+                };
                 return Ok((ssa, code));
             }
             _ => return Err(LlvmError::UnsupportedOp(format!("Bool {:?}", op))),
@@ -663,9 +714,83 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                     (ssa, code)
                 }
                 _ => {
-                    let left_val = emit_operand(ctx, left, &stmt.ty, output)?;
-                    let right_val = emit_operand(ctx, right, &stmt.ty, output)?;
-                    let (ssa, code) = emit_binop(ctx, op, &left_val, &right_val, &stmt.ty)?;
+                    // For comparison/logical ops, operand types differ from result type
+                    // Look up actual operand types from context for each operand
+                    let get_operand_type = |op: &Operand| -> Type {
+                        match op {
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local).cloned().unwrap_or_else(|| stmt.ty.clone())
+                            }
+                            Operand::Const(c) => match c {
+                                Constant::Int(_) => Type::Prim(PrimType::I64),
+                                Constant::Float(_) => Type::Prim(PrimType::F64),
+                                Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                                Constant::String(_) => Type::Prim(PrimType::String),
+                                Constant::Unit => Type::Tuple(vec![]),
+                            },
+                        }
+                    };
+                    let left_ty = get_operand_type(left);
+                    let right_ty = get_operand_type(right);
+
+                    let mut left_val = emit_operand(ctx, left, &left_ty, output)?;
+                    let mut right_val = emit_operand(ctx, right, &right_ty, output)?;
+
+                    // Handle type conversions for arithmetic operations
+                    let is_arithmetic = matches!(op,
+                        goth_ast::op::BinOp::Add | goth_ast::op::BinOp::Sub |
+                        goth_ast::op::BinOp::Mul | goth_ast::op::BinOp::Div |
+                        goth_ast::op::BinOp::Mod
+                    );
+                    let result_is_float = is_float_type(&stmt.ty);
+                    let result_is_int = is_int_type(&stmt.ty);
+
+                    if is_arithmetic && result_is_float {
+                        // Convert integer operands to float if result is float
+                        if is_int_type(&left_ty) {
+                            let conv_ssa = ctx.fresh_ssa();
+                            output.push_str(&format!(
+                                "  {} = sitofp i64 {} to double\n",
+                                conv_ssa, left_val
+                            ));
+                            left_val = conv_ssa;
+                        }
+                        if is_int_type(&right_ty) {
+                            let conv_ssa = ctx.fresh_ssa();
+                            output.push_str(&format!(
+                                "  {} = sitofp i64 {} to double\n",
+                                conv_ssa, right_val
+                            ));
+                            right_val = conv_ssa;
+                        }
+                    } else if is_arithmetic && result_is_int {
+                        // Convert float operands to int if result is int
+                        if is_float_type(&left_ty) {
+                            let conv_ssa = ctx.fresh_ssa();
+                            output.push_str(&format!(
+                                "  {} = fptosi double {} to i64\n",
+                                conv_ssa, left_val
+                            ));
+                            left_val = conv_ssa;
+                        }
+                        if is_float_type(&right_ty) {
+                            let conv_ssa = ctx.fresh_ssa();
+                            output.push_str(&format!(
+                                "  {} = fptosi double {} to i64\n",
+                                conv_ssa, right_val
+                            ));
+                            right_val = conv_ssa;
+                        }
+                    }
+
+                    // Use the operand type for comparison operations, result type for arithmetic
+                    let operand_ty_for_binop = if is_arithmetic {
+                        stmt.ty.clone()
+                    } else {
+                        left_ty.clone()
+                    };
+
+                    let (ssa, code) = emit_binop(ctx, op, &left_val, &right_val, &stmt.ty, &operand_ty_for_binop)?;
 
                     // If this is a comparison and dest type is i64, extend the result
                     let is_comparison = matches!(op,
@@ -694,30 +819,50 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
             // Handle Sum/Prod specially - they need intermediate values
             match op {
                 goth_ast::op::UnaryOp::Sum => {
-                    // Sum reduction: get length first, then call goth_sum_i64
+                    // Sum reduction: get length first, then call appropriate runtime function
                     let len_ssa = ctx.fresh_ssa();
                     output.push_str(&format!(
                         "  {} = call i64 @goth_len(i8* {})\n",
                         len_ssa, op_val
                     ));
                     let ssa = ctx.fresh_ssa();
+                    // Check if result type is float or int
+                    let is_float = match &stmt.ty {
+                        Type::Prim(PrimType::F64) | Type::Prim(PrimType::F32) => true,
+                        _ => false,
+                    };
+                    let (func_name, ret_ty) = if is_float {
+                        ("goth_sum_f64", "double")
+                    } else {
+                        ("goth_sum_i64", "i64")
+                    };
                     let code = format!(
-                        "  {} = call i64 @goth_sum_i64(i8* {}, i64 {})\n",
-                        ssa, op_val, len_ssa
+                        "  {} = call {} @{}(i8* {}, i64 {})\n",
+                        ssa, ret_ty, func_name, op_val, len_ssa
                     );
                     (ssa, code)
                 }
                 goth_ast::op::UnaryOp::Prod => {
-                    // Product reduction: get length first, then call goth_prod_i64
+                    // Product reduction: get length first, then call appropriate runtime function
                     let len_ssa = ctx.fresh_ssa();
                     output.push_str(&format!(
                         "  {} = call i64 @goth_len(i8* {})\n",
                         len_ssa, op_val
                     ));
                     let ssa = ctx.fresh_ssa();
+                    // Check if result type is float or int
+                    let is_float = match &stmt.ty {
+                        Type::Prim(PrimType::F64) | Type::Prim(PrimType::F32) => true,
+                        _ => false,
+                    };
+                    let (func_name, ret_ty) = if is_float {
+                        ("goth_prod_f64", "double")
+                    } else {
+                        ("goth_prod_i64", "i64")
+                    };
                     let code = format!(
-                        "  {} = call i64 @goth_prod_i64(i8* {}, i64 {})\n",
-                        ssa, op_val, len_ssa
+                        "  {} = call {} @{}(i8* {}, i64 {})\n",
+                        ssa, ret_ty, func_name, op_val, len_ssa
                     );
                     (ssa, code)
                 }
@@ -811,25 +956,39 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::Call { func, args, arg_tys } => {
-            let ssa = ctx.fresh_ssa();
             let ret_ty = emit_type(&stmt.ty)?;
+            let is_void_ret = ret_ty == "void";
 
             let mut arg_strs = Vec::new();
             for (arg, arg_ty) in args.iter().zip(arg_tys.iter()) {
+                // Skip unit-typed arguments - they don't exist in LLVM
+                if is_unit_type(arg_ty) {
+                    continue;
+                }
                 let llvm_ty = emit_type(arg_ty)?;
                 let arg_val = emit_operand(ctx, arg, arg_ty, output)?;
                 arg_strs.push(format!("{} {}", llvm_ty, arg_val));
             }
 
-            let code = format!(
-                "  {} = call {} @{}({})\n",
-                ssa,
-                ret_ty,
-                func,
-                arg_strs.join(", ")
-            );
-
-            (ssa, code)
+            if is_void_ret {
+                let code = format!(
+                    "  call void @{}({})\n",
+                    func,
+                    arg_strs.join(", ")
+                );
+                // Return a placeholder for void - won't be used
+                ("undef".to_string(), code)
+            } else {
+                let ssa = ctx.fresh_ssa();
+                let code = format!(
+                    "  {} = call {} @{}({})\n",
+                    ssa,
+                    ret_ty,
+                    func,
+                    arg_strs.join(", ")
+                );
+                (ssa, code)
+            }
         }
 
         Rhs::Iota(n) => {
@@ -857,7 +1016,6 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::TensorReduce { tensor, op } => {
-            let ssa = ctx.fresh_ssa();
             let tensor_ty = Type::Prim(PrimType::I64); // Placeholder
             let tensor_val = emit_operand(ctx, tensor, &tensor_ty, output)?;
 
@@ -868,67 +1026,264 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 len_ssa, tensor_val
             ));
 
-            let func_name = match op {
-                ReduceOp::Sum => "goth_sum_i64",
-                ReduceOp::Prod => "goth_prod_i64",
-                ReduceOp::Min => "goth_min_i64",
-                ReduceOp::Max => "goth_max_i64",
+            // Check if result type is float or int
+            let is_float = match &stmt.ty {
+                Type::Prim(PrimType::F64) | Type::Prim(PrimType::F32) => true,
+                _ => false,
+            };
+
+            let ssa = ctx.fresh_ssa();
+            let (func_name, ret_ty) = match (op, is_float) {
+                (ReduceOp::Sum, true) => ("goth_sum_f64", "double"),
+                (ReduceOp::Sum, false) => ("goth_sum_i64", "i64"),
+                (ReduceOp::Prod, true) => ("goth_prod_f64", "double"),
+                (ReduceOp::Prod, false) => ("goth_prod_i64", "i64"),
+                (ReduceOp::Min, _) => ("goth_min_i64", "i64"),
+                (ReduceOp::Max, _) => ("goth_max_i64", "i64"),
             };
 
             let code = format!(
-                "  {} = call i64 @{}(i8* {}, i64 {})\n",
-                ssa, func_name, tensor_val, len_ssa
+                "  {} = call {} @{}(i8* {}, i64 {})\n",
+                ssa, ret_ty, func_name, tensor_val, len_ssa
             );
 
             (ssa, code)
         }
 
         Rhs::Index(arr, idx) => {
-            let ssa = ctx.fresh_ssa();
-            let arr_ty = Type::Prim(PrimType::I64);
+            // Look up array type from context
+            let arr_ty = match arr {
+                Operand::Local(local) => ctx.local_types.get(local).cloned(),
+                _ => None,
+            }.unwrap_or(Type::Prim(PrimType::I64));
             let arr_val = emit_operand(ctx, arr, &arr_ty, output)?;
             let idx_val = emit_operand(ctx, idx, &Type::Prim(PrimType::I64), output)?;
 
-            let code = format!(
-                "  {} = call i64 @goth_index_i64(i8* {}, i64 {})\n",
-                ssa, arr_val, idx_val
-            );
+            // Use the statement's result type to determine the right index function
+            let elem_ty = emit_type(&stmt.ty)?;
 
-            (ssa, code)
+            // For string indexing, return string
+            if elem_ty == "i8*" || is_string_type(&stmt.ty) {
+                let ssa = ctx.fresh_ssa();
+                let code = format!(
+                    "  {} = call i8* @goth_index_str(i8* {}, i64 {})\n",
+                    ssa, arr_val, idx_val
+                );
+                (ssa, code)
+            } else if elem_ty == "i32" {
+                // Char type - index i64 array and truncate
+                let tmp_ssa = ctx.fresh_ssa();
+                output.push_str(&format!(
+                    "  {} = call i64 @goth_index_i64(i8* {}, i64 {})\n",
+                    tmp_ssa, arr_val, idx_val
+                ));
+                let ssa = ctx.fresh_ssa();
+                let code = format!("  {} = trunc i64 {} to i32\n", ssa, tmp_ssa);
+                (ssa, code)
+            } else {
+                // Default i64 indexing
+                let ssa = ctx.fresh_ssa();
+                let code = format!(
+                    "  {} = call i64 @goth_index_i64(i8* {}, i64 {})\n",
+                    ssa, arr_val, idx_val
+                );
+                (ssa, code)
+            }
         }
 
         Rhs::Prim { name, args } => {
-            let ssa = ctx.fresh_ssa();
             let ret_ty = emit_type(&stmt.ty)?;
+            let is_void_ret = ret_ty == "void";
 
             // Handle specific primitives
             match name.as_str() {
                 "print" => {
                     if let Some(arg) = args.first() {
-                        let arg_ty = Type::Prim(PrimType::I64);
-                        let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
-                        // For now, assume i64
-                        let code = format!("  call void @goth_print_i64(i64 {})\n", arg_val);
-                        output.push_str(&code);
+                        // Detect argument type from the operand or local type
+                        let is_string = match arg {
+                            Operand::Const(Constant::String(_)) => true,
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local)
+                                    .map(|ty| is_string_type(ty))
+                                    .unwrap_or(false)
+                            }
+                            _ => false,
+                        };
+                        let is_float = match arg {
+                            Operand::Const(Constant::Float(_)) => true,
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local)
+                                    .map(|ty| is_float_type(ty))
+                                    .unwrap_or(false)
+                            }
+                            _ => false,
+                        };
+                        let is_bool = match arg {
+                            Operand::Const(Constant::Bool(_)) => true,
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local)
+                                    .map(|ty| is_bool_type(ty))
+                                    .unwrap_or(false)
+                            }
+                            _ => false,
+                        };
+                        if is_string {
+                            let arg_ty = Type::Prim(PrimType::String);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_string(i8* {})\n", arg_val);
+                            output.push_str(&code);
+                        } else if is_float {
+                            let arg_ty = Type::Prim(PrimType::F64);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_f64(double {})\n", arg_val);
+                            output.push_str(&code);
+                        } else if is_bool {
+                            let arg_ty = Type::Prim(PrimType::Bool);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_bool(i1 {})\n", arg_val);
+                            output.push_str(&code);
+                        } else {
+                            let arg_ty = Type::Prim(PrimType::I64);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_i64(i64 {})\n", arg_val);
+                            output.push_str(&code);
+                        }
                         output.push_str("  call void @goth_print_newline()\n");
                     }
-                    // Return unit value (0 for LLVM purposes) - fall through to register local
-                    ("0".to_string(), String::new())
+                    // Return unit placeholder
+                    ("undef".to_string(), String::new())
+                }
+                "write" => {
+                    // write: print without newline
+                    if let Some(arg) = args.first() {
+                        let is_string = match arg {
+                            Operand::Const(Constant::String(_)) => true,
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local)
+                                    .map(|ty| is_string_type(ty))
+                                    .unwrap_or(false)
+                            }
+                            _ => false,
+                        };
+                        let is_float = match arg {
+                            Operand::Const(Constant::Float(_)) => true,
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local)
+                                    .map(|ty| is_float_type(ty))
+                                    .unwrap_or(false)
+                            }
+                            _ => false,
+                        };
+                        if is_string {
+                            let arg_ty = Type::Prim(PrimType::String);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_string(i8* {})\n", arg_val);
+                            output.push_str(&code);
+                        } else if is_float {
+                            let arg_ty = Type::Prim(PrimType::F64);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_f64(double {})\n", arg_val);
+                            output.push_str(&code);
+                        } else {
+                            let arg_ty = Type::Prim(PrimType::I64);
+                            let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                            let code = format!("  call void @goth_print_i64(i64 {})\n", arg_val);
+                            output.push_str(&code);
+                        }
+                    }
+                    ("undef".to_string(), String::new())
+                }
+                "flush" => {
+                    output.push_str("  call void @fflush(i8* null)\n");
+                    ("undef".to_string(), String::new())
+                }
+                // TUI primitives - these take unit and return unit
+                "cursorHide" | "cursorShow" | "screenClear" | "rawModeEnter" | "rawModeExit" => {
+                    // These are zero-argument void functions
+                    let code = format!("  call void @goth_{}()\n", name);
+                    output.push_str(&code);
+                    ("undef".to_string(), String::new())
+                }
+                "cursorMove" => {
+                    // cursorMove takes (row, col)
+                    if args.len() >= 2 {
+                        let row_ty = Type::Prim(PrimType::I64);
+                        let col_ty = Type::Prim(PrimType::I64);
+                        let row_val = emit_operand(ctx, &args[0], &row_ty, output)?;
+                        let col_val = emit_operand(ctx, &args[1], &col_ty, output)?;
+                        let code = format!("  call void @goth_cursorMove(i64 {}, i64 {})\n", row_val, col_val);
+                        output.push_str(&code);
+                    }
+                    ("undef".to_string(), String::new())
+                }
+                "sleep" => {
+                    if let Some(arg) = args.first() {
+                        let arg_ty = Type::Prim(PrimType::I64);
+                        let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                        let code = format!("  call void @goth_sleep(i64 {})\n", arg_val);
+                        output.push_str(&code);
+                    }
+                    ("undef".to_string(), String::new())
+                }
+                "toString" => {
+                    // Convert value to string
+                    // Note: MIR may incorrectly type this as Char, but it returns String
+                    if let Some(arg) = args.first() {
+                        // Determine argument type
+                        let arg_ty = match arg {
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local).cloned().unwrap_or(Type::Prim(PrimType::I64))
+                            }
+                            Operand::Const(c) => match c {
+                                Constant::Int(_) => Type::Prim(PrimType::I64),
+                                Constant::Float(_) => Type::Prim(PrimType::F64),
+                                Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                                _ => Type::Prim(PrimType::I64),
+                            },
+                        };
+                        let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
+                        let llvm_arg_ty = emit_type(&arg_ty)?;
+
+                        // For Char (i32), extend to i64 first
+                        let (final_arg, final_ty) = if llvm_arg_ty == "i32" {
+                            let ext_ssa = ctx.fresh_ssa();
+                            output.push_str(&format!("  {} = sext i32 {} to i64\n", ext_ssa, arg_val));
+                            (ext_ssa, "i64".to_string())
+                        } else {
+                            (arg_val, llvm_arg_ty)
+                        };
+
+                        // Create the SSA for the result AFTER any extension
+                        let ssa = ctx.fresh_ssa();
+                        output.push_str(&format!("  {} = call i8* @goth_toString_{}({} {})\n",
+                            ssa,
+                            if is_float_type(&arg_ty) { "f64" } else { "i64" },
+                            final_ty,
+                            final_arg
+                        ));
+                        // Override: toString ALWAYS returns String, regardless of MIR type
+                        ctx.register_local(stmt.dest, ssa.clone(), Type::Prim(PrimType::String));
+                        return Ok(());
+                    } else {
+                        ("undef".to_string(), String::new())
+                    }
                 }
                 "len" => {
                     if let Some(arg) = args.first() {
                         let arr_ty = Type::Prim(PrimType::I64);
                         let arr_val = emit_operand(ctx, arg, &arr_ty, output)?;
+                        let ssa = ctx.fresh_ssa();
                         let code = format!("  {} = call i64 @goth_len(i8* {})\n", ssa, arr_val);
                         (ssa, code)
                     } else {
-                        (ssa, String::new())
+                        ("0".to_string(), String::new())
                     }
                 }
                 "reverse" => {
                     if let Some(arg) = args.first() {
                         let arr_ty = Type::Prim(PrimType::I64);
                         let arr_val = emit_operand(ctx, arg, &arr_ty, output)?;
+                        let ssa = ctx.fresh_ssa();
                         let len_ssa = ctx.fresh_ssa();
                         output.push_str(&format!(
                             "  {} = call i64 @goth_len(i8* {})\n",
@@ -940,12 +1295,13 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                         );
                         (ssa, code)
                     } else {
-                        (ssa, String::new())
+                        ("undef".to_string(), String::new())
                     }
                 }
                 "toFloat" => {
                     // Convert integer to float
                     if let Some(arg) = args.first() {
+                        let ssa = ctx.fresh_ssa();
                         let arg_ty = Type::Prim(PrimType::I64);
                         let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
                         let code = format!("  {} = sitofp i64 {} to double\n", ssa, arg_val);
@@ -955,18 +1311,38 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                     }
                 }
                 "toInt" => {
-                    // Convert float to integer
+                    // Convert to integer (if needed)
                     if let Some(arg) = args.first() {
-                        let arg_ty = Type::Prim(PrimType::F64);
-                        let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
-                        let code = format!("  {} = fptosi double {} to i64\n", ssa, arg_val);
-                        (ssa, code)
+                        // Get actual argument type
+                        let actual_arg_ty = match arg {
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local).cloned().unwrap_or(Type::Prim(PrimType::F64))
+                            }
+                            Operand::Const(c) => match c {
+                                Constant::Int(_) => Type::Prim(PrimType::I64),
+                                Constant::Float(_) => Type::Prim(PrimType::F64),
+                                _ => Type::Prim(PrimType::F64),
+                            },
+                        };
+
+                        if is_int_type(&actual_arg_ty) {
+                            // Already an integer, just pass through
+                            let arg_val = emit_operand(ctx, arg, &actual_arg_ty, output)?;
+                            (arg_val, String::new())
+                        } else {
+                            // Convert float to integer
+                            let ssa = ctx.fresh_ssa();
+                            let arg_val = emit_operand(ctx, arg, &Type::Prim(PrimType::F64), output)?;
+                            let code = format!("  {} = fptosi double {} to i64\n", ssa, arg_val);
+                            (ssa, code)
+                        }
                     } else {
                         ("0".to_string(), String::new())
                     }
                 }
                 "floor" => {
                     if let Some(arg) = args.first() {
+                        let ssa = ctx.fresh_ssa();
                         let arg_ty = Type::Prim(PrimType::F64);
                         let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
                         let code = format!("  {} = call double @floor(double {})\n", ssa, arg_val);
@@ -977,6 +1353,7 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 }
                 "ceil" => {
                     if let Some(arg) = args.first() {
+                        let ssa = ctx.fresh_ssa();
                         let arg_ty = Type::Prim(PrimType::F64);
                         let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
                         let code = format!("  {} = call double @ceil(double {})\n", ssa, arg_val);
@@ -987,6 +1364,7 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 }
                 "sqrt" => {
                     if let Some(arg) = args.first() {
+                        let ssa = ctx.fresh_ssa();
                         let arg_ty = Type::Prim(PrimType::F64);
                         let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
                         let code = format!("  {} = call double @sqrt(double {})\n", ssa, arg_val);
@@ -997,31 +1375,64 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
                 }
                 _ => {
                     // Generic primitive - emit as function call
+                    // Skip unit-typed arguments
                     let mut arg_strs = Vec::new();
                     for arg in args {
-                        let arg_ty = Type::Prim(PrimType::I64);
+                        // Skip unit constants
+                        if let Operand::Const(Constant::Unit) = arg {
+                            continue;
+                        }
+                        // Look up the actual type of the argument
+                        let arg_ty = match arg {
+                            Operand::Local(local) => {
+                                ctx.local_types.get(local).cloned().unwrap_or(Type::Prim(PrimType::I64))
+                            }
+                            Operand::Const(c) => match c {
+                                Constant::Int(_) => Type::Prim(PrimType::I64),
+                                Constant::Float(_) => Type::Prim(PrimType::F64),
+                                Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                                Constant::String(_) => Type::Prim(PrimType::String),
+                                Constant::Unit => Type::Tuple(vec![]),
+                            },
+                        };
+                        let llvm_ty = emit_type(&arg_ty)?;
+                        if llvm_ty == "void" {
+                            continue;
+                        }
                         let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
-                        arg_strs.push(format!("i64 {}", arg_val));
+                        arg_strs.push(format!("{} {}", llvm_ty, arg_val));
                     }
-                    let code = format!(
-                        "  {} = call {} @goth_{}({})\n",
-                        ssa,
-                        ret_ty,
-                        name,
-                        arg_strs.join(", ")
-                    );
-                    (ssa, code)
+                    if is_void_ret {
+                        let code = format!(
+                            "  call void @goth_{}({})\n",
+                            name,
+                            arg_strs.join(", ")
+                        );
+                        ("undef".to_string(), code)
+                    } else {
+                        let ssa = ctx.fresh_ssa();
+                        let code = format!(
+                            "  {} = call {} @goth_{}({})\n",
+                            ssa,
+                            ret_ty,
+                            name,
+                            arg_strs.join(", ")
+                        );
+                        (ssa, code)
+                    }
                 }
             }
         }
 
         Rhs::Tuple(ops) => {
-            // For now, just use the first element or return 0
-            if let Some(first) = ops.first() {
+            // Empty tuple is unit type
+            if ops.is_empty() {
+                ("undef".to_string(), String::new())
+            } else if let Some(first) = ops.first() {
                 let val = emit_operand(ctx, first, &stmt.ty, output)?;
                 (val, String::new())
             } else {
-                ("0".to_string(), String::new())
+                ("undef".to_string(), String::new())
             }
         }
 
@@ -1083,27 +1494,57 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
         }
 
         Rhs::ClosureCall { closure, args } => {
-            let ssa = ctx.fresh_ssa();
             let ret_ty = emit_type(&stmt.ty)?;
+            let is_void_ret = ret_ty == "void";
             let closure_val = emit_operand(ctx, closure, &stmt.ty, output)?;
 
             let mut arg_strs = Vec::new();
             for arg in args {
-                let arg_ty = Type::Prim(PrimType::I64);
+                // Check if operand is a unit constant and skip it
+                if let Operand::Const(Constant::Unit) = arg {
+                    continue;
+                }
+                // Determine actual argument type from operand
+                let arg_ty = match arg {
+                    Operand::Local(local) => {
+                        ctx.local_types.get(local).cloned().unwrap_or(Type::Prim(PrimType::I64))
+                    }
+                    Operand::Const(c) => match c {
+                        Constant::Int(_) => Type::Prim(PrimType::I64),
+                        Constant::Float(_) => Type::Prim(PrimType::F64),
+                        Constant::Bool(_) => Type::Prim(PrimType::Bool),
+                        Constant::String(_) => Type::Prim(PrimType::String),
+                        Constant::Unit => Type::Tuple(vec![]),
+                    },
+                };
+                // Skip unit-typed arguments
+                if is_unit_type(&arg_ty) {
+                    continue;
+                }
                 let arg_val = emit_operand(ctx, arg, &arg_ty, output)?;
-                arg_strs.push(format!("i64 {}", arg_val));
+                let llvm_ty = emit_type(&arg_ty)?;
+                arg_strs.push(format!("{} {}", llvm_ty, arg_val));
             }
 
             // Indirect call
-            let code = format!(
-                "  {} = call {} {}({})\n",
-                ssa,
-                ret_ty,
-                closure_val,
-                arg_strs.join(", ")
-            );
-
-            (ssa, code)
+            if is_void_ret {
+                let code = format!(
+                    "  call void {}({})\n",
+                    closure_val,
+                    arg_strs.join(", ")
+                );
+                ("undef".to_string(), code)
+            } else {
+                let ssa = ctx.fresh_ssa();
+                let code = format!(
+                    "  {} = call {} {}({})\n",
+                    ssa,
+                    ret_ty,
+                    closure_val,
+                    arg_strs.join(", ")
+                );
+                (ssa, code)
+            }
         }
 
         Rhs::MakeVariant { tag, constructor: _, payload } => {
@@ -1316,9 +1757,16 @@ fn emit_stmt(ctx: &mut LlvmContext, stmt: &Stmt, output: &mut String) -> Result<
 
     output.push_str(&code);
 
+    let llvm_ty = emit_type(&stmt.ty)?;
+
+    // For unit/void types, register with "undef" so later references don't fail
+    if llvm_ty == "void" {
+        ctx.register_local(stmt.dest, "undef".to_string(), stmt.ty.clone());
+        return Ok(());
+    }
+
     // If this is a stack-allocated local, emit a store instead of registering SSA
     if let Some(ptr) = ctx.get_stack_ptr(&stmt.dest).cloned() {
-        let llvm_ty = emit_type(&stmt.ty)?;
         output.push_str(&format!("  store {} {}, {}* {}\n", llvm_ty, ssa, llvm_ty, ptr));
     } else {
         ctx.register_local(stmt.dest, ssa, stmt.ty.clone());
@@ -1420,8 +1868,10 @@ fn emit_function(func: &Function, is_main: bool) -> Result<(String, Vec<(String,
         .enumerate()
         .filter_map(|(i, ty)| {
             let llvm_ty = emit_type(ty).unwrap_or_else(|_| "i64".to_string());
-            // Skip void parameters (unit type)
+            // Skip void parameters (unit type) in the signature, but still register them
             if llvm_ty == "void" {
+                // Register with "undef" so later references don't fail
+                ctx.register_local(LocalId::new(i as u32), "undef".to_string(), ty.clone());
                 return None;
             }
             let param_ssa = format!("%arg{}", i);
@@ -1454,9 +1904,16 @@ fn emit_function(func: &Function, is_main: bool) -> Result<(String, Vec<(String,
     // Emit alloca instructions for multi-block locals at entry
     for (local, ty) in &multi_block_locals {
         let llvm_ty = emit_type(ty)?;
+        if llvm_ty == "void" {
+            // For void types, pre-register with "undef" so uses before definition work
+            ctx.register_local(*local, "undef".to_string(), ty.clone());
+            continue;
+        }
         let ptr_name = ctx.fresh_ssa();
         output.push_str(&format!("  {} = alloca {}\n", ptr_name, llvm_ty));
         ctx.register_stack_local(*local, ptr_name);
+        // Also register the type so we can look it up later
+        ctx.local_types.insert(*local, ty.clone());
     }
 
     // Emit entry block body (without re-emitting the label)
@@ -1620,15 +2077,45 @@ pub fn emit_program(program: &Program) -> Result<String> {
     output.push_str(&emit_format_strings());
 
     // Emit all functions and collect string literals
+    // We need to track string literal renaming for each function
     let main_func = program.functions.iter().find(|f| f.name == "main");
     let mut all_string_literals: Vec<(String, String)> = Vec::new();
     let mut function_outputs: Vec<String> = Vec::new();
+    let mut global_str_idx = 0usize;
 
     for func in &program.functions {
         let is_main = func.name == "main";
-        let (func_code, string_literals) = emit_function(func, is_main)?;
+        let (mut func_code, string_literals) = emit_function(func, is_main)?;
+
+        // Rename string literals to be globally unique using two-phase approach
+        // to avoid partial substring matches
+
+        // Sort by old name index descending to avoid partial matches within each phase
+        let mut sorted_literals: Vec<_> = string_literals.into_iter().collect();
+        sorted_literals.sort_by(|(a, _), (b, _)| {
+            let get_idx = |s: &str| -> usize {
+                s.strip_prefix("@.str.").and_then(|n| n.parse().ok()).unwrap_or(0)
+            };
+            get_idx(b).cmp(&get_idx(a))  // Descending order
+        });
+
+        // Phase 1: Replace old names with unique temporary placeholders
+        let mut temp_to_final: Vec<(String, String)> = Vec::new();
+        for (i, (old_name, value)) in sorted_literals.into_iter().enumerate() {
+            let temp_name = format!("@__goth_tmp_str_{}_{}__", global_str_idx + i, func.name);
+            let final_name = format!("@.str.{}", global_str_idx + i);
+            func_code = func_code.replace(&old_name, &temp_name);
+            temp_to_final.push((temp_name, final_name.clone()));
+            all_string_literals.push((final_name, value));
+        }
+        global_str_idx += temp_to_final.len();
+
+        // Phase 2: Replace temp placeholders with final names
+        for (temp_name, final_name) in temp_to_final {
+            func_code = func_code.replace(&temp_name, &final_name);
+        }
+
         function_outputs.push(func_code);
-        all_string_literals.extend(string_literals);
     }
 
     // Emit collected string literals before functions

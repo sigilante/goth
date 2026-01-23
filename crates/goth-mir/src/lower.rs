@@ -359,7 +359,7 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
         
         // ============ Let Bindings ============
         
-        Expr::Let { pattern, value, body } => {
+        Expr::Let { pattern, value, body, type_: _ } => {
             use goth_ast::pattern::Pattern;
 
             // Lower the value
@@ -2155,6 +2155,7 @@ mod tests {
         // let x = 5 in x + 1
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::BinOp(
                 BinOp::Add,
@@ -2189,9 +2190,11 @@ mod tests {
         // let x = 5 in let y = x + 3 in y * 2
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::Let {
                 pattern: Pattern::Var(Some("y".into())),
+                type_: None,
                 value: Box::new(Expr::BinOp(
                     BinOp::Add,
                     Box::new(Expr::Idx(0)),  // x
@@ -2294,6 +2297,7 @@ mod tests {
         // let x = 10 in λ→ ₀ + x
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(10))),
             body: Box::new(Expr::Lam(Box::new(Expr::BinOp(
                 BinOp::Add,
@@ -2332,6 +2336,7 @@ mod tests {
         // let f = λ→ ₀ + 1 in f 5
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("f".into())),
+            type_: None,
             value: Box::new(Expr::Lam(Box::new(Expr::BinOp(
                 BinOp::Add,
                 Box::new(Expr::Idx(0)),
@@ -2381,9 +2386,11 @@ mod tests {
         // f x
         let expr = Expr::Let {
             pattern: Pattern::Var(Some("x".into())),
+            type_: None,
             value: Box::new(Expr::Lit(Literal::Int(5))),
             body: Box::new(Expr::Let {
                 pattern: Pattern::Var(Some("y".into())),
+                type_: None,
                 value: Box::new(Expr::BinOp(
                     BinOp::Mul,
                     Box::new(Expr::Idx(0)),  // x
@@ -2391,6 +2398,7 @@ mod tests {
                 )),
                 body: Box::new(Expr::Let {
                     pattern: Pattern::Var(Some("f".into())),
+                    type_: None,
                     value: Box::new(Expr::Lam(Box::new(Expr::BinOp(
                         BinOp::Add,
                         Box::new(Expr::Idx(0)),  // Parameter

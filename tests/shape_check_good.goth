@@ -1,0 +1,13 @@
+# Shape checking test - should PASS
+# Run with: goth --check tests/shape_check_good.goth
+
+# Function with matching shapes
+╭─ identity : [n]F64 → [n]F64
+╰─ ₀
+
+# Function that doubles each element (preserves shape)
+╭─ double : [n]F64 → [n]F64
+╰─ ₀ ↦ (λ→ ₀ × 2.0)
+
+╭─ main : () → I64
+╰─ 0

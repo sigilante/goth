@@ -39,9 +39,11 @@ pub enum Expr {
     /// λ⟨a b c⟩→ body introduces 3 bindings
     LamN(u32, Box<Expr>),
 
-    /// Let binding: let pattern ← value in body
+    /// Let binding: let pattern [: type] ← value in body
     Let {
         pattern: Pattern,
+        /// Optional type annotation
+        type_: Option<Type>,
         value: Box<Expr>,
         body: Box<Expr>,
     },
@@ -302,6 +304,17 @@ impl Expr {
     pub fn let_(pat: Pattern, value: Expr, body: Expr) -> Self {
         Expr::Let {
             pattern: pat,
+            type_: None,
+            value: Box::new(value),
+            body: Box::new(body),
+        }
+    }
+
+    /// Let binding with type annotation
+    pub fn let_typed(pat: Pattern, ty: Type, value: Expr, body: Expr) -> Self {
+        Expr::Let {
+            pattern: pat,
+            type_: Some(ty),
             value: Box::new(value),
             body: Box::new(body),
         }
@@ -413,10 +426,11 @@ impl Expr {
                     Box::new(a.shift(cutoff, delta)),
                 )
             }
-            Expr::Let { pattern, value, body } => {
+            Expr::Let { pattern, type_, value, body } => {
                 let bindings = pattern.binding_count() as u32;
                 Expr::Let {
                     pattern: pattern.clone(),
+                    type_: type_.clone(),
                     value: Box::new(value.shift(cutoff, delta)),
                     body: Box::new(body.shift(cutoff + bindings, delta)),
                 }
@@ -520,8 +534,12 @@ impl std::fmt::Display for Expr {
             Expr::App(func, arg) => write!(f, "({} {})", func, arg),
             Expr::Lam(body) => write!(f, "λ→ {}", body),
             Expr::LamN(n, body) => write!(f, "λ{}→ {}", n, body),
-            Expr::Let { pattern, value, body } => {
-                write!(f, "let {} ← {} in {}", pattern, value, body)
+            Expr::Let { pattern, type_, value, body } => {
+                if let Some(ty) = type_ {
+                    write!(f, "let {} : {} ← {} in {}", pattern, ty, value, body)
+                } else {
+                    write!(f, "let {} ← {} in {}", pattern, value, body)
+                }
             }
             Expr::BinOp(op, l, r) => write!(f, "({} {} {})", l, op.glyph(), r),
             Expr::UnaryOp(op, e) => write!(f, "{}{}", op.glyph(), e),

@@ -1,0 +1,9 @@
+# Shape checking test cases
+# Run with: goth --check tests/shape_check_tests.goth
+
+# TEST 1: Function with mismatched shapes (should FAIL)
+╭─ bad : [3]F64 → [5]F64
+╰─ ₀
+
+╭─ main : () → I64
+╰─ 0
