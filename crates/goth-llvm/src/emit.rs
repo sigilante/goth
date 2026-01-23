@@ -141,32 +141,175 @@ fn escape_string_for_llvm(s: &str) -> String {
     result
 }
 
-/// Analyze a function to find locals that are assigned in multiple blocks.
-/// These need stack allocation (alloca/store/load) instead of direct SSA.
+/// Analyze a function to find locals that need stack allocation.
+/// A local needs stack allocation if:
+/// 1. It is assigned in multiple blocks, OR
+/// 2. It is assigned in one block and used in a different block
 fn find_multi_block_locals(func: &Function) -> HashMap<LocalId, Type> {
     let mut assignments: HashMap<LocalId, HashSet<usize>> = HashMap::new();
+    let mut uses: HashMap<LocalId, HashSet<usize>> = HashMap::new();
     let mut local_types: HashMap<LocalId, Type> = HashMap::new();
 
-    // Track assignments in entry block (block 0)
-    for stmt in &func.body.stmts {
-        assignments.entry(stmt.dest).or_default().insert(0);
-        local_types.insert(stmt.dest, stmt.ty.clone());
-    }
-
-    // Track assignments in other blocks
-    for (block_id, block) in &func.blocks {
-        for stmt in &block.stmts {
-            assignments.entry(stmt.dest).or_default().insert(block_id.0 as usize);
-            local_types.insert(stmt.dest, stmt.ty.clone());
+    // Helper to extract locals from an operand
+    fn collect_operand_locals(op: &Operand, block_id: usize, uses: &mut HashMap<LocalId, HashSet<usize>>) {
+        if let Operand::Local(local) = op {
+            uses.entry(*local).or_default().insert(block_id);
         }
     }
 
-    // Return locals assigned in more than one block
-    assignments
-        .into_iter()
-        .filter(|(_, blocks)| blocks.len() > 1)
-        .filter_map(|(local, _)| local_types.get(&local).map(|ty| (local, ty.clone())))
-        .collect()
+    // Helper to extract locals from a Rhs
+    fn collect_rhs_locals(rhs: &Rhs, block_id: usize, uses: &mut HashMap<LocalId, HashSet<usize>>) {
+        match rhs {
+            Rhs::Use(op) => collect_operand_locals(op, block_id, uses),
+            Rhs::BinOp(_, left, right) => {
+                collect_operand_locals(left, block_id, uses);
+                collect_operand_locals(right, block_id, uses);
+            }
+            Rhs::UnaryOp(_, op) => collect_operand_locals(op, block_id, uses),
+            Rhs::Call { args, .. } => {
+                for arg in args {
+                    collect_operand_locals(arg, block_id, uses);
+                }
+            }
+            Rhs::ClosureCall { closure, args } => {
+                collect_operand_locals(closure, block_id, uses);
+                for arg in args {
+                    collect_operand_locals(arg, block_id, uses);
+                }
+            }
+            Rhs::Tuple(ops) => {
+                for op in ops {
+                    collect_operand_locals(op, block_id, uses);
+                }
+            }
+            Rhs::TupleField(op, _) => collect_operand_locals(op, block_id, uses),
+            Rhs::Array(ops) => {
+                for op in ops {
+                    collect_operand_locals(op, block_id, uses);
+                }
+            }
+            Rhs::ArrayFill { size, value } => {
+                collect_operand_locals(size, block_id, uses);
+                collect_operand_locals(value, block_id, uses);
+            }
+            Rhs::Prim { args, .. } => {
+                for arg in args {
+                    collect_operand_locals(arg, block_id, uses);
+                }
+            }
+            Rhs::MakeVariant { payload, .. } => {
+                if let Some(op) = payload {
+                    collect_operand_locals(op, block_id, uses);
+                }
+            }
+            Rhs::MakeClosure { captures, .. } => {
+                for op in captures {
+                    collect_operand_locals(op, block_id, uses);
+                }
+            }
+            Rhs::Const(_) => {}
+            // Tensor operations
+            Rhs::TensorMap { tensor, func } => {
+                collect_operand_locals(tensor, block_id, uses);
+                collect_operand_locals(func, block_id, uses);
+            }
+            Rhs::TensorReduce { tensor, .. } => {
+                collect_operand_locals(tensor, block_id, uses);
+            }
+            Rhs::TensorFilter { tensor, pred } => {
+                collect_operand_locals(tensor, block_id, uses);
+                collect_operand_locals(pred, block_id, uses);
+            }
+            Rhs::TensorZip { left, right } => {
+                collect_operand_locals(left, block_id, uses);
+                collect_operand_locals(right, block_id, uses);
+            }
+            Rhs::Slice { array, start, end } => {
+                collect_operand_locals(array, block_id, uses);
+                if let Some(s) = start {
+                    collect_operand_locals(s, block_id, uses);
+                }
+                if let Some(e) = end {
+                    collect_operand_locals(e, block_id, uses);
+                }
+            }
+            Rhs::ContractCheck { predicate, .. } => {
+                collect_operand_locals(predicate, block_id, uses);
+            }
+            Rhs::Uncertain { value, uncertainty } => {
+                collect_operand_locals(value, block_id, uses);
+                collect_operand_locals(uncertainty, block_id, uses);
+            }
+            Rhs::Index(arr, idx) => {
+                collect_operand_locals(arr, block_id, uses);
+                collect_operand_locals(idx, block_id, uses);
+            }
+            Rhs::Iota(n) => {
+                collect_operand_locals(n, block_id, uses);
+            }
+            Rhs::Range(start, end) => {
+                collect_operand_locals(start, block_id, uses);
+                collect_operand_locals(end, block_id, uses);
+            }
+            Rhs::GetTag(op) | Rhs::GetPayload(op) => {
+                collect_operand_locals(op, block_id, uses);
+            }
+        }
+    }
+
+    // Helper to extract locals from a terminator
+    fn collect_term_locals(term: &Terminator, block_id: usize, uses: &mut HashMap<LocalId, HashSet<usize>>) {
+        match term {
+            Terminator::Return(op) => collect_operand_locals(op, block_id, uses),
+            Terminator::If { cond, .. } => collect_operand_locals(cond, block_id, uses),
+            Terminator::Switch { scrutinee, .. } => collect_operand_locals(scrutinee, block_id, uses),
+            Terminator::Goto(_) | Terminator::Unreachable => {}
+        }
+    }
+
+    // Track assignments and uses in entry block (block 0)
+    for stmt in &func.body.stmts {
+        assignments.entry(stmt.dest).or_default().insert(0);
+        local_types.insert(stmt.dest, stmt.ty.clone());
+        collect_rhs_locals(&stmt.rhs, 0, &mut uses);
+    }
+    collect_term_locals(&func.body.term, 0, &mut uses);
+
+    // Track assignments and uses in other blocks
+    for (block_id, block) in &func.blocks {
+        let bid = block_id.0 as usize;
+        for stmt in &block.stmts {
+            assignments.entry(stmt.dest).or_default().insert(bid);
+            local_types.insert(stmt.dest, stmt.ty.clone());
+            collect_rhs_locals(&stmt.rhs, bid, &mut uses);
+        }
+        collect_term_locals(&block.term, bid, &mut uses);
+    }
+
+    // A local needs stack allocation if:
+    // 1. It's assigned in multiple blocks, OR
+    // 2. It's used in a block different from where it's assigned
+    let mut result = HashMap::new();
+    for (local, assigned_blocks) in &assignments {
+        let needs_alloca = if assigned_blocks.len() > 1 {
+            // Assigned in multiple blocks
+            true
+        } else if let Some(used_blocks) = uses.get(local) {
+            // Check if used in a different block than where assigned
+            let assigned_block = *assigned_blocks.iter().next().unwrap();
+            used_blocks.iter().any(|&b| b != assigned_block)
+        } else {
+            false
+        };
+
+        if needs_alloca {
+            if let Some(ty) = local_types.get(local) {
+                result.insert(*local, ty.clone());
+            }
+        }
+    }
+
+    result
 }
 
 /// Emit LLVM type
