@@ -90,13 +90,17 @@ _14: I64 = BinOp(Add, _4, Const(1))   // row + 1 ✓
 _16: I64 = BinOp(Sub, _6, Const(1))   // len - 1 ✓
 ```
 
-### Boolean Op Type Inference in LLVM Backend
-- **Error:** `UnsupportedOp("And")`
-- **Location:** `goth-llvm/src/emit.rs` line 363
-- **Root Cause:** And/Or operations have integer type (I64) instead of Bool type
-- **Effect:** LLVM backend branches to integer codepath, which doesn't support And/Or
+### ~~Boolean Op Type Inference~~ ✅ FIXED (commit d251d2a)
+- Comparison ops (Lt, Gt, Leq, Geq, Eq, Neq) now return Bool type
+- Logical ops (And, Or) now return Bool type
+- MLIR/LLVM backends updated to handle Bool result types
+- Test: `if 3 < 5 then 1 else 0` compiles and runs correctly
 
-**Fix needed:** MIR lowering should infer Bool type for And/Or binary operations, not the operand type.
+### UndefinedLocal in tui_demo.goth
+- **Error:** `UndefinedLocal("LocalId(54)")`
+- **Location:** LLVM emit during tui_demo compilation
+- **Root Cause:** Complex control flow with many locals across blocks
+- **Investigation needed:** Track how locals are defined/used across basic blocks
 
 ---
 
@@ -129,10 +133,9 @@ _16: I64 = BinOp(Sub, _6, Const(1))   // len - 1 ✓
 
 ## Next Steps
 
-1. **Fix Bool type inference for And/Or** - In `goth-mir/src/lower.rs`, And/Or BinOp should return Bool type
-2. **Complete tui_demo compilation** - After type fix, test full compilation
-3. **Add more primitive support** - toString, write, and TUI primitives
-4. **MLIR Phase 5** - CLI integration, comprehensive testing, error handling
+1. **Fix UndefinedLocal in tui_demo** - Debug LLVM emit local tracking across blocks
+2. **Add more primitive support** - toString, write, and TUI primitives
+3. **MLIR Phase 5** - CLI integration, comprehensive testing, error handling
 
 ---
 
