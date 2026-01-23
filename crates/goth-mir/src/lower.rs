@@ -41,6 +41,8 @@ pub struct LoweringContext {
     pending_entry_block: Option<Block>,
     /// Entry block ID for the function (first block created)
     entry_block_id: Option<BlockId>,
+    /// Named local variables (from let bindings with named patterns)
+    named_locals: std::collections::HashMap<String, (LocalId, Type)>,
 }
 
 impl LoweringContext {
@@ -59,6 +61,7 @@ impl LoweringContext {
             local_types: std::collections::HashMap::new(),
             pending_entry_block: None,
             entry_block_id: None,
+            named_locals: std::collections::HashMap::new(),
         }
     }
     
@@ -138,8 +141,11 @@ impl LoweringContext {
 /// Check if a name is a known primitive
 fn is_primitive(name: &str) -> bool {
     matches!(name,
+        // Sequence generation
         "iota" | "ι" | "⍳" |
         "range" | "…" |
+
+        // Array/tensor operations
         "len" | "length" |
         "sum" | "Σ" |
         "prod" | "Π" |
@@ -154,16 +160,52 @@ fn is_primitive(name: &str) -> bool {
         "drop" | "↓" |
         "concat" | "⧺" |
         "index" |
-        "print" |
-        "toString" | "str" |
-        "toInt" | "toFloat" |
+        "replicate" |
+        "zip" |
+        "norm" |
+
+        // Math operations
         "dot" | "·" |
         "matmul" |
         "sqrt" | "√" |
         "abs" |
         "floor" | "ceil" | "round" |
         "sin" | "cos" | "tan" |
-        "exp" | "ln" | "log"
+        "asin" | "acos" | "atan" |
+        "sinh" | "cosh" | "tanh" |
+        "exp" | "ln" | "log" | "log10" | "log2" |
+        "gamma" | "Γ" |
+        "sign" |
+
+        // Type conversions
+        "toString" | "str" |
+        "toInt" | "toFloat" | "toBool" | "toChar" |
+        "parseInt" | "parseFloat" |
+
+        // String operations
+        "chars" |
+        "strConcat" |
+        "strLen" |
+        "lines" |
+        "words" |
+        "bytes" |
+        "strEq" |
+        "startsWith" |
+        "endsWith" |
+        "contains" |
+        "joinStrings" |
+
+        // I/O operations
+        "print" |
+        "write" |
+        "flush" |
+        "readLine" |
+        "readKey" |
+        "rawModeEnter" |
+        "rawModeExit" |
+        "sleep" |
+        "readFile" |
+        "writeFile"
     )
 }
 
@@ -195,6 +237,11 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
         }
         
         Expr::Name(name) => {
+            // First check for locally bound names (from let bindings)
+            if let Some((local, ty)) = ctx.named_locals.get(name.as_ref()) {
+                return Ok((Operand::Local(*local), ty.clone()));
+            }
+
             // Check if it's a primitive
             if is_primitive(name) {
                 // Primitives are handled at application site
@@ -246,15 +293,31 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
         
         Expr::BinOp(op, left, right) => {
             let (left_op, left_ty) = lower_expr_to_operand(ctx, left)?;
-            let (right_op, right_ty) = lower_expr_to_operand(ctx, right)?;
-            
-            // Result type depends on operation
-            // TODO: Proper type inference
-            let result_ty = left_ty.clone();  // Simplified for now
-            
+            let (right_op, _right_ty) = lower_expr_to_operand(ctx, right)?;
+
+            // Result type depends on operation category
+            let result_ty = match op {
+                // Comparison operators always return Bool
+                goth_ast::op::BinOp::Eq
+                | goth_ast::op::BinOp::Neq
+                | goth_ast::op::BinOp::Lt
+                | goth_ast::op::BinOp::Gt
+                | goth_ast::op::BinOp::Leq
+                | goth_ast::op::BinOp::Geq => {
+                    Type::Prim(goth_ast::types::PrimType::Bool)
+                }
+                // Logical operators always return Bool
+                goth_ast::op::BinOp::And
+                | goth_ast::op::BinOp::Or => {
+                    Type::Prim(goth_ast::types::PrimType::Bool)
+                }
+                // Arithmetic and other operators preserve operand type
+                _ => left_ty.clone(),
+            };
+
             let dest = ctx.fresh_local();
             ctx.emit(dest, result_ty.clone(), Rhs::BinOp(op.clone(), left_op, right_op));
-            
+
             Ok((Operand::Local(dest), result_ty))
         }
         
@@ -262,7 +325,7 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
         
         Expr::UnaryOp(op, operand) => {
             let (op_val, op_ty) = lower_expr_to_operand(ctx, operand)?;
-            
+
             // Result type depends on operation
             let result_ty = match op {
                 goth_ast::op::UnaryOp::Floor | goth_ast::op::UnaryOp::Ceil => {
@@ -277,35 +340,59 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
                 | goth_ast::op::UnaryOp::Abs => Type::Prim(goth_ast::types::PrimType::F64),
                 goth_ast::op::UnaryOp::Not => Type::Prim(goth_ast::types::PrimType::Bool),
                 goth_ast::op::UnaryOp::Neg => op_ty.clone(),
+                // Reduce operations (Sum, Prod) return element type, not array type
+                goth_ast::op::UnaryOp::Sum | goth_ast::op::UnaryOp::Prod => {
+                    // Extract element type from tensor type
+                    match &op_ty {
+                        Type::Tensor(_, elem_ty) => (**elem_ty).clone(),
+                        _ => op_ty.clone(), // Fallback to same type for scalars
+                    }
+                }
                 _ => op_ty.clone(),
             };
-            
+
             let dest = ctx.fresh_local();
             ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(*op, op_val));
-            
+
             Ok((Operand::Local(dest), result_ty))
         }
         
         // ============ Let Bindings ============
+        
+        Expr::Let { pattern, value, body, type_: _ } => {
+            use goth_ast::pattern::Pattern;
 
-        Expr::Let { pattern, type_: _, value, body } => {
             // Lower the value
             let (val_op, val_ty) = lower_expr_to_operand(ctx, value)?;
-            
+
             // For now, only handle simple variable patterns
             // TODO: Pattern compilation for complex patterns
             let local = ctx.fresh_local();
             ctx.emit(local, val_ty.clone(), Rhs::Use(val_op));
-            
+
+            // Extract name from pattern if it's a named Var
+            let binding_name = match pattern {
+                Pattern::Var(Some(name)) => Some(name.to_string()),
+                _ => None,
+            };
+
+            // Store named binding if present
+            if let Some(ref name) = binding_name {
+                ctx.named_locals.insert(name.clone(), (local, val_ty.clone()));
+            }
+
             // Push onto stack for de Bruijn resolution
             ctx.push_local(local, val_ty);
-            
+
             // Lower the body
             let result = lower_expr_to_operand(ctx, body)?;
-            
-            // Pop the local
+
+            // Pop the local and remove named binding
             ctx.pop_local();
-            
+            if let Some(name) = binding_name {
+                ctx.named_locals.remove(&name);
+            }
+
             Ok(result)
         }
         
@@ -611,11 +698,29 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
             }
 
             let (func_op, func_ty) = lower_expr_to_operand(ctx, func)?;
-            let (arg_op, _arg_ty) = lower_expr_to_operand(ctx, arg)?;
+            let (arg_op, arg_ty) = lower_expr_to_operand(ctx, arg)?;
 
             // Determine return type from function type
             let ret_ty = match &func_ty {
                 Type::Fn(_arg_ty, ret_ty) => (**ret_ty).clone(),
+                // Handle polymorphic type variables - assume they represent functions
+                // and use the type variable as return type (will be refined later)
+                Type::Var(name) => Type::Var(name.clone()),
+                // Handle effectful function types
+                Type::Effectful(inner, _effects) => {
+                    match inner.as_ref() {
+                        Type::Fn(_arg_ty, ret_ty) => (**ret_ty).clone(),
+                        Type::Var(name) => Type::Var(name.clone()),
+                        _ => arg_ty.clone(), // Best effort: use argument type
+                    }
+                }
+                // For Forall types, try to extract the inner function type
+                Type::Forall(_params, inner) => {
+                    match inner.as_ref() {
+                        Type::Fn(_arg_ty, ret_ty) => (**ret_ty).clone(),
+                        _ => arg_ty.clone(),
+                    }
+                }
                 _ => return Err(MirError::TypeError(
                     format!("Expected function type, got {:?}", func_ty)
                 )),
@@ -688,10 +793,39 @@ pub fn lower_expr_to_operand(ctx: &mut LoweringContext, expr: &Expr) -> MirResul
             
             let dest = ctx.fresh_local();
             ctx.emit(dest, array_ty.clone(), Rhs::Array(ops));
-            
+
             Ok((Operand::Local(dest), array_ty))
         }
-        
+
+        // ============ Array Fill ============
+
+        Expr::ArrayFill { shape, value } => {
+            // ArrayFill creates an array of given size filled with a value
+            // For now, only support 1D arrays (single dimension)
+            if shape.len() != 1 {
+                return Err(MirError::CannotLower(
+                    "Multi-dimensional ArrayFill not yet supported".to_string()
+                ));
+            }
+
+            let (size_op, _size_ty) = lower_expr_to_operand(ctx, &shape[0])?;
+            let (value_op, value_ty) = lower_expr_to_operand(ctx, value)?;
+
+            // Result type is an array of the value type
+            let array_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()), // Dynamic size
+                value_ty.clone()
+            );
+
+            let dest = ctx.fresh_local();
+            ctx.emit(dest, array_ty.clone(), Rhs::ArrayFill {
+                size: size_op,
+                value: value_op,
+            });
+
+            Ok((Operand::Local(dest), array_ty))
+        }
+
         // ============ Field Access ============
 
         Expr::Field(base, access) => {
@@ -987,9 +1121,228 @@ fn lower_match_expr(
 
         Ok((Operand::Local(result), result_ty))
     } else {
-        // Non-variant match (e.g., literal patterns) - use if-else chain for now
-        // This is a simplified implementation
-        Err(MirError::CannotLower("Non-variant match expressions not yet fully supported".to_string()))
+        // Non-variant match (e.g., literal patterns) - use if-else chain
+        //
+        // Strategy: Generate nested if-else for each literal pattern,
+        // with variable/wildcard patterns as the default case.
+        //
+        // match x {
+        //   0 → a;
+        //   1 → b;
+        //   n → c;   // variable pattern becomes default
+        // }
+        //
+        // Becomes:
+        //   if x == 0 then a
+        //   else if x == 1 then b
+        //   else c  (with n bound to x)
+
+        // Separate literal patterns from default (var/wildcard) patterns
+        let mut literal_arms: Vec<(&goth_ast::expr::MatchArm, Constant)> = Vec::new();
+        let mut default_arm: Option<&goth_ast::expr::MatchArm> = None;
+        let mut var_binding: Option<Option<Box<str>>> = None;
+
+        for arm in arms {
+            match &arm.pattern {
+                Pattern::Lit(lit) => {
+                    let (constant, _) = lower_literal(lit);
+                    literal_arms.push((arm, constant));
+                }
+                Pattern::Var(name) => {
+                    // Variable pattern matches anything and binds the value
+                    if default_arm.is_none() {
+                        default_arm = Some(arm);
+                        var_binding = Some(name.clone());
+                    }
+                }
+                Pattern::Wildcard => {
+                    // Wildcard matches anything but doesn't bind
+                    if default_arm.is_none() {
+                        default_arm = Some(arm);
+                    }
+                }
+                _ => {
+                    // Other patterns (tuple, array, etc.) not yet supported
+                    return Err(MirError::CannotLower(
+                        format!("Pattern type {:?} not yet supported in non-variant match", arm.pattern)
+                    ));
+                }
+            }
+        }
+
+        // Need at least a default arm for exhaustiveness
+        let default_arm = match default_arm {
+            Some(arm) => arm,
+            None => {
+                // If no explicit default, use the last arm if it exists
+                // (This handles matches that are exhaustive by literal coverage)
+                // For now, we require an explicit default
+                return Err(MirError::CannotLower(
+                    "Non-variant match requires a default (wildcard or variable) pattern".to_string()
+                ));
+            }
+        };
+
+        // If no literal arms, just lower the default
+        if literal_arms.is_empty() {
+            // Bind variable if needed
+            if let Some(name) = &var_binding {
+                if name.is_some() {
+                    // Create a local for the bound variable
+                    let bound_local = ctx.fresh_local();
+                    ctx.emit(bound_local, scrut_ty.clone(), Rhs::Use(scrut_op.clone()));
+                    ctx.push_local(bound_local, scrut_ty.clone());
+                }
+            }
+
+            let (body_op, body_ty) = lower_expr_to_operand(ctx, &default_arm.body)?;
+
+            // Pop binding if we pushed one
+            if let Some(Some(_)) = &var_binding {
+                ctx.pop_local();
+            }
+
+            return Ok((body_op, body_ty));
+        }
+
+        // Generate if-else chain for literal patterns
+        // We'll build this from the inside out (last pattern first)
+
+        // First, lower the default arm body
+        // Store the scrutinee for potential variable binding
+        let scrut_local = match &scrut_op {
+            Operand::Local(id) => *id,
+            Operand::Const(_) => {
+                // Store constant in a local for comparison
+                let local = ctx.fresh_local();
+                ctx.emit(local, scrut_ty.clone(), Rhs::Use(scrut_op.clone()));
+                local
+            }
+        };
+
+        // Create all the block IDs we need upfront
+        let mut check_block_ids: Vec<BlockId> = Vec::new();
+        let mut arm_block_ids: Vec<BlockId> = Vec::new();
+
+        for _ in 0..literal_arms.len() {
+            check_block_ids.push(ctx.fresh_block());
+            arm_block_ids.push(ctx.fresh_block());
+        }
+        let default_block_id = ctx.fresh_block();
+        let join_block_id = ctx.fresh_block();
+
+        // Save current statements - these go in the entry/first check block
+        let entry_stmts = ctx.take_stmts();
+
+        // Lower each literal arm body and create arm blocks
+        let mut result_ty: Option<Type> = None;
+
+        for (i, (arm, _)) in literal_arms.iter().enumerate() {
+            // Lower the arm body
+            let (arm_op, arm_ty) = lower_expr_to_operand(ctx, &arm.body)?;
+
+            if result_ty.is_none() {
+                result_ty = Some(arm_ty.clone());
+            }
+
+            let arm_stmts = ctx.take_stmts();
+            let mut block_stmts = arm_stmts;
+            block_stmts.push(Stmt {
+                dest: result,
+                ty: arm_ty,
+                rhs: Rhs::Use(arm_op),
+            });
+
+            ctx.add_block(arm_block_ids[i], Block {
+                stmts: block_stmts,
+                term: Terminator::Goto(join_block_id),
+            });
+        }
+
+        // Lower the default arm body
+        if let Some(Some(_)) = &var_binding {
+            // Bind the scrutinee to a local variable
+            ctx.push_local(scrut_local, scrut_ty.clone());
+        }
+
+        let (default_op, default_ty) = lower_expr_to_operand(ctx, &default_arm.body)?;
+
+        if let Some(Some(_)) = &var_binding {
+            ctx.pop_local();
+        }
+
+        if result_ty.is_none() {
+            result_ty = Some(default_ty.clone());
+        }
+
+        let default_stmts = ctx.take_stmts();
+        let mut default_block_stmts = default_stmts;
+        default_block_stmts.push(Stmt {
+            dest: result,
+            ty: default_ty,
+            rhs: Rhs::Use(default_op),
+        });
+
+        ctx.add_block(default_block_id, Block {
+            stmts: default_block_stmts,
+            term: Terminator::Goto(join_block_id),
+        });
+
+        // Now create the check blocks with comparisons
+        // Each check block: compare scrutinee with literal, branch to arm or next check
+        for (i, (_, constant)) in literal_arms.iter().enumerate() {
+            let cmp_local = ctx.fresh_local();
+            let cmp_stmt = Stmt {
+                dest: cmp_local,
+                ty: Type::Prim(goth_ast::types::PrimType::Bool),
+                rhs: Rhs::BinOp(
+                    goth_ast::op::BinOp::Eq,
+                    Operand::Local(scrut_local),
+                    Operand::Const(constant.clone()),
+                ),
+            };
+
+            let next_block = if i + 1 < literal_arms.len() {
+                check_block_ids[i + 1]
+            } else {
+                default_block_id
+            };
+
+            let block_stmts = if i == 0 {
+                // First check block gets the entry statements
+                let mut stmts = entry_stmts.clone();
+                stmts.push(cmp_stmt);
+                stmts
+            } else {
+                vec![cmp_stmt]
+            };
+
+            ctx.add_block(check_block_ids[i], Block {
+                stmts: block_stmts,
+                term: Terminator::If {
+                    cond: Operand::Local(cmp_local),
+                    then_block: arm_block_ids[i],
+                    else_block: next_block,
+                },
+            });
+        }
+
+        // Join block
+        ctx.add_block(join_block_id, Block {
+            stmts: vec![],
+            term: Terminator::Unreachable, // Will be replaced by caller
+        });
+
+        // Set the first check block as the pending entry
+        ctx.pending_entry_block = Some(Block {
+            stmts: vec![],
+            term: Terminator::Goto(check_block_ids[0]),
+        });
+
+        let result_ty = result_ty.unwrap_or(Type::Tuple(vec![]));
+        ctx.local_types.insert(result, result_ty.clone());
+
+        Ok((Operand::Local(result), result_ty))
     }
 }
 
@@ -1133,6 +1486,326 @@ fn lower_primitive_app(ctx: &mut LoweringContext, prim_name: &str, arg: &Expr) -
             });
             Ok((Operand::Local(dest), result_ty))
         }
+        "toBool" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Bool);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "toBool".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "toChar" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Char);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "toChar".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "parseInt" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::I64);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "parseInt".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "parseFloat" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "parseFloat".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // String operations
+        "chars" => {
+            // String → [n]Char (returns the string as char tensor)
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "chars".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "strLen" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::I64);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "strLen".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "lines" => {
+            // String → [m]String (split by newlines)
+            let string_ty = Type::vector(
+                goth_ast::shape::Dim::Var("k".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("m".into()),
+                string_ty
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "lines".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "words" => {
+            // String → [m]String (split by whitespace)
+            let string_ty = Type::vector(
+                goth_ast::shape::Dim::Var("k".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("m".into()),
+                string_ty
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "words".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "bytes" => {
+            // String → [m]I64 (UTF-8 byte values)
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("m".into()),
+                Type::Prim(goth_ast::types::PrimType::I64)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "bytes".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "joinStrings" => {
+            // [n]String → String (join array of strings)
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("m".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "joinStrings".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // Additional math functions
+        "sin" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Sin,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "cos" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Cos,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "tan" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Tan,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "asin" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Asin,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "acos" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Acos,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "atan" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Atan,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "sinh" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Sinh,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "cosh" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Cosh,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "tanh" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Tanh,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "exp" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Exp,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "ln" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Ln,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "log" | "log10" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Log10,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "log2" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Log2,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "gamma" | "Γ" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Gamma,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "sign" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Sign,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "round" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::I64);
+            ctx.emit(dest, result_ty.clone(), Rhs::UnaryOp(
+                goth_ast::op::UnaryOp::Round,
+                arg_op
+            ));
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "norm" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::F64);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "norm".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // I/O operations
+        "write" => {
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "write".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "flush" => {
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "flush".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "readLine" => {
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "readLine".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "readKey" => {
+            let result_ty = Type::Prim(goth_ast::types::PrimType::I64);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "readKey".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "rawModeEnter" => {
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "rawModeEnter".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "rawModeExit" => {
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "rawModeExit".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "sleep" => {
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "sleep".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "readFile" => {
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "readFile".to_string(),
+                args: vec![arg_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
 
         // Default: generic primitive call
         _ => {
@@ -1239,6 +1912,101 @@ fn lower_primitive_app2(ctx: &mut LoweringContext, prim_name: &str, arg1: &Expr,
             let result_ty = arg2_ty.clone();
             ctx.emit(dest, result_ty.clone(), Rhs::Prim {
                 name: "reshape".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // String operations (two-argument)
+        "strConcat" => {
+            // String → String → String
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("p".into()),
+                Type::Prim(goth_ast::types::PrimType::Char)
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "strConcat".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "strEq" => {
+            // String → String → Bool
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Bool);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "strEq".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "startsWith" => {
+            // String → String → Bool
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Bool);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "startsWith".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "endsWith" => {
+            // String → String → Bool
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Bool);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "endsWith".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "contains" => {
+            // String → String → Bool
+            let result_ty = Type::Prim(goth_ast::types::PrimType::Bool);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "contains".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // Array operations (two-argument)
+        "replicate" => {
+            // I64 → α → [n]α
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()),
+                arg2_ty.clone()
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "replicate".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+        "zip" => {
+            // [n]α → [n]β → [n]⟨α, β⟩
+            let elem1 = match &arg1_ty {
+                Type::Tensor(_, elem) => (**elem).clone(),
+                _ => arg1_ty.clone(),
+            };
+            let elem2 = match &arg2_ty {
+                Type::Tensor(_, elem) => (**elem).clone(),
+                _ => arg2_ty.clone(),
+            };
+            let result_ty = Type::vector(
+                goth_ast::shape::Dim::Var("n".into()),
+                Type::tuple(vec![elem1, elem2])
+            );
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "zip".to_string(),
+                args: vec![arg1_op, arg2_op],
+            });
+            Ok((Operand::Local(dest), result_ty))
+        }
+
+        // File I/O (two-argument)
+        "writeFile" => {
+            // String → String → Unit
+            let result_ty = Type::Tuple(vec![]);
+            ctx.emit(dest, result_ty.clone(), Rhs::Prim {
+                name: "writeFile".to_string(),
                 args: vec![arg1_op, arg2_op],
             });
             Ok((Operand::Local(dest), result_ty))
@@ -1735,10 +2503,13 @@ pub fn lower_module(module: &Module) -> MirResult<Program> {
                 for _ in 0..param_types.len() {
                     fn_ctx.fresh_local();
                 }
-                // Push onto local stack in REVERSE order so that:
-                // ₀ = first param (Goth convention, not standard de Bruijn)
-                // This is because lookup_index does: locals[len - 1 - idx]
-                for i in (0..param_types.len()).rev() {
+                // Push onto local stack in FORWARD order so that:
+                // ₀ = last param (standard de Bruijn, matching evaluator)
+                // For f : A → B → C applied as (f a b):
+                //   ₀ = b (most recently applied)
+                //   ₁ = a (first applied)
+                // Since lookup_index does: locals[len - 1 - idx]
+                for i in 0..param_types.len() {
                     fn_ctx.push_local(LocalId::new(i as u32), param_types[i].clone());
                 }
 

@@ -7,11 +7,22 @@ repository.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+# Enable melior-based MLIR backend (requires LLVM/MLIR installation)
+melior = ["dep:melior"]
+# Text-based MLIR generation (no external dependencies)
+text-emit = []
+
 [dependencies]
 goth-ast = { path = "../goth-ast" }
 goth-mir = { path = "../goth-mir" }
 thiserror = "1.0"
+regex = "1.10"
+# Rust bindings to MLIR (optional, requires LLVM 17+)
+melior = { version = "0.18", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+goth-parse = { path = "../goth-parse" }
 

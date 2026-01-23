@@ -42,14 +42,45 @@ pub fn emit_runtime_declarations() -> String {
     out.push_str("declare double @lgamma(double) nounwind readnone\n");
     out.push_str("\n");
 
+    // Standard I/O
+    out.push_str("; Standard I/O\n");
+    out.push_str("declare i32 @fflush(i8*) nounwind\n");
+    out.push_str("declare i32 @fputs(i8* nocapture readonly, i8*) nounwind\n");
+    out.push_str("\n");
+
     // Goth runtime functions (implemented in runtime.c)
     out.push_str("; Goth runtime\n");
     out.push_str("declare void @goth_print_i64(i64)\n");
     out.push_str("declare void @goth_print_f64(double)\n");
     out.push_str("declare void @goth_print_bool(i1)\n");
+    out.push_str("declare void @goth_print_string(i8*)\n");
     out.push_str("declare void @goth_print_newline()\n");
     out.push_str("declare i8* @goth_argv(i32)\n");
     out.push_str("declare i32 @goth_argc()\n");
+    out.push_str("\n");
+
+    // TUI primitives
+    out.push_str("; TUI primitives\n");
+    out.push_str("declare void @goth_cursorHide()\n");
+    out.push_str("declare void @goth_cursorShow()\n");
+    out.push_str("declare void @goth_cursorMove(i64, i64)\n");
+    out.push_str("declare void @goth_screenClear()\n");
+    out.push_str("declare void @goth_rawModeEnter()\n");
+    out.push_str("declare void @goth_rawModeExit()\n");
+    out.push_str("declare void @goth_sleep(i64)\n");
+    out.push_str("declare i64 @goth_readKey()\n");
+    out.push_str("declare i8* @goth_toString_i64(i64)\n");
+    out.push_str("declare i8* @goth_toString_f64(double)\n");
+    out.push_str("\n");
+
+    // String operations
+    out.push_str("; String operations\n");
+    out.push_str("declare i8* @goth_chars(i8*)\n");
+    out.push_str("declare i8* @goth_strConcat(i8*, i8*)\n");
+    out.push_str("declare i64 @goth_strLen(i8*)\n");
+    out.push_str("declare i8* @goth_drop(i64, i8*)\n");
+    out.push_str("declare i8* @goth_replicate(i64, i8*)\n");
+    out.push_str("declare i8* @goth_joinStrings(i8*)\n");
     out.push_str("\n");
 
     // Tensor runtime (heap-allocated arrays)
@@ -59,11 +90,13 @@ pub fn emit_runtime_declarations() -> String {
     out.push_str("declare i64 @goth_sum_i64(i8*, i64)\n");
     out.push_str("declare double @goth_sum_f64(i8*, i64)\n");
     out.push_str("declare i64 @goth_prod_i64(i8*, i64)\n");
+    out.push_str("declare double @goth_prod_f64(i8*, i64)\n");
     out.push_str("declare i64 @goth_min_i64(i8*, i64)\n");
     out.push_str("declare i64 @goth_max_i64(i8*, i64)\n");
     out.push_str("declare i64 @goth_len(i8*)\n");
     out.push_str("declare i8* @goth_reverse(i8*, i64)\n");
-    out.push_str("declare i64 @goth_index_i64(i8*, i64)\n");
+    out.push_str("declare i64 @goth_index_i64(i8*, i64)
+declare i8* @goth_index_str(i8*, i64)\n");
     out.push_str("declare i8* @goth_map_i64(i8*, i8*, i64)\n");
     out.push_str("declare i8* @goth_filter_i64(i8*, i8*, i64)\n");
     out.push_str("\n");

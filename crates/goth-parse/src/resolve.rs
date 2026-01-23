@@ -114,8 +114,10 @@ impl ResolveCtx {
             Pattern::Guard(inner, _) => {
                 self.collect_pattern_names(inner, names);
             }
-            // Wildcard, Lit don't bind names
-            _ => {}
+            // Wildcard binds an anonymous name (important for de Bruijn index shifting)
+            Pattern::Wildcard => names.push("_".to_string()),
+            // Lit patterns and variants without payload don't bind names
+            Pattern::Lit(_) | Pattern::Variant { payload: None, .. } => {}
         }
     }
 
@@ -421,13 +423,36 @@ impl ResolveCtx {
         }
     }
 
+    /// Count the number of parameters in a function type
+    fn count_params(ty: &goth_ast::types::Type) -> usize {
+        use goth_ast::types::Type;
+        let mut count = 0;
+        let mut current = ty;
+        while let Type::Fn(_, ret) = current {
+            count += 1;
+            current = ret;
+        }
+        count
+    }
+
     /// Resolve a declaration
     fn resolve_decl(&mut self, decl: Decl) -> Decl {
         match decl {
             Decl::Fn(fn_decl) => {
-                // Function body has one implicit argument
-                self.push("_".to_string());
+                // Count number of parameters from signature
+                let num_params = Self::count_params(&fn_decl.signature).max(1);
+
+                // Push anonymous bindings for each parameter
+                // These are pushed in order (first param first), so with lookup_index
+                // reversing the order, ₀ will be the last param, ₁ the second-to-last, etc.
+                let param_names: Vec<String> = (0..num_params)
+                    .map(|i| format!("_param{}", i))
+                    .collect();
+                self.push_many(param_names);
+
                 let body = self.resolve_expr(fn_decl.body);
+
+                // Pop all parameter bindings
                 self.pop();
                 
                 let preconditions = fn_decl.preconditions.into_iter()
@@ -575,7 +600,7 @@ mod tests {
     fn test_resolve_shadowing() {
         let expr = parse_expr("let x = 1 in let x = 2 in x").unwrap();
         let resolved = resolve_expr(expr);
-        
+
         match resolved {
             Expr::Let { body: outer_body, .. } => {
                 match *outer_body {
@@ -584,6 +609,65 @@ mod tests {
                         assert!(matches!(*inner_body, Expr::Idx(0)));
                     }
                     _ => panic!("Expected inner Let"),
+                }
+            }
+            _ => panic!("Expected outer Let"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_wildcard_shifts_indices() {
+        // This tests that wildcard patterns in let bindings shift de Bruijn indices
+        // let x = 1 in let _ = 2 in x
+        // After the wildcard binding, x should be at index 1 (not 0)
+        let expr = parse_expr("let x = 1 in let _ = 2 in x").unwrap();
+        let resolved = resolve_expr(expr);
+
+        match resolved {
+            Expr::Let { body: outer_body, .. } => {
+                match *outer_body {
+                    Expr::Let { body: inner_body, .. } => {
+                        // x is at index 1 (wildcard at 0, x at 1)
+                        assert!(matches!(*inner_body, Expr::Idx(1)),
+                            "Expected x at index 1 after wildcard binding, got {:?}", inner_body);
+                    }
+                    _ => panic!("Expected inner Let"),
+                }
+            }
+            _ => panic!("Expected outer Let"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_nested_wildcard_with_multiple_vars() {
+        // Tests the vline-like pattern:
+        // let a = 0 in let b = 1 in let _ = expr in a + b
+        // After wildcard, a should be at index 2, b should be at index 1
+        let expr = parse_expr("let a = 0 in let b = 1 in let _ = 2 in a + b").unwrap();
+        let resolved = resolve_expr(expr);
+
+        match resolved {
+            Expr::Let { body: body1, .. } => {
+                match *body1 {
+                    Expr::Let { body: body2, .. } => {
+                        match *body2 {
+                            Expr::Let { body: body3, .. } => {
+                                match *body3 {
+                                    Expr::BinOp(_, left, right) => {
+                                        // a is at index 2 (wildcard=0, b=1, a=2)
+                                        assert!(matches!(*left, Expr::Idx(2)),
+                                            "Expected a at index 2, got {:?}", left);
+                                        // b is at index 1
+                                        assert!(matches!(*right, Expr::Idx(1)),
+                                            "Expected b at index 1, got {:?}", right);
+                                    }
+                                    _ => panic!("Expected BinOp"),
+                                }
+                            }
+                            _ => panic!("Expected innermost Let"),
+                        }
+                    }
+                    _ => panic!("Expected middle Let"),
                 }
             }
             _ => panic!("Expected outer Let"),

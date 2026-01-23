@@ -3,10 +3,21 @@
 //! Emits MLIR text format using standard dialects:
 //! - `func` dialect for functions
 //! - `arith` dialect for arithmetic operations
-//! - `scf` dialect for control flow
-//! - Custom handling for closures
+//! - `cf` dialect for unstructured control flow
+//! - `tensor` dialect for array operations
+//! - `goth` dialect for Goth-specific operations
+//!
+//! This module provides two implementations:
+//! 1. Legacy implementation (MlirContext) - used by existing code
+//! 2. New implementation (MlirBuilder) - uses the modular dialect approach
+//!
+//! The new implementation is available via `emit_program_v2` and will
+//! eventually replace the legacy implementation.
 
 use crate::error::{MlirError, Result};
+use crate::context::TextMlirContext;
+use crate::builder::MlirBuilder;
+use crate::types::type_to_mlir_string;
 use goth_ast::types::{Type, PrimType};
 use goth_mir::mir::*;
 use std::collections::HashMap;
@@ -208,10 +219,62 @@ fn is_float_type(ty: &Type) -> bool {
     }
 }
 
+/// Check if type is boolean
+fn is_bool_type(ty: &Type) -> bool {
+    match ty {
+        Type::Prim(PrimType::Bool) => true,
+        Type::Var(name) => matches!(name.as_ref(), "B" | "Bool"),
+        _ => false,
+    }
+}
+
 /// Emit binary operation
 fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
               left: String, right: String, ty: &Type) -> Result<String> {
     let ssa = ctx.fresh_ssa();
+
+    // For Bool result type, handle logical ops and comparisons specially
+    if is_bool_type(ty) {
+        match op {
+            // Logical operations on Bool operands
+            goth_ast::op::BinOp::And => {
+                return Ok(format!("{}{} = arith.andi {}, {} : i1\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Or => {
+                return Ok(format!("{}{} = arith.ori {}, {} : i1\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            // Comparison operations - default to integer comparison
+            // (The operands are integers, result is Bool)
+            goth_ast::op::BinOp::Lt => {
+                return Ok(format!("{}{} = arith.cmpi slt, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Gt => {
+                return Ok(format!("{}{} = arith.cmpi sgt, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Leq => {
+                return Ok(format!("{}{} = arith.cmpi sle, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Geq => {
+                return Ok(format!("{}{} = arith.cmpi sge, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Eq => {
+                return Ok(format!("{}{} = arith.cmpi eq, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            goth_ast::op::BinOp::Neq => {
+                return Ok(format!("{}{} = arith.cmpi ne, {}, {} : i64\n",
+                    ctx.indent_str(), ssa, left, right));
+            }
+            _ => return Err(MlirError::UnsupportedOp(format!("Bool {:?}", op))),
+        }
+    }
+
     let mlir_ty = emit_type(ty)?;
 
     let op_name = if is_int_type(ty) {
@@ -246,8 +309,8 @@ fn emit_binop(ctx: &mut MlirContext, op: &goth_ast::op::BinOp,
     } else {
         return Err(MlirError::UnsupportedType(format!("{:?}", ty)));
     };
-    
-    Ok(format!("{}{} = {} {}, {} : {}\n", 
+
+    Ok(format!("{}{} = {} {}, {} : {}\n",
         ctx.indent_str(), ssa, op_name, left, right, mlir_ty))
 }
 
@@ -370,7 +433,7 @@ fn emit_stmt(ctx: &mut MlirContext, stmt: &Stmt, output: &mut String) -> Result<
             for elem in elems {
                 elem_ssas.push(emit_operand(ctx, elem, output)?);
             }
-            
+
             // Create tensor
             let code = format!("{}{} = tensor.from_elements {} : {}\n",
                 ctx.indent_str(), ssa,
@@ -378,7 +441,21 @@ fn emit_stmt(ctx: &mut MlirContext, stmt: &Stmt, output: &mut String) -> Result<
                 emit_type(&stmt.ty)?);
             (ssa, code)
         }
-        
+
+        Rhs::ArrayFill { size, value } => {
+            let ssa = ctx.fresh_ssa();
+            let size_ssa = emit_operand(ctx, size, output)?;
+            let value_ssa = emit_operand(ctx, value, output)?;
+
+            // Use linalg.fill or tensor.generate for filled arrays
+            // For now, use a comment placeholder
+            let code = format!("{}// {}: ArrayFill(size={}, value={})\n{}{} = tensor.splat {} : {}\n",
+                ctx.indent_str(), ssa, size_ssa, value_ssa,
+                ctx.indent_str(), ssa, value_ssa,
+                emit_type(&stmt.ty)?);
+            (ssa, code)
+        }
+
         Rhs::MakeClosure { func, captures } => {
             let ssa = ctx.fresh_ssa();
             // Closure creation - pack function pointer + environment
@@ -600,19 +677,38 @@ pub fn emit_function(func: &Function) -> Result<String> {
 /// Emit program
 pub fn emit_program(program: &Program) -> Result<String> {
     let mut output = String::new();
-    
+
     // Module header
     output.push_str("module {\n");
-    
+
     // Emit all functions
     for func in &program.functions {
         output.push_str(&emit_function(func)?);
         output.push_str("\n");
     }
-    
+
     output.push_str("}\n");
-    
+
     Ok(output)
+}
+
+/// Emit program using the new builder infrastructure
+///
+/// This is the new implementation that uses the modular dialect approach.
+/// It will eventually replace `emit_program` once fully tested.
+pub fn emit_program_v2(program: &Program) -> Result<String> {
+    let mut ctx = TextMlirContext::new();
+    let mut builder = MlirBuilder::new(&mut ctx);
+    builder.emit_program(program)?;
+    Ok(ctx.into_output())
+}
+
+/// Emit a single function using the new builder infrastructure
+pub fn emit_function_v2(func: &Function) -> Result<String> {
+    let mut ctx = TextMlirContext::new();
+    let mut builder = MlirBuilder::new(&mut ctx);
+    builder.emit_function(func)?;
+    Ok(ctx.into_output())
 }
 
 #[cfg(test)]

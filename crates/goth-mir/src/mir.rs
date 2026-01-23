@@ -91,7 +91,13 @@ pub enum Rhs {
     
     /// Create array from elements
     Array(Vec<Operand>),
-    
+
+    /// Create array filled with a value: [n]⊢v creates array of n copies of v
+    ArrayFill {
+        size: Operand,
+        value: Operand,
+    },
+
     /// Array indexing
     Index(Operand, Operand),
     

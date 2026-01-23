@@ -111,6 +111,9 @@ impl fmt::Display for Rhs {
                 }
                 write!(f, ")")
             }
+            Rhs::ArrayFill { size, value } => {
+                write!(f, "ArrayFill({}, {})", size, value)
+            }
             Rhs::Index(arr, idx) => {
                 write!(f, "Index({}, {})", arr, idx)
             }
