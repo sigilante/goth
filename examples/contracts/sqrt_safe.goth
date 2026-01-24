@@ -1,0 +1,12 @@
+# Safe square root with precondition
+# Input: x (must be non-negative)
+# Precondition: x >= 0
+# Output: sqrt(x)
+# De Bruijn: ₀ = x
+
+╭─ sqrtSafe : F64 → F64
+│  ⊢ ₀ >= 0.0
+╰─ √₀
+
+╭─ main : F64 → F64
+╰─ sqrtSafe ₀

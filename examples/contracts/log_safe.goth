@@ -1,0 +1,12 @@
+# Safe natural logarithm with precondition
+# Input: x (must be positive)
+# Precondition: x > 0
+# Output: ln(x)
+# De Bruijn: ₀ = x
+
+╭─ logSafe : F64 → F64
+│  ⊢ ₀ > 0.0
+╰─ ln ₀
+
+╭─ main : F64 → F64
+╰─ logSafe ₀

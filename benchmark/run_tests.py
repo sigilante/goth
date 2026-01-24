@@ -50,14 +50,29 @@ def find_goth_binary():
     return None
 
 def run_goth(goth_binary: str, file_path: str, args: list) -> tuple[Optional[str], Optional[str]]:
-    """Run goth with given file and arguments."""
-    cmd = [goth_binary, str(Path(__file__).parent.parent / file_path)] + [str(a) for a in args]
+    """Run goth with given file and arguments.
+
+    Returns (output, error) tuple. Detects errors even if exit code is 0
+    by checking for 'Error:' prefix in output.
+    """
+    # Use absolute path to avoid path doubling bug in CLI
+    abs_file_path = (Path(__file__).parent.parent / file_path).resolve()
+    cmd = [goth_binary, str(abs_file_path)] + [str(a) for a in args]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            return result.stdout.strip(), None
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+
+        # Check for error output (interpreter may return 0 even on errors)
+        # Errors can be in stdout or stderr depending on error type
+        if stdout.startswith("Error:") or stdout.startswith("Load error:"):
+            return None, stdout
+        elif stderr.startswith("Error:") or stderr.startswith("Load error:"):
+            return None, stderr
+        elif result.returncode != 0:
+            return None, stderr or f"Exit code {result.returncode}"
         else:
-            return None, result.stderr.strip() or f"Exit code {result.returncode}"
+            return stdout, None
     except subprocess.TimeoutExpired:
         return None, "Timeout"
     except Exception as e:
@@ -96,29 +111,58 @@ def compare_output(expected: Any, actual: str, reltol: float = None, abstol: flo
     return str(expected).strip() == actual.strip()
 
 def run_test_case(goth_binary: str, test: dict, case: dict, verbose: bool) -> TestResult:
-    """Run a single test case."""
+    """Run a single test case.
+
+    Supports expected-failure tests via 'expected_error' field:
+    - "precondition" - expects precondition violation
+    - "postcondition" - expects postcondition violation
+    - "type_error" - expects type error
+    - "runtime" - expects any runtime error
+    - Any string - expects error message to contain that string
+    """
     file_path = test["file"]
     inputs = case["input"]
-    expected = case["expected"]
+    expected = case.get("expected")
+    expected_error = case.get("expected_error")
     # Support both new names (reltol/abstol) and legacy (tolerance as abstol)
     reltol = case.get("reltol")
     abstol = case.get("abstol") or case.get("tolerance")
 
     actual, error = run_goth(goth_binary, file_path, inputs)
 
-    if error:
-        passed = False
+    if expected_error:
+        # Expected-failure test: we WANT an error
+        if error:
+            error_lower = error.lower()
+            if expected_error == "precondition":
+                passed = "precondition" in error_lower
+            elif expected_error == "postcondition":
+                passed = "postcondition" in error_lower
+            elif expected_error == "type_error":
+                passed = "type error" in error_lower
+            elif expected_error == "runtime":
+                passed = True  # Any error counts
+            else:
+                passed = expected_error.lower() in error_lower
+        else:
+            passed = False  # Expected error but got success
+        display_expected = f"error: {expected_error}"
     else:
-        passed = compare_output(expected, actual, reltol, abstol)
+        # Normal test: we want success
+        if error:
+            passed = False
+        else:
+            passed = compare_output(expected, actual, reltol, abstol)
+        display_expected = expected
 
     if verbose:
         status = "✓" if passed else "✗"
-        print(f"  {status} {test['name']}({', '.join(map(str, inputs))}) = {actual or error} (expected {expected})")
+        print(f"  {status} {test['name']}({', '.join(map(str, inputs))}) = {actual or error} (expected {display_expected})")
 
     return TestResult(
         name=f"{test['name']}({', '.join(map(str, inputs))})",
         passed=passed,
-        expected=expected,
+        expected=display_expected,
         actual=actual,
         error=error
     )

@@ -204,8 +204,11 @@ impl Loader {
 pub fn load_file(path: impl AsRef<Path>) -> LoadResult<Module> {
     let path = path.as_ref();
     let base_dir = path.parent().unwrap_or(Path::new("."));
+    let file_name = path.file_name()
+        .map(|n| Path::new(n))
+        .unwrap_or(path);
     let mut loader = Loader::new(base_dir);
-    loader.load_file(path)
+    loader.load_file(file_name)
 }
 
 /// Convenience function to load source with a base directory

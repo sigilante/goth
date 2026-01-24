@@ -1,0 +1,12 @@
+# Absolute value with postcondition
+# Input: x (any integer)
+# Postcondition: result >= 0
+# Output: |x|
+# De Bruijn: ₀ = x in body, ₀ = result in postcondition
+
+╭─ absPost : I64 → I64
+│  ⊨ ₀ >= 0
+╰─ if ₀ < 0 then 0 - ₀ else ₀
+
+╭─ main : I64 → I64
+╰─ absPost ₀
