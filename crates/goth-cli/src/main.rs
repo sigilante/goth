@@ -7,6 +7,8 @@
 
 use clap::Parser;
 use colored::Colorize;
+use goth_ast::ser::{to_json, to_json_compact, from_json, expr_to_json};
+use goth_ast::pretty;
 use goth_eval::prelude::*;
 use goth_parse::prelude::*;
 use goth_check::TypeChecker;
@@ -72,10 +74,57 @@ struct Args {
     /// Don't look for or execute main function (just load declarations)
     #[arg(long)]
     no_main: bool,
+
+    // ============ AST-First LLM Workflow ============
+
+    /// Output JSON AST instead of evaluating (for LLM consumption)
+    #[arg(long)]
+    to_json: bool,
+
+    /// Read JSON AST from file instead of Goth source (for LLM-generated code)
+    #[arg(long)]
+    from_json: Option<PathBuf>,
+
+    /// Render AST to Goth syntax (use with --from-json to see pretty output)
+    #[arg(long)]
+    render: bool,
+
+    /// Output compact JSON (no pretty-printing)
+    #[arg(long)]
+    compact: bool,
 }
 
 fn main() {
     let args = Args::parse();
+
+    // ============ AST-First LLM Workflow ============
+
+    // Handle --from-json: Read JSON AST, validate, optionally render/eval
+    if let Some(json_path) = args.from_json {
+        // When using --from-json, the `file` positional arg (if present) becomes the first program arg
+        let mut effective_args = args.program_args.clone();
+        if let Some(ref file) = args.file {
+            effective_args.insert(0, file.to_string_lossy().to_string());
+        }
+        run_from_json(&json_path, args.check, args.render, args.trace, &effective_args);
+        return;
+    }
+
+    // Handle --to-json with file: Parse Goth, emit JSON AST
+    if args.to_json {
+        if let Some(ref file) = args.file {
+            run_to_json_file(file, args.compact);
+            return;
+        } else if let Some(ref expr) = args.eval {
+            run_to_json_expr(expr, args.compact);
+            return;
+        } else {
+            eprintln!("{}: --to-json requires a file or -e expression", "Error".red().bold());
+            return;
+        }
+    }
+
+    // ============ Standard Workflow ============
 
     if let Some(expr) = args.eval {
         // Evaluate expression from command line
@@ -752,6 +801,125 @@ fn is_complete(input: &str) -> bool {
     }
     
     true
+}
+
+// ============ AST-First LLM Workflow Handlers ============
+
+/// Read JSON AST from file, validate, optionally render/eval
+fn run_from_json(path: &PathBuf, check: bool, render: bool, trace: bool, program_args: &[String]) {
+    // Read JSON file
+    let json_content = match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("{}: reading {}: {}", "Error".red().bold(), path.display(), e);
+            return;
+        }
+    };
+
+    // Parse JSON to Module
+    let module = match from_json(&json_content) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{}: invalid JSON AST: {}", "Error".red().bold(), e);
+            return;
+        }
+    };
+
+    println!("{}: parsed {} declaration(s)", "OK".green().bold(), module.decls.len());
+
+    // JSON AST may contain both Names (for globals) and Idx (for lambdas)
+    // Resolve any remaining Names to indices
+    let module = resolve_module(module);
+
+    // Type check if requested
+    if check {
+        let mut type_checker = TypeChecker::new();
+        match type_checker.check_module(&module) {
+            Ok(_bindings) => println!("{}: type check passed", "OK".green().bold()),
+            Err(e) => {
+                eprintln!("{}: {}", "Type error".red().bold(), e);
+                return;
+            }
+        }
+    }
+
+    // Render to Goth syntax if requested
+    if render {
+        println!();
+        println!("{}", "─".repeat(40).dimmed());
+        let output = pretty::print_module(&module);
+        println!("{}", output);
+        println!("{}", "─".repeat(40).dimmed());
+    } else {
+        // If not rendering, evaluate
+        run_module_with_main(&module, trace, program_args);
+    }
+}
+
+/// Parse Goth source file, emit JSON AST
+fn run_to_json_file(path: &PathBuf, compact: bool) {
+    // Load and parse the file
+    let module = match load_file(path) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("{}: {}", "Load error".red().bold(), e);
+            return;
+        }
+    };
+
+    // Serialize to JSON
+    let json = if compact {
+        match to_json_compact(&module) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("{}: {}", "JSON error".red().bold(), e);
+                return;
+            }
+        }
+    } else {
+        match to_json(&module) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("{}: {}", "JSON error".red().bold(), e);
+                return;
+            }
+        }
+    };
+
+    println!("{}", json);
+}
+
+/// Parse Goth expression, emit JSON AST
+fn run_to_json_expr(source: &str, compact: bool) {
+    // Parse expression
+    let expr = match parse_expr(source) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{}: {}", "Parse error".red().bold(), e);
+            return;
+        }
+    };
+
+    // Serialize to JSON
+    let json = if compact {
+        match serde_json::to_string(&expr) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("{}: {}", "JSON error".red().bold(), e);
+                return;
+            }
+        }
+    } else {
+        match expr_to_json(&expr) {
+            Ok(j) => j,
+            Err(e) => {
+                eprintln!("{}: {}", "JSON error".red().bold(), e);
+                return;
+            }
+        }
+    };
+
+    println!("{}", json);
 }
 
 fn print_banner() {

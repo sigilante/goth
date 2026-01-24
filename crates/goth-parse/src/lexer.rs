@@ -85,12 +85,15 @@ pub enum Token {
     Use,
 
     // ============ Function Box ============
+    // ASCII: /- for top, |_ for middle, _/ for bottom (like a box shape)
     #[token("╭─")]
     #[token("/-")]
     FnStart,
     #[token("│")]
+    #[token("|_")]
     FnMid,
     #[token("╰─")]
+    #[token("_/")]
     FnEnd,
 
     // ============ Delimiters ============
@@ -140,6 +143,7 @@ pub enum Token {
     #[token("%")]
     Percent,
     #[token("±")]
+    #[token("+-")]
     PlusMinus,
     #[token("√")]
     Sqrt,
@@ -292,8 +296,10 @@ pub enum Token {
 
     // ============ Effects ============
     #[token("□")]
+    #[token("pure")]
     Pure,
     #[token("◇")]
+    #[token("io")]
     Diamond,
 
     // ============ Booleans ============
@@ -810,5 +816,41 @@ mod tests {
     fn test_back_arrow_ascii() {
         let mut lex = Lexer::new("<-");
         assert_eq!(lex.next(), Some(Token::BackArrow));
+    }
+
+    #[test]
+    fn test_function_box_ascii() {
+        // Pure ASCII function definition: /- top, |_ middle, _/ bottom
+        let mut lex = Lexer::new("/- f : I64 -> I64\n|_ requires _0 > 0\n_/ _0 * 2");
+        assert_eq!(lex.next(), Some(Token::FnStart));
+        assert_eq!(lex.next(), Some(Token::Ident("f".into())));
+        assert_eq!(lex.next(), Some(Token::Colon));
+        assert_eq!(lex.next(), Some(Token::TyI64));
+        assert_eq!(lex.next(), Some(Token::Arrow));
+        assert_eq!(lex.next(), Some(Token::TyI64));
+        assert_eq!(lex.next(), Some(Token::FnMid));
+        assert_eq!(lex.next(), Some(Token::Ident("requires".into())));
+        assert_eq!(lex.next(), Some(Token::Index(0)));
+        assert_eq!(lex.next(), Some(Token::Gt));
+        assert_eq!(lex.next(), Some(Token::Int(0)));
+        assert_eq!(lex.next(), Some(Token::FnEnd));
+        assert_eq!(lex.next(), Some(Token::Index(0)));
+        assert_eq!(lex.next(), Some(Token::Star));
+        assert_eq!(lex.next(), Some(Token::Int(2)));
+    }
+
+    #[test]
+    fn test_plus_minus_ascii() {
+        let mut lex = Lexer::new("5.0 +- 0.1");
+        assert_eq!(lex.next(), Some(Token::Float(5.0)));
+        assert_eq!(lex.next(), Some(Token::PlusMinus));
+        assert_eq!(lex.next(), Some(Token::Float(0.1)));
+    }
+
+    #[test]
+    fn test_effect_markers_ascii() {
+        let mut lex = Lexer::new("pure io");
+        assert_eq!(lex.next(), Some(Token::Pure));
+        assert_eq!(lex.next(), Some(Token::Diamond));
     }
 }

@@ -1,0 +1,585 @@
+{
+  "name": "tsp_anneal",
+  "decls": [
+    {
+      "Fn": {
+        "name": "dist",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Prim": "I64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "Let": {
+            "pattern": {
+              "Var": "d"
+            },
+            "type_": null,
+            "value": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Gt",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                },
+                "then_": {
+                  "BinOp": [
+                    "Sub",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                },
+                "else_": {
+                  "BinOp": [
+                    "Sub",
+                    {
+                      "Idx": 0
+                    },
+                    {
+                      "Idx": 1
+                    }
+                  ]
+                }
+              }
+            },
+            "body": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Eq",
+                    {
+                      "Idx": 0
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Lit": {
+                    "Int": 0
+                  }
+                },
+                "else_": {
+                  "If": {
+                    "cond": {
+                      "BinOp": [
+                        "Or",
+                        {
+                          "BinOp": [
+                            "Eq",
+                            {
+                              "Idx": 0
+                            },
+                            {
+                              "Lit": {
+                                "Int": 1
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "BinOp": [
+                            "Eq",
+                            {
+                              "Idx": 0
+                            },
+                            {
+                              "Lit": {
+                                "Int": 3
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "then_": {
+                      "Lit": {
+                        "Int": 100
+                      }
+                    },
+                    "else_": {
+                      "Lit": {
+                        "Int": 141
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "tourLen",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Fn": [
+                    {
+                      "Prim": "I64"
+                    },
+                    {
+                      "Fn": [
+                        {
+                          "Prim": "I64"
+                        },
+                        {
+                          "Prim": "I64"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Add",
+            {
+              "BinOp": [
+                "Add",
+                {
+                  "BinOp": [
+                    "Add",
+                    {
+                      "App": [
+                        {
+                          "App": [
+                            {
+                              "Name": "dist"
+                            },
+                            {
+                              "Idx": 3
+                            }
+                          ]
+                        },
+                        {
+                          "Idx": 2
+                        }
+                      ]
+                    },
+                    {
+                      "App": [
+                        {
+                          "App": [
+                            {
+                              "Name": "dist"
+                            },
+                            {
+                              "Idx": 2
+                            }
+                          ]
+                        },
+                        {
+                          "Idx": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "Name": "dist"
+                        },
+                        {
+                          "Idx": 1
+                        }
+                      ]
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "App": [
+                {
+                  "App": [
+                    {
+                      "Name": "dist"
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                },
+                {
+                  "Idx": 3
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "lcg",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Mod",
+            {
+              "BinOp": [
+                "Add",
+                {
+                  "BinOp": [
+                    "Mul",
+                    {
+                      "Lit": {
+                        "Int": 1103515245
+                      }
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                },
+                {
+                  "Lit": {
+                    "Int": 12345
+                  }
+                }
+              ]
+            },
+            {
+              "Lit": {
+                "Int": 2147483648
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "optimize",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Fn": [
+                    {
+                      "Prim": "I64"
+                    },
+                    {
+                      "Prim": "I64"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 2
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Idx": 1
+            },
+            "else_": {
+              "App": [
+                {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "Name": "optimize"
+                        },
+                        {
+                          "BinOp": [
+                            "Sub",
+                            {
+                              "Idx": 2
+                            },
+                            {
+                              "Lit": {
+                                "Int": 1
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 1
+                        },
+                        {
+                          "BinOp": [
+                            "Mod",
+                            {
+                              "App": [
+                                {
+                                  "Name": "lcg"
+                                },
+                                {
+                                  "Idx": 0
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": {
+                                "Int": 3
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "lcg"
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Tuple": []
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "Let": {
+            "pattern": {
+              "Var": "optimal"
+            },
+            "type_": null,
+            "value": {
+              "App": [
+                {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "App": [
+                            {
+                              "Name": "tourLen"
+                            },
+                            {
+                              "Lit": {
+                                "Int": 0
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 2
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Lit": {
+                    "Int": 3
+                  }
+                }
+              ]
+            },
+            "body": {
+              "Let": {
+                "pattern": {
+                  "Var": "subopt"
+                },
+                "type_": null,
+                "value": {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "App": [
+                            {
+                              "App": [
+                                {
+                                  "Name": "tourLen"
+                                },
+                                {
+                                  "Lit": {
+                                    "Int": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": {
+                                "Int": 2
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 3
+                      }
+                    }
+                  ]
+                },
+                "body": {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "App": [
+                            {
+                              "Name": "optimize"
+                            },
+                            {
+                              "Lit": {
+                                "Int": 50
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": {
+                            "Int": 500
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 42
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

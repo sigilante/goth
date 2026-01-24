@@ -1,0 +1,22 @@
+# Prime generation via filtering
+# Usage: goth sieve.goth <n>
+# Example: goth sieve.goth 30
+#
+# Filter approach: check each number for primality
+
+# hasDivisor d n: check if n has divisor in [d, √n]
+# With 2-arg function: ₁ = d (first arg), ₀ = n (second arg)
+╭─ hasDivisor : I64 → I64 → Bool
+╰─ if ₁ × ₁ > ₀ then ⊥
+   else if (₀ % ₁) = 0 then ⊤
+   else hasDivisor (₁ + 1) ₀
+
+# isPrime n: true if n is prime
+╭─ isPrime : I64 → Bool
+╰─ if ₀ < 2 then ⊥
+   else ¬(hasDivisor 2 ₀)
+
+# main: filter range to get primes
+# Returns the list of primes (use len to get count)
+╭─ main : I64 → T
+╰─ (range 2 (₀ + 1)) ▸ isPrime

@@ -510,6 +510,7 @@ dependencies = [
  "goth-eval",
  "goth-parse",
  "rustyline",
+ "serde_json",
 ]
 
 [[package]]

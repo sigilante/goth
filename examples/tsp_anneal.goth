@@ -1,0 +1,36 @@
+# Simulated Annealing for Traveling Salesman Problem
+# Usage: goth tsp_anneal.goth
+#
+# Demonstrates the structure of simulated annealing optimization.
+# Uses a 4-city problem on unit square for simplicity.
+#
+# Cities: A=(0,0), B=(1,0), C=(1,1), D=(0,1)
+# Optimal tour: A→B→C→D→A with length 400 (×100 scale)
+
+# Distance lookup: adjacent=100, diagonal=141 (√2×100)
+╭─ dist : I64 → I64 → I64
+╰─ let d ← if ₁ > ₀ then ₁ - ₀ else ₀ - ₁ in
+   if ₀ = 0 then 0
+   else if ₀ = 1 ∨ ₀ = 3 then 100
+   else 141
+
+# Tour length for path a→b→c→d→a
+╭─ tourLen : I64 → I64 → I64 → I64 → I64
+╰─ dist ₃ ₂ + dist ₂ ₁ + dist ₁ ₀ + dist ₀ ₃
+
+# Linear congruential generator
+╭─ lcg : I64 → I64
+╰─ (1103515245 × ₀ + 12345) % 2147483648
+
+# Simple optimization: reduce cost by random amount each step
+# iters, cost, seed → final cost
+# ₂=iters, ₁=cost, ₀=seed
+╭─ optimize : I64 → I64 → I64 → I64
+╰─ if ₂ = 0 then ₁
+   else optimize (₂ - 1) (₁ - ((lcg ₀) % 3)) (lcg ₀)
+
+# Main: compute optimal tour then demonstrate optimization
+╭─ main : () → I64
+╰─ let optimal ← tourLen 0 1 2 3 in   # = 400
+   let subopt ← tourLen 0 2 1 3 in    # = 482 (crosses diagonally)
+   optimize 50 500 42

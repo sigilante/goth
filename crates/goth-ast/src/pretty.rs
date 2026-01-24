@@ -221,8 +221,6 @@ impl Pretty {
 
     /// Pretty print a type
     pub fn print_type(&mut self, ty: &Type) {
-        use crate::types::PrimType;
-        
         match ty {
             Type::Prim(p) => self.write(&format!("{:?}", p)),
             
@@ -356,9 +354,8 @@ impl Pretty {
             Expr::Name(name) => self.write(name),
             
             Expr::Idx(n) => {
-                self.write(if self.config.unicode { "₀₁₂₃₄₅₆₇₈₉" } else { "_" });
                 if self.config.unicode {
-                    // Convert to subscript
+                    // Convert index to subscript digits (e.g., 12 -> ₁₂)
                     for digit in n.to_string().chars() {
                         let subscript = match digit {
                             '0' => '₀', '1' => '₁', '2' => '₂', '3' => '₃', '4' => '₄',
@@ -368,6 +365,8 @@ impl Pretty {
                         self.output.push(subscript);
                     }
                 } else {
+                    // ASCII: _0, _1, _12, etc.
+                    self.write("_");
                     self.write(&n.to_string());
                 }
             }

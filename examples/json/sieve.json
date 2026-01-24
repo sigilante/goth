@@ -1,0 +1,234 @@
+{
+  "name": "sieve",
+  "decls": [
+    {
+      "Fn": {
+        "name": "hasDivisor",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Prim": "Bool"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Gt",
+                {
+                  "BinOp": [
+                    "Mul",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Idx": 1
+                    }
+                  ]
+                },
+                {
+                  "Idx": 0
+                }
+              ]
+            },
+            "then_": {
+              "Lit": "False"
+            },
+            "else_": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Eq",
+                    {
+                      "BinOp": [
+                        "Mod",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Idx": 1
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Lit": "True"
+                },
+                "else_": {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "Name": "hasDivisor"
+                        },
+                        {
+                          "BinOp": [
+                            "Add",
+                            {
+                              "Idx": 1
+                            },
+                            {
+                              "Lit": {
+                                "Int": 1
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "isPrime",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "Bool"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Lt",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 2
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Lit": "False"
+            },
+            "else_": {
+              "UnaryOp": [
+                "Not",
+                {
+                  "App": [
+                    {
+                      "App": [
+                        {
+                          "Name": "hasDivisor"
+                        },
+                        {
+                          "Lit": {
+                            "Int": 2
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Var": "T"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Filter",
+            {
+              "App": [
+                {
+                  "App": [
+                    {
+                      "Name": "range"
+                    },
+                    {
+                      "Lit": {
+                        "Int": 2
+                      }
+                    }
+                  ]
+                },
+                {
+                  "BinOp": [
+                    "Add",
+                    {
+                      "Idx": 0
+                    },
+                    {
+                      "Lit": {
+                        "Int": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Name": "isPrime"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
