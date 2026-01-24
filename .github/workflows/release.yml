@@ -5,6 +5,15 @@ on:
     branches: [ master, main ]
     tags:
       - 'v*'
+    # Skip builds for docs-only or examples-only changes
+    # The "latest" release will still point to the most recent binary
+    paths-ignore:
+      - 'docs/**'
+      - 'examples/**'
+      - 'benchmark/**'
+      - '*.md'
+      - '.gitignore'
+      - 'jupyter/**'
 
 env:
   CARGO_TERM_COLOR: always

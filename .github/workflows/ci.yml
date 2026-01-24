@@ -3,8 +3,21 @@ name: CI
 on:
   push:
     branches: [ master, main ]
+    # Skip CI for docs-only changes (no code to test)
+    paths-ignore:
+      - 'docs/**'
+      - 'benchmark/**'
+      - '*.md'
+      - '.gitignore'
+      - 'jupyter/**'
   pull_request:
     branches: [ master, main ]
+    paths-ignore:
+      - 'docs/**'
+      - 'benchmark/**'
+      - '*.md'
+      - '.gitignore'
+      - 'jupyter/**'
 
 env:
   CARGO_TERM_COLOR: always
