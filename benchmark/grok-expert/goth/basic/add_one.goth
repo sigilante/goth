@@ -1,0 +1,4 @@
+# Increment by one
+# Property: result = input + 1
+╭─ main : I64 → I64
+╰─ ₀ + 1

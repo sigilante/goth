@@ -49,15 +49,32 @@ def find_goth_binary():
             return str(candidate)
     return None
 
-def run_goth(goth_binary: str, file_path: str, args: list) -> tuple[Optional[str], Optional[str]]:
+def run_goth(goth_binary: str, file_path: str, args: list, json_ast: bool = False) -> tuple[Optional[str], Optional[str]]:
     """Run goth with given file and arguments.
 
     Returns (output, error) tuple. Detects errors even if exit code is 0
     by checking for 'Error:' prefix in output.
+
+    If json_ast is True, uses --from-json to read JSON AST files.
     """
     # Use absolute path to avoid path doubling bug in CLI
     abs_file_path = (Path(__file__).parent.parent / file_path).resolve()
-    cmd = [goth_binary, str(abs_file_path)] + [str(a) for a in args]
+    str_args = [str(a) for a in args]
+
+    # Check if any args look like flags (start with -)
+    # If so, add -- separator to prevent CLI from parsing them as options
+    needs_separator = any(str(a).startswith('-') for a in args)
+
+    if json_ast:
+        cmd = [goth_binary, "--from-json", str(abs_file_path)]
+        if needs_separator:
+            cmd.append("--")
+        cmd.extend(str_args)
+    else:
+        cmd = [goth_binary, str(abs_file_path)]
+        if needs_separator:
+            cmd.append("--")
+        cmd.extend(str_args)
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         stdout = result.stdout.strip()
@@ -72,6 +89,15 @@ def run_goth(goth_binary: str, file_path: str, args: list) -> tuple[Optional[str
         elif result.returncode != 0:
             return None, stderr or f"Exit code {result.returncode}"
         else:
+            # For JSON AST mode, strip the "OK: parsed N declaration(s)" prefix
+            if json_ast and stdout.startswith("OK:"):
+                lines = stdout.split('\n')
+                if len(lines) > 1:
+                    actual_output = '\n'.join(lines[1:]).strip()
+                    # Check if the actual output is an error
+                    if actual_output.startswith("Error:"):
+                        return None, actual_output
+                    stdout = actual_output
             return stdout, None
     except subprocess.TimeoutExpired:
         return None, "Timeout"
@@ -110,7 +136,7 @@ def compare_output(expected: Any, actual: str, reltol: float = None, abstol: flo
     # String comparison
     return str(expected).strip() == actual.strip()
 
-def run_test_case(goth_binary: str, test: dict, case: dict, verbose: bool) -> TestResult:
+def run_test_case(goth_binary: str, test: dict, case: dict, verbose: bool, json_ast: bool = False) -> TestResult:
     """Run a single test case.
 
     Supports expected-failure tests via 'expected_error' field:
@@ -128,7 +154,7 @@ def run_test_case(goth_binary: str, test: dict, case: dict, verbose: bool) -> Te
     reltol = case.get("reltol")
     abstol = case.get("abstol") or case.get("tolerance")
 
-    actual, error = run_goth(goth_binary, file_path, inputs)
+    actual, error = run_goth(goth_binary, file_path, inputs, json_ast=json_ast)
 
     if expected_error:
         # Expected-failure test: we WANT an error
@@ -173,6 +199,7 @@ def run_category(goth_binary: str, test_file: Path, verbose: bool) -> CategoryRe
         data = json.load(f)
 
     category = data["category"]
+    json_ast = data.get("json_ast", False)  # Support JSON AST mode
     result = CategoryResult(name=category)
 
     if verbose:
@@ -180,7 +207,7 @@ def run_category(goth_binary: str, test_file: Path, verbose: bool) -> CategoryRe
 
     for test in data["tests"]:
         for case in test["cases"]:
-            test_result = run_test_case(goth_binary, test, case, verbose)
+            test_result = run_test_case(goth_binary, test, case, verbose, json_ast=json_ast)
             result.results.append(test_result)
             if test_result.passed:
                 result.passed += 1

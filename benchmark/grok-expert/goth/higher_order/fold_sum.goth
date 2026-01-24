@@ -1,0 +1,4 @@
+# Sum via fold (using Σ)
+# Property: result = n(n+1)/2
+╭─ main : I64 → I64
+╰─ Σ (iota ₀ ↦ (λ→ ₀ + 1))

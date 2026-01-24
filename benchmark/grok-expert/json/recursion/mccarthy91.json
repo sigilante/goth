@@ -1,0 +1,82 @@
+{
+  "name": "mccarthy91",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Gt",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 100
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "BinOp": [
+                "Sub",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 10
+                  }
+                }
+              ]
+            },
+            "else_": {
+              "App": [
+                {
+                  "Name": "main"
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "BinOp": [
+                        "Add",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 11
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

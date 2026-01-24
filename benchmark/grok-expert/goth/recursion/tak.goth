@@ -1,0 +1,3 @@
+# Tak(x,y,z)
+╭─ main : I64 → I64 → I64 → I64
+╰─ if ₂ ≤ ₁ then ₀ else main (main ₂ (₁ - 1) ₀) (main ₁ (₀ - 1) ₂) (main ₀ (₂ - 1) ₁)

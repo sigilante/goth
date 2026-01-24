@@ -1,0 +1,4 @@
+# Nth prime (find by counting)
+╭─ main : I64 → I64
+╰─ let find_nth = λ n cnt p → if cnt = n then p else find_nth n (cnt + if is_prime (p+1) then 1 else 0) (p+1) in
+     find_nth ₀ 0 2

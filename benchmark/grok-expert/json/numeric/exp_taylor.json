@@ -1,0 +1,141 @@
+{
+  "name": "exp_taylor",
+  "decls": [
+    {
+      "Fn": {
+        "name": "taylor_term",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "F64"
+                },
+                {
+                  "Prim": "F64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Div",
+            {
+              "App": [
+                {
+                  "Name": "pow"
+                },
+                {
+                  "Idx": 1
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "float"
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "App": [
+                {
+                  "Name": "gamma"
+                },
+                {
+                  "BinOp": [
+                    "Add",
+                    {
+                      "App": [
+                        {
+                          "Name": "float"
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Float": 1.0
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "F64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "UnaryOp": [
+            "Sum",
+            {
+              "BinOp": [
+                "Map",
+                {
+                  "App": [
+                    {
+                      "Name": "iota"
+                    },
+                    {
+                      "Lit": {
+                        "Int": 20
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Lam": {
+                    "App": [
+                      {
+                        "Name": "taylor_term"
+                      },
+                      {
+                        "Idx": 0
+                      },
+                      {
+                        "Idx": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

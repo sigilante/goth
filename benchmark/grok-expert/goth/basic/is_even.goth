@@ -1,0 +1,3 @@
+# Even check
+╭─ main : I64 → Bool
+╰─ ₀ mod 2 = 0

@@ -1,0 +1,7 @@
+# Sqrt Newton-Raphson
+╭─ newton_step : F64 → F64 → F64
+╰─ ₀ - (₀ × ₀ - ₁) / (2.0 × ₀)
+
+╭─ main : F64 → F64
+╰─ let x0 = ₀ / 2.0 in
+     foldl newton_step x0 (iota 10)

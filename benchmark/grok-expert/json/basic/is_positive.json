@@ -1,0 +1,38 @@
+{
+  "name": "is_positive",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "Bool"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Gt",
+            {
+              "Idx": 0
+            },
+            {
+              "Lit": {
+                "Int": 0
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

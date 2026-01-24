@@ -1,0 +1,159 @@
+{
+  "name": "pi_leibniz",
+  "decls": [
+    {
+      "Fn": {
+        "name": "leibniz_term",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Div",
+            {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Eq",
+                    {
+                      "BinOp": [
+                        "Mod",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 2
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Lit": {
+                    "Float": 1.0
+                  }
+                },
+                "else_": {
+                  "Lit": {
+                    "Float": -1.0
+                  }
+                }
+              }
+            },
+            {
+              "BinOp": [
+                "Add",
+                {
+                  "BinOp": [
+                    "Mul",
+                    {
+                      "Lit": {
+                        "Float": 2.0
+                      }
+                    },
+                    {
+                      "App": [
+                        {
+                          "Name": "float"
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Lit": {
+                    "Float": 1.0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Mul",
+            {
+              "Lit": {
+                "Float": 4.0
+              }
+            },
+            {
+              "UnaryOp": [
+                "Sum",
+                {
+                  "BinOp": [
+                    "Map",
+                    {
+                      "App": [
+                        {
+                          "Name": "iota"
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Lam": {
+                        "App": [
+                          {
+                            "Name": "leibniz_term"
+                          },
+                          {
+                            "Idx": 0
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

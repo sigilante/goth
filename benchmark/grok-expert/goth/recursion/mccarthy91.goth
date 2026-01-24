@@ -1,0 +1,3 @@
+# McCarthy 91
+╭─ main : I64 → I64
+╰─ if ₀ > 100 then ₀ - 10 else main (main (₀ + 11))

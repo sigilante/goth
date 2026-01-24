@@ -1,0 +1,3 @@
+# Sudan F(n,x,y)
+╭─ main : I64 → I64 → I64 → I64
+╰─ if ₂ = 0 then ₁ + ₀ else if ₀ = 0 then ₁ else main (₂ - 1) (main ₂ ₁ (₀ - 1)) (main ₂ ₁ (₀ - 1) + ₀)

@@ -1,0 +1,110 @@
+{
+  "name": "any_negative",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "Bool"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Gt",
+            {
+              "App": [
+                {
+                  "Name": "len"
+                },
+                {
+                  "BinOp": [
+                    "Filter",
+                    {
+                      "BinOp": [
+                        "Map",
+                        {
+                          "App": [
+                            {
+                              "Name": "iota"
+                            },
+                            {
+                              "BinOp": [
+                                "Add",
+                                {
+                                  "BinOp": [
+                                    "Mul",
+                                    {
+                                      "Idx": 0
+                                    },
+                                    {
+                                      "Lit": {
+                                        "Int": 2
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Lit": {
+                                    "Int": 1
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "Lam": {
+                            "BinOp": [
+                              "Sub",
+                              {
+                                "Idx": 0
+                              },
+                              {
+                                "Idx": 0
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lam": {
+                        "BinOp": [
+                          "Lt",
+                          {
+                            "Idx": 0
+                          },
+                          {
+                            "Lit": {
+                              "Int": 0
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Lit": {
+                "Int": 0
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

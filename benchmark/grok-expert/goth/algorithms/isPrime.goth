@@ -1,0 +1,6 @@
+# Is prime
+# Precondition: n >= 2
+╭─ main : I64 → Bool
+╰─ let sqrt_n = ⌊ √ (float ₀) ⌋ in
+     if ₀ < 2 then ⊥ else
+     len (range 2 (sqrt_n + 1) ▸ (λ→ ₀ mod (₀) = 0)) = 0

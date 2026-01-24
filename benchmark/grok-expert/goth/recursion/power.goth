@@ -1,0 +1,4 @@
+# Power: b^e
+# Precondition: e >= 0
+╭─ main : I64 → I64 → I64
+╰─ if ₀ = 0 then 1 else ₁ × main ₁ (₀ - 1)

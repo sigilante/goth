@@ -1,0 +1,45 @@
+{
+  "name": "gamma_fact",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "F64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "App": [
+            {
+              "Name": "gamma"
+            },
+            {
+              "BinOp": [
+                "Add",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Float": 1.0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

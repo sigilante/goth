@@ -1,0 +1,7 @@
+# Binary search: find target in [1..n] (returns target if found, else ?; assumes present)
+╭─ bs : I64 → I64 → I64 → I64 → I64
+╰─ if ₁ > ₀ then -1 else let mid = (₁ + ₀) / 2 in
+     if mid = ₂ then mid else if mid < ₂ then bs (mid + 1) ₀ ₂ else bs ₁ (mid - 1) ₂
+
+╭─ main : I64 → I64 → I64
+╰─ bs 1 ₁ ₀

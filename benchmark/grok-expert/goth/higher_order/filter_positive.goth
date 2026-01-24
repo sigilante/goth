@@ -1,0 +1,5 @@
+# Keep positive (generate [1..n])
+# Precondition: n > 0
+# Postcondition: all elements > 0, len(result) = n
+╭─ main : I64 → [?]I64
+╰─ iota ₀ ↦ (λ→ ₀ + 1)

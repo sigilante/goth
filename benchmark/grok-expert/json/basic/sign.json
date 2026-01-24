@@ -1,0 +1,74 @@
+{
+  "name": "sign",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Lt",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Lit": {
+                "Int": -1
+              }
+            },
+            "else_": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Gt",
+                    {
+                      "Idx": 0
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Lit": {
+                    "Int": 1
+                  }
+                },
+                "else_": {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

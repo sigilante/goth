@@ -1,0 +1,4 @@
+# Identity function
+# Property: result = input
+╭─ main : I64 → I64
+╰─ ₀

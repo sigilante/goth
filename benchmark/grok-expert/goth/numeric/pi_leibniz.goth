@@ -1,0 +1,6 @@
+# Pi Leibniz: 4 * Σ (-1)^k / (2k+1) k=0 to n
+╭─ leibniz_term : I64 → F64
+╰─ (if ₀ mod 2 = 0 then 1.0 else -1.0) / (2.0 × (float ₀) + 1.0)
+
+╭─ main : I64 → F64
+╰─ 4.0 × Σ (iota ₀ ↦ (λ→ leibniz_term ₀))

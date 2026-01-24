@@ -1,0 +1,4 @@
+# Digit sum
+# Precondition: n >= 0
+╭─ main : I64 → I64
+╰─ if ₀ < 10 then ₀ else (₀ mod 10) + main (₀ / 10)

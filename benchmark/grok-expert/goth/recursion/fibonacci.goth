@@ -1,0 +1,5 @@
+# Fibonacci: Fib(n)
+# Precondition: n >= 0
+# Property: fib(n) = fib(n-1) + fib(n-2) for n > 1
+╭─ main : I64 → I64
+╰─ if ₀ ≤ 1 then ₀ else main (₀ - 1) + main (₀ - 2)

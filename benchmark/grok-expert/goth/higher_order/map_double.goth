@@ -1,0 +1,5 @@
+# Double list via map
+# Precondition: n > 0
+# Postcondition: len(result) = n, all elements even
+╭─ main : I64 → [?]I64
+╰─ (iota ₀ ↦ (λ→ ₀ + 1)) ↦ (λ→ ₀ × 2)

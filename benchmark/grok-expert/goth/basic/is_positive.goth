@@ -1,0 +1,3 @@
+# Positive check
+╭─ main : I64 → Bool
+╰─ ₀ > 0

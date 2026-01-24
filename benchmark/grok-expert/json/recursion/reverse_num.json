@@ -1,0 +1,138 @@
+{
+  "name": "reverse_num",
+  "decls": [
+    {
+      "Fn": {
+        "name": "rev",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Prim": "I64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 1
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Idx": 0
+            },
+            "else_": {
+              "App": [
+                {
+                  "Name": "rev"
+                },
+                {
+                  "BinOp": [
+                    "Div",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Lit": {
+                        "Int": 10
+                      }
+                    }
+                  ]
+                },
+                {
+                  "BinOp": [
+                    "Add",
+                    {
+                      "BinOp": [
+                        "Mul",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 10
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "BinOp": [
+                        "Mod",
+                        {
+                          "Idx": 1
+                        },
+                        {
+                          "Lit": {
+                            "Int": 10
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "App": [
+            {
+              "Name": "rev"
+            },
+            {
+              "Idx": 0
+            },
+            {
+              "Lit": {
+                "Int": 0
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

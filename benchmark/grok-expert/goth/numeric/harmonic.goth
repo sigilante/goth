@@ -1,0 +1,3 @@
+# Harmonic number H(n)
+╭─ main : I64 → F64
+╰─ Σ ((iota ₀ ↦ (λ→ ₀ + 1)) ↦ (λ→ 1.0 / (float ₀)))

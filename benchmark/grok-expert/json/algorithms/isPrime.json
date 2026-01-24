@@ -1,0 +1,143 @@
+{
+  "name": "isPrime",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "Bool"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "Let": {
+            "pattern": {
+              "Var": "sqrt_n"
+            },
+            "type_": null,
+            "value": {
+              "UnaryOp": [
+                "Floor",
+                {
+                  "UnaryOp": [
+                    "Sqrt",
+                    {
+                      "App": [
+                        {
+                          "Name": "float"
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "body": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Lt",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Lit": {
+                        "Int": 2
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Lit": "False"
+                },
+                "else_": {
+                  "BinOp": [
+                    "Eq",
+                    {
+                      "App": [
+                        {
+                          "Name": "len"
+                        },
+                        {
+                          "BinOp": [
+                            "Filter",
+                            {
+                              "App": [
+                                {
+                                  "Name": "range"
+                                },
+                                {
+                                  "Lit": {
+                                    "Int": 2
+                                  }
+                                },
+                                {
+                                  "BinOp": [
+                                    "Add",
+                                    {
+                                      "Idx": 0
+                                    },
+                                    {
+                                      "Lit": {
+                                        "Int": 1
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "Lam": {
+                                "BinOp": [
+                                  "Eq",
+                                  {
+                                    "BinOp": [
+                                      "Mod",
+                                      {
+                                        "Idx": 1
+                                      },
+                                      {
+                                        "Idx": 0
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Lit": {
+                                      "Int": 0
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+# LCM(a,b) = a*b / gcd(a,b)
+# Need gcd defined (assume as helper or inline)
+╭─ gcd : I64 → I64 → I64
+╰─ if ₀ = 0 then ₁ else gcd ₀ (₁ mod ₀)
+
+╭─ main : I64 → I64 → I64
+╰─ (₁ × ₀) / gcd ₁ ₀

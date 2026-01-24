@@ -1,0 +1,6 @@
+# Reverse number (with tail-recursive helper)
+╭─ rev : I64 → I64 → I64
+╰─ if ₁ = 0 then ₀ else rev (₁ / 10) (₀ × 10 + (₁ mod 10))
+
+╭─ main : I64 → I64
+╰─ rev ₀ 0

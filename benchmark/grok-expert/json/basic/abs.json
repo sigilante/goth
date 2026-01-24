@@ -1,0 +1,53 @@
+{
+  "name": "abs",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Lt",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "UnaryOp": [
+                "Neg",
+                {
+                  "Idx": 0
+                }
+              ]
+            },
+            "else_": {
+              "Idx": 0
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# Count primes <= n
+╭─ is_prime : I64 → Bool
+╰─ let sqrt_n = ⌊ √ (float ₀) ⌋ in
+     if ₀ < 2 then ⊥ else
+     len (range 2 (sqrt_n + 1) ▸ (λ→ ₀ mod (₀) = 0)) = 0
+
+╭─ main : I64 → I64
+╰─ len (range 2 (₀ + 1) ▸ (λ→ is_prime ₀))

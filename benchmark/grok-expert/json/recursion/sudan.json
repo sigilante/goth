@@ -1,0 +1,167 @@
+{
+  "name": "sudan",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Fn": [
+                    {
+                      "Prim": "I64"
+                    },
+                    {
+                      "Prim": "I64"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 2
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "BinOp": [
+                "Add",
+                {
+                  "Idx": 1
+                },
+                {
+                  "Idx": 0
+                }
+              ]
+            },
+            "else_": {
+              "If": {
+                "cond": {
+                  "BinOp": [
+                    "Eq",
+                    {
+                      "Idx": 0
+                    },
+                    {
+                      "Lit": {
+                        "Int": 0
+                      }
+                    }
+                  ]
+                },
+                "then_": {
+                  "Idx": 1
+                },
+                "else_": {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 2
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "App": [
+                        {
+                          "Name": "main"
+                        },
+                        {
+                          "Idx": 2
+                        },
+                        {
+                          "Idx": 1
+                        },
+                        {
+                          "BinOp": [
+                            "Sub",
+                            {
+                              "Idx": 0
+                            },
+                            {
+                              "Lit": {
+                                "Int": 1
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "BinOp": [
+                        "Add",
+                        {
+                          "App": [
+                            {
+                              "Name": "main"
+                            },
+                            {
+                              "Idx": 2
+                            },
+                            {
+                              "Idx": 1
+                            },
+                            {
+                              "BinOp": [
+                                "Sub",
+                                {
+                                  "Idx": 0
+                                },
+                                {
+                                  "Lit": {
+                                    "Int": 1
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "name": "power",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Prim": "I64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Lit": {
+                "Int": 1
+              }
+            },
+            "else_": {
+              "BinOp": [
+                "Mul",
+                {
+                  "Idx": 1
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

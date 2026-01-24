@@ -1,0 +1,65 @@
+{
+  "name": "compose",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "App": [
+            {
+              "BinOp": [
+                "Compose",
+                {
+                  "Lam": {
+                    "BinOp": [
+                      "Mul",
+                      {
+                        "Idx": 0
+                      },
+                      {
+                        "Idx": 0
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Lam": {
+                    "BinOp": [
+                      "Mul",
+                      {
+                        "Idx": 0
+                      },
+                      {
+                        "Lit": {
+                          "Int": 2
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Idx": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "name": "harmonic",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "UnaryOp": [
+            "Sum",
+            {
+              "BinOp": [
+                "Map",
+                {
+                  "BinOp": [
+                    "Map",
+                    {
+                      "App": [
+                        {
+                          "Name": "iota"
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Lam": {
+                        "BinOp": [
+                          "Add",
+                          {
+                            "Idx": 0
+                          },
+                          {
+                            "Lit": {
+                              "Int": 1
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Lam": {
+                    "BinOp": [
+                      "Div",
+                      {
+                        "Lit": {
+                          "Float": 1.0
+                        }
+                      },
+                      {
+                        "App": [
+                          {
+                            "Name": "float"
+                          },
+                          {
+                            "Idx": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

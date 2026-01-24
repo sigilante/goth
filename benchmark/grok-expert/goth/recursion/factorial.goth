@@ -1,0 +1,6 @@
+# Factorial: n!
+# Precondition: n >= 0
+# Postcondition: result >= 1
+# Property: factorial(n) = n * factorial(n-1) for n > 0
+╭─ main : I64 → I64
+╰─ if ₀ ≤ 1 then 1 else ₀ × main (₀ - 1)

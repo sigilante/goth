@@ -1,0 +1,3 @@
+# Any negative in [-n .. n]
+╭─ main : I64 → Bool
+╰─ len (iota (₀ × 2 + 1) ↦ (λ→ ₀ - ₀)) ▸ (λ→ ₀ < 0) > 0

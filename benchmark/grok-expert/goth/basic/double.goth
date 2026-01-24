@@ -1,0 +1,4 @@
+# Multiply by two
+# Property: result = 2 × input
+╭─ main : I64 → I64
+╰─ ₀ × 2

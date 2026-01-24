@@ -1,0 +1,4 @@
+# Product via fold (using Π)
+# Property: result = n!
+╭─ main : I64 → I64
+╰─ Π (iota ₀ ↦ (λ→ ₀ + 1))

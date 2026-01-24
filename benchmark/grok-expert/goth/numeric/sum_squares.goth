@@ -1,0 +1,4 @@
+# Sum of squares: Σ k²
+# Property: result = n(n+1)(2n+1)/6
+╭─ main : I64 → I64
+╰─ Σ ((iota ₀ ↦ (λ→ ₀ + 1)) ↦ (λ→ ₀ × ₀))

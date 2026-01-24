@@ -1,0 +1,143 @@
+{
+  "name": "sqrt_newton",
+  "decls": [
+    {
+      "Fn": {
+        "name": "newton_step",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "F64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "F64"
+                },
+                {
+                  "Prim": "F64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Sub",
+            {
+              "Idx": 0
+            },
+            {
+              "BinOp": [
+                "Div",
+                {
+                  "BinOp": [
+                    "Sub",
+                    {
+                      "BinOp": [
+                        "Mul",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Idx": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Idx": 1
+                    }
+                  ]
+                },
+                {
+                  "BinOp": [
+                    "Mul",
+                    {
+                      "Lit": {
+                        "Float": 2.0
+                      }
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "F64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "Let": {
+            "pattern": {
+              "Var": "x0"
+            },
+            "type_": null,
+            "value": {
+              "BinOp": [
+                "Div",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Float": 2.0
+                  }
+                }
+              ]
+            },
+            "body": {
+              "App": [
+                {
+                  "Name": "foldl"
+                },
+                {
+                  "Name": "newton_step"
+                },
+                {
+                  "Idx": 0
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "iota"
+                    },
+                    {
+                      "Lit": {
+                        "Int": 10
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

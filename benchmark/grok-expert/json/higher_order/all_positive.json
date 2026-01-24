@@ -1,0 +1,90 @@
+{
+  "name": "all_positive",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "Bool"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Eq",
+            {
+              "App": [
+                {
+                  "Name": "len"
+                },
+                {
+                  "BinOp": [
+                    "Filter",
+                    {
+                      "BinOp": [
+                        "Map",
+                        {
+                          "App": [
+                            {
+                              "Name": "iota"
+                            },
+                            {
+                              "Idx": 0
+                            }
+                          ]
+                        },
+                        {
+                          "Lam": {
+                            "BinOp": [
+                              "Add",
+                              {
+                                "Idx": 0
+                              },
+                              {
+                                "Lit": {
+                                  "Int": 1
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Lam": {
+                        "BinOp": [
+                          "Gt",
+                          {
+                            "Idx": 0
+                          },
+                          {
+                            "Lit": {
+                              "Int": 0
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Idx": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

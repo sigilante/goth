@@ -1,0 +1,90 @@
+{
+  "name": "fibonacci",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Leq",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 1
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Idx": 0
+            },
+            "else_": {
+              "BinOp": [
+                "Add",
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 2
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

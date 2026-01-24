@@ -1,0 +1,5 @@
+# Modpow: b^e mod m
+╭─ main : I64 → I64 → I64 → I64
+╰─ if ₀ = 0 then 1 mod ₂ else
+     let half = main ₁ (₀ / 2) ₂ in
+     if ₀ mod 2 = 0 then (half × half) mod ₂ else ((half × half) mod ₂ × ₁) mod ₂

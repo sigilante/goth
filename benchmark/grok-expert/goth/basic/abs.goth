@@ -1,0 +1,4 @@
+# Absolute value
+# Postcondition: result >= 0
+╭─ main : I64 → I64
+╰─ if ₀ < 0 then -₀ else ₀

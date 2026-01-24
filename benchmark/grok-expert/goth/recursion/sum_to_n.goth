@@ -1,0 +1,4 @@
+# Sum to n: Σ(1..n)
+# Property: result = n(n+1)/2
+╭─ main : I64 → I64
+╰─ if ₀ < 1 then 0 else ₀ + main (₀ - 1)

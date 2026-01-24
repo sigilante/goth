@@ -1,0 +1,4 @@
+# Square a number
+# Property: result = input × input
+╭─ main : I64 → I64
+╰─ ₀ × ₀

@@ -1,0 +1,6 @@
+# Exp Taylor: e^x ≈ Σ x^k / k! (k=0 to 20)
+╭─ taylor_term : I64 → F64 → F64 → F64
+╰─ (pow ₁ (float ₀)) / (Γ (float ₀ + 1.0))
+
+╭─ main : F64 → F64
+╰─ Σ (iota 20 ↦ (λ→ taylor_term ₀ ₁))

@@ -1,0 +1,73 @@
+{
+  "name": "gcd",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Prim": "I64"
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Idx": 1
+            },
+            "else_": {
+              "App": [
+                {
+                  "Name": "main"
+                },
+                {
+                  "Idx": 0
+                },
+                {
+                  "BinOp": [
+                    "Mod",
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

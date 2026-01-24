@@ -1,0 +1,35 @@
+{
+  "name": "gamma_half",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "F64"
+            },
+            {
+              "Prim": "F64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "App": [
+            {
+              "Name": "gamma"
+            },
+            {
+              "Idx": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

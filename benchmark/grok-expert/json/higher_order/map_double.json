@@ -1,0 +1,82 @@
+{
+  "name": "map_double",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Tensor": [
+                {
+                  "Prim": "I64"
+                },
+                [
+                  "?"
+                ]
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "BinOp": [
+            "Map",
+            {
+              "BinOp": [
+                "Map",
+                {
+                  "App": [
+                    {
+                      "Name": "iota"
+                    },
+                    {
+                      "Idx": 0
+                    }
+                  ]
+                },
+                {
+                  "Lam": {
+                    "BinOp": [
+                      "Add",
+                      {
+                        "Idx": 0
+                      },
+                      {
+                        "Lit": {
+                          "Int": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "Lam": {
+                "BinOp": [
+                  "Mul",
+                  {
+                    "Idx": 0
+                  },
+                  {
+                    "Lit": {
+                      "Int": 2
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

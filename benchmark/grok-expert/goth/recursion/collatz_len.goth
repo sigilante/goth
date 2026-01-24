@@ -1,0 +1,4 @@
+# Collatz length: steps to 1
+# Precondition: n > 0
+╭─ main : I64 → I64
+╰─ if ₀ = 1 then 0 else 1 + main (if ₀ mod 2 = 0 then ₀ / 2 else 3 × ₀ + 1)

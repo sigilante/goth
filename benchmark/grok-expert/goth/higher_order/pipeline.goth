@@ -1,0 +1,3 @@
+# Pipeline: sum squares of evens in [1..n]
+╭─ main : I64 → I64
+╰─ Σ (((iota ₀ ↦ (λ→ ₀ + 1)) ▸ (λ→ ₀ mod 2 = 0)) ↦ (λ→ ₀ × ₀))

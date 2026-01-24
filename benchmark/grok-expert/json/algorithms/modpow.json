@@ -1,0 +1,184 @@
+{
+  "name": "modpow",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Fn": [
+                {
+                  "Prim": "I64"
+                },
+                {
+                  "Fn": [
+                    {
+                      "Prim": "I64"
+                    },
+                    {
+                      "Prim": "I64"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 0
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "BinOp": [
+                "Mod",
+                {
+                  "Lit": {
+                    "Int": 1
+                  }
+                },
+                {
+                  "Idx": 2
+                }
+              ]
+            },
+            "else_": {
+              "Let": {
+                "pattern": {
+                  "Var": "half"
+                },
+                "type_": null,
+                "value": {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "Idx": 1
+                    },
+                    {
+                      "BinOp": [
+                        "Div",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 2
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Idx": 2
+                    }
+                  ]
+                },
+                "body": {
+                  "If": {
+                    "cond": {
+                      "BinOp": [
+                        "Eq",
+                        {
+                          "BinOp": [
+                            "Mod",
+                            {
+                              "Idx": 2
+                            },
+                            {
+                              "Lit": {
+                                "Int": 2
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "Lit": {
+                            "Int": 0
+                          }
+                        }
+                      ]
+                    },
+                    "then_": {
+                      "BinOp": [
+                        "Mod",
+                        {
+                          "BinOp": [
+                            "Mul",
+                            {
+                              "Idx": 0
+                            },
+                            {
+                              "Idx": 0
+                            }
+                          ]
+                        },
+                        {
+                          "Idx": 3
+                        }
+                      ]
+                    },
+                    "else_": {
+                      "BinOp": [
+                        "Mod",
+                        {
+                          "BinOp": [
+                            "Mul",
+                            {
+                              "BinOp": [
+                                "Mod",
+                                {
+                                  "BinOp": [
+                                    "Mul",
+                                    {
+                                      "Idx": 0
+                                    },
+                                    {
+                                      "Idx": 0
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Idx": 3
+                                }
+                              ]
+                            },
+                            {
+                              "Idx": 1
+                            }
+                          ]
+                        },
+                        {
+                          "Idx": 3
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

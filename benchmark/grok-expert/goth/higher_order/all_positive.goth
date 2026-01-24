@@ -1,0 +1,3 @@
+# All positive (true for [1..n])
+╭─ main : I64 → Bool
+╰─ len ((iota ₀ ↦ (λ→ ₀ + 1)) ▸ (λ→ ₀ > 0)) = ₀

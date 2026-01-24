@@ -1,0 +1,127 @@
+{
+  "name": "collatz_len",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Eq",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 1
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Lit": {
+                "Int": 0
+              }
+            },
+            "else_": {
+              "BinOp": [
+                "Add",
+                {
+                  "Lit": {
+                    "Int": 1
+                  }
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "If": {
+                        "cond": {
+                          "BinOp": [
+                            "Eq",
+                            {
+                              "BinOp": [
+                                "Mod",
+                                {
+                                  "Idx": 0
+                                },
+                                {
+                                  "Lit": {
+                                    "Int": 2
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": {
+                                "Int": 0
+                              }
+                            }
+                          ]
+                        },
+                        "then_": {
+                          "BinOp": [
+                            "Div",
+                            {
+                              "Idx": 0
+                            },
+                            {
+                              "Lit": {
+                                "Int": 2
+                              }
+                            }
+                          ]
+                        },
+                        "else_": {
+                          "BinOp": [
+                            "Add",
+                            {
+                              "BinOp": [
+                                "Mul",
+                                {
+                                  "Lit": {
+                                    "Int": 3
+                                  }
+                                },
+                                {
+                                  "Idx": 0
+                                }
+                              ]
+                            },
+                            {
+                              "Lit": {
+                                "Int": 1
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

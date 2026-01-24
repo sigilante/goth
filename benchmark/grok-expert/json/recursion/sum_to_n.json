@@ -1,0 +1,75 @@
+{
+  "name": "sum_to_n",
+  "decls": [
+    {
+      "Fn": {
+        "name": "main",
+        "type_params": [],
+        "signature": {
+          "Fn": [
+            {
+              "Prim": "I64"
+            },
+            {
+              "Prim": "I64"
+            }
+          ]
+        },
+        "effects": [],
+        "constraints": [],
+        "preconditions": [],
+        "postconditions": [],
+        "body": {
+          "If": {
+            "cond": {
+              "BinOp": [
+                "Lt",
+                {
+                  "Idx": 0
+                },
+                {
+                  "Lit": {
+                    "Int": 1
+                  }
+                }
+              ]
+            },
+            "then_": {
+              "Lit": {
+                "Int": 0
+              }
+            },
+            "else_": {
+              "BinOp": [
+                "Add",
+                {
+                  "Idx": 0
+                },
+                {
+                  "App": [
+                    {
+                      "Name": "main"
+                    },
+                    {
+                      "BinOp": [
+                        "Sub",
+                        {
+                          "Idx": 0
+                        },
+                        {
+                          "Lit": {
+                            "Int": 1
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
