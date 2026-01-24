@@ -386,6 +386,135 @@ The `±` operator creates uncertain values that track measurement error.
 4. **Use `Name` for recursion** - reference the function by name, not index
 5. **Validate structure** - use `goth --from-json file.json --check --render`
 
+## FAQ / Clarifications
+
+### 1. List/Array Construction
+
+**Static arrays:**
+```goth
+[1, 2, 3, 4, 5]           # Literal array
+```
+
+**Dynamic range generation:**
+```goth
+iota 5                    # → [0 1 2 3 4] (0 to n-1)
+⍳ 5                       # Same (APL-style)
+range 1 5                 # → [1 2 3 4] (start to end-1)
+```
+
+**Array type in JSON AST:**
+```json
+{"Array": [{"Prim": "I64"}]}   // Type: [n]I64
+```
+
+Arrays are tensors internally. No cons/nil - use `iota`/`range` with map/filter.
+
+### 2. Higher-Order Functions
+
+Built-in operators (not standalone functions):
+
+| Operation | Unicode | ASCII | Example |
+|-----------|---------|-------|---------|
+| Map | `↦` | `-:` | `[1,2,3] ↦ (λ→ ₀ × 2)` → `[2 4 6]` |
+| Filter | `▸` | `\|>_` | `[1,2,3,4,5] ▸ (λ→ ₀ > 2)` → `[3 4 5]` |
+| Sum | `Σ` | `+/` | `Σ [1,2,3,4,5]` → `15` |
+| Product | `Π` | `*/` | `Π [1,2,3,4,5]` → `120` |
+| Compose | `∘` | `.:` | `f ∘ g` (f after g) |
+| Bind | `⤇` | `=>>` | Monadic bind |
+
+**In JSON AST:**
+```json
+{"BinOp": ["Map", {"Array": [...]}, {"Lam": ...}]}
+{"BinOp": ["Filter", {"Array": [...]}, {"Lam": ...}]}
+```
+
+### 3. Input/Output
+
+**Array output:** Printed as `[1 2 3]` (space-separated, no commas)
+
+**Tuple output:** Printed as `⟨1, 2, 3⟩`
+
+**Uncertain output:** Printed as `10.5±0.3`
+
+**Main function inputs:** Always via command-line args, converted to the signature type. For array inputs, generate them internally from scalar args:
+```goth
+# To get [1..n], use:
+╭─ main : I64 → [?]I64
+╰─ iota ₀ ↦ (λ→ ₀ + 1)    # [1, 2, ..., n]
+```
+
+### 4. Benchmark File Format
+
+**Preferred:** Goth syntax (`.goth` files) for readability.
+
+**JSON AST:** Use for LLM reliability testing or programmatic generation.
+
+**Symbol preference:** Unicode preferred (`╭─`, `₀`, `λ`, `→`), but ASCII fallbacks work (`/-`, `_0`, `\`, `->`).
+
+### 5. Type System
+
+**Array types:**
+```json
+{"Tensor": [{"Prim": "I64"}, [5]]}     // [5]I64 - fixed size
+{"Tensor": [{"Prim": "F64"}, ["?"]]}   // [?]F64 - dynamic size
+```
+
+**Tuple types:**
+```json
+{"Tuple": [{"Prim": "I64"}, {"Prim": "Bool"}]}  // ⟨I64, Bool⟩
+```
+
+**Uncertain types:**
+```json
+{"Uncertain": [{"Prim": "F64"}, {"Prim": "F64"}]}  // F64 ± F64
+```
+
+**Polymorphic functions:** Use `type_params` and `Var` types:
+```json
+{
+  "type_params": [{"name": "A"}, {"name": "B"}],
+  "signature": {"Fn": [{"Var": "A"}, {"Var": "B"}]}
+}
+```
+
+### 6. Contracts
+
+**Optional** - add when mathematically meaningful.
+
+**Test violations:** Use `"expected_error": "precondition"` in test cases:
+```json
+{"input": [-1], "expected_error": "precondition"}
+```
+
+### 7. Built-in Operators
+
+**Math functions:** `√` (sqrt), `Γ` (gamma), `ln`, `exp`, `sin`, `cos`, `tan`, `abs`, `⌊` (floor), `⌈` (ceil), `log₁₀`, `log₂`
+
+**Array operations:** `len`, `Σ` (sum), `Π` (product), `↦` (map), `▸` (filter), `iota`, `range`
+
+**No bitwise ops** currently. Use arithmetic equivalents if needed.
+
+### 8. Execution Environment
+
+**Float tolerance:** Use `"tolerance": 0.001` or `"reltol": 1e-9` in test cases.
+
+**Recursion depth:** TCO supported for tail-recursive functions. Non-tail recursion limited to ~1000 depth. Use accumulator patterns for deep recursion:
+```goth
+# Tail-recursive (unlimited depth)
+╭─ sumAcc : I64 → I64 → I64
+╰─ if ₁ < 1 then ₀ else sumAcc (₁ - 1) (₀ + ₁)
+```
+
+### 9. Extending Benchmarks
+
+**Current gaps to consider:**
+- String manipulation (limited support currently)
+- Data structures (trees, graphs - would need ADTs)
+- More numeric algorithms (integration, differentiation)
+- Property-based contract testing
+
+**Stick to:** Pure functional algorithms that fit the current type system.
+
 ## Goth Syntax ↔ JSON
 
 | Goth Syntax | JSON AST |
