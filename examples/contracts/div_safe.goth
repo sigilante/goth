@@ -1,0 +1,12 @@
+# Safe division with precondition
+# Input: a b (divisor b must be non-zero)
+# Precondition: b != 0
+# Output: a / b
+# De Bruijn: ₁ = a, ₀ = b
+
+╭─ divSafe : I64 → I64 → I64
+│  ⊢ ₀ ≠ 0
+╰─ ₁ / ₀
+
+╭─ main : I64 → I64 → I64
+╰─ divSafe ₁ ₀

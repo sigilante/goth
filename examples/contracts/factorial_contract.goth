@@ -1,0 +1,14 @@
+# Factorial with pre/postconditions
+# Input: n (must be non-negative)
+# Precondition: n >= 0
+# Postcondition: result >= 1 (factorial is always positive)
+# Output: n!
+# De Bruijn: ₀ = n
+
+╭─ factContract : I64 → I64
+│  ⊢ ₀ >= 0
+│  ⊨ ₀ >= 1
+╰─ if ₀ < 2 then 1 else ₀ × factContract (₀ - 1)
+
+╭─ main : I64 → I64
+╰─ factContract ₀

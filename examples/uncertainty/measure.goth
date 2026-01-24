@@ -1,0 +1,10 @@
+# Create an uncertain measurement value
+# Input: value uncertainty
+# Output: value ± uncertainty
+# De Bruijn: ₁ = value, ₀ = uncertainty
+
+╭─ measure : F64 → F64 → (F64 ± F64)
+╰─ ₁ ± ₀
+
+╭─ main : F64 → F64 → (F64 ± F64)
+╰─ measure ₁ ₀

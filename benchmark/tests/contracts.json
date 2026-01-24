@@ -1,0 +1,64 @@
+{
+  "category": "contracts",
+  "description": "Precondition and postcondition enforcement tests",
+  "tests": [
+    {
+      "name": "sqrt_safe",
+      "file": "examples/contracts/sqrt_safe.goth",
+      "description": "Square root with non-negative precondition",
+      "cases": [
+        {"input": [4.0], "expected": 2.0},
+        {"input": [9.0], "expected": 3.0},
+        {"input": [0.0], "expected": 0.0},
+        {"input": [-1.0], "expected_error": "precondition"},
+        {"input": [-100.0], "expected_error": "precondition"}
+      ]
+    },
+    {
+      "name": "abs_post",
+      "file": "examples/contracts/abs_post.goth",
+      "description": "Absolute value with non-negative postcondition",
+      "cases": [
+        {"input": [5], "expected": 5},
+        {"input": [-5], "expected": 5},
+        {"input": [0], "expected": 0},
+        {"input": [-100], "expected": 100}
+      ]
+    },
+    {
+      "name": "div_safe",
+      "file": "examples/contracts/div_safe.goth",
+      "description": "Division with non-zero divisor precondition",
+      "cases": [
+        {"input": [10, 2], "expected": 5},
+        {"input": [100, 5], "expected": 20},
+        {"input": [7, 3], "expected": 2},
+        {"input": [10, 0], "expected_error": "precondition"},
+        {"input": [0, 0], "expected_error": "precondition"}
+      ]
+    },
+    {
+      "name": "log_safe",
+      "file": "examples/contracts/log_safe.goth",
+      "description": "Natural log with positive precondition",
+      "cases": [
+        {"input": [1.0], "expected": 0.0, "tolerance": 0.0001},
+        {"input": [2.718281828], "expected": 1.0, "tolerance": 0.0001},
+        {"input": [0.0], "expected_error": "precondition"},
+        {"input": [-1.0], "expected_error": "precondition"}
+      ]
+    },
+    {
+      "name": "factorial_contract",
+      "file": "examples/contracts/factorial_contract.goth",
+      "description": "Factorial with pre/postconditions",
+      "cases": [
+        {"input": [0], "expected": 1},
+        {"input": [5], "expected": 120},
+        {"input": [10], "expected": 3628800},
+        {"input": [-1], "expected_error": "precondition"},
+        {"input": [-5], "expected_error": "precondition"}
+      ]
+    }
+  ]
+}

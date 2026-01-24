@@ -296,6 +296,58 @@ See `examples/json/` for complete JSON AST examples:
 - `sieve.json` - Prime sieve using filter
 - `tsp_anneal.json` - Simulated annealing structure
 
+## Contracts (Pre/Postconditions)
+
+Goth supports runtime-checked contracts:
+
+### Preconditions (`⊢`)
+
+Conditions that must be true when a function is called:
+
+```goth
+# Square root requires non-negative input
+╭─ sqrtSafe : F64 → F64
+│  ⊢ ₀ >= 0.0
+╰─ √₀
+```
+
+### Postconditions (`⊨`)
+
+Conditions that must be true when a function returns. In postconditions, `₀` refers to the result:
+
+```goth
+# Absolute value guarantees non-negative result
+╭─ absPost : I64 → I64
+│  ⊨ ₀ >= 0
+╰─ if ₀ < 0 then 0 - ₀ else ₀
+```
+
+### Combined Contracts
+
+```goth
+# Factorial with both pre and post conditions
+╭─ factContract : I64 → I64
+│  ⊢ ₀ >= 0
+│  ⊨ ₀ >= 1
+╰─ if ₀ < 2 then 1 else ₀ × factContract (₀ - 1)
+```
+
+ASCII fallbacks: `|-` for `⊢`, `|=` for `⊨`
+
+## Uncertain Values (Error Propagation)
+
+Goth supports values with associated uncertainty:
+
+```goth
+# Create an uncertain measurement
+╭─ measure : F64 → F64 → (F64 ± F64)
+╰─ ₁ ± ₀
+
+# Usage: measure 10.5 0.3 → 10.5±0.3
+```
+
+The `±` operator creates uncertain values that track measurement error.
+
 ## Generation Tips for Claude
 
 1. **Start with the type signature** - this determines arity and index usage
