@@ -1,0 +1,4 @@
+# Gamma function for integers (factorial)
+╭─ main : Float → Float
+╰─ if ₀ < 1 then 1.0
+   else ₀ × main (₀ - 1.0)

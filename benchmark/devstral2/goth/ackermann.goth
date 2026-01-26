@@ -1,0 +1,5 @@
+# Ackermann function
+╭─ main : I64 → I64 → I64
+╰─ if ₀ == 0 then ₁ + 1
+   else if ₁ == 0 then main (₀ - 1) 1
+   else main (₀ - 1) (main ₀ (₁ - 1))

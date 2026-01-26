@@ -1,0 +1,5 @@
+# Modular exponentiation
+╭─ main : I64 → I64 → I64 → I64
+╰─ if ₁ == 0 then 1
+   else if ₁ % 2 == 0 then (main ₀ (₁ / 2) ₁) % ₁
+   else (₀ × main ₀ (₁ - 1) ₁) % ₁

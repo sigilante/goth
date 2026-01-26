@@ -1,0 +1,3 @@
+# Check if number is even
+╭─ main : I64 → Bool
+╰─ (₀ % 2) == 0
