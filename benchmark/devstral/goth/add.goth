@@ -1,0 +1,4 @@
+# Simple add function
+╭─ add : I64 × I64 → I64
+│  ⊢ ₀ >= 0 && ₁ >= 0
+╰─ ₀ + ₁

@@ -1,0 +1,4 @@
+# Safe divide with error handling
+╭─ safe_divide : I64 × I64 → ±I64
+│  ⊢ ₁ != 0
+╰─ try { ₀ ÷ ₁ } catch { ±None }

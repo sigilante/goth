@@ -1,0 +1,4 @@
+# TCO factorial
+╭─ tco_factorial : I64 → I64
+│  ⊢ ₀ >= 0
+╰─ let helper = fn(n, acc) -> if n == 0 then acc else helper(n - 1, n × acc); helper(₀, 1)
