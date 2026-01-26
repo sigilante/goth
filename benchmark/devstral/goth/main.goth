@@ -1,0 +1,4 @@
+# Main function example
+╭─ main : → I64
+│  ⊢ true
+╰─ let x = 5; factorial(x)

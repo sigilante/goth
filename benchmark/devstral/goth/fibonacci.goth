@@ -1,0 +1,4 @@
+# Fibonacci
+╭─ fibonacci : I64 → I64
+│  ⊢ ₀ >= 0
+╰─ if ₀ < 2 then ₀ else fibonacci(₀ - 1) + fibonacci(₀ - 2)

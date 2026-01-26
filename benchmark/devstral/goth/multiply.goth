@@ -1,0 +1,4 @@
+# Multiply (mixed JSON/Goth syntax - invalid)
+╭─ multiply : I64 × I64 → I64
+│  ⊢ true
+╰─ { "Idx": 1 } * { "Idx": 0 }

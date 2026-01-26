@@ -1,0 +1,4 @@
+# Square with postcondition
+╭─ square : I64 → I64
+│  ⊢ true
+╰─ let result = ₀ × ₀ in ⊨ result >= 0 && result == ₀ × ₀; result
