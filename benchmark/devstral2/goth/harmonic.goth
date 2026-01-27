@@ -1,0 +1,4 @@
+# Harmonic series
+╭─ main : I64 → Float
+╰─ if ₀ == 1 then 1.0
+   else 1.0 / float(₀) + main (₀ - 1)

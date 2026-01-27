@@ -1,0 +1,4 @@
+# Fold function
+╭─ main : (A → B → B) → B → [A] → B
+╰─ if ₂ == [] then ₁
+   else main ₀ (₀ ₁ (head ₂)) (tail ₂)

@@ -1,0 +1,4 @@
+# Factorial: n!
+╭─ main : I64 → I64
+╰─ if ₀ < 1 then 1
+   else ₀ × main (₀ - 1)

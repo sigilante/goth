@@ -1,0 +1,3 @@
+# Function composition
+╭─ main : (B → C) → (A → B) → A → C
+╰─ ₀ (₁ ₀)

@@ -1,0 +1,4 @@
+# Map function
+╭─ main : (I64 → I64) → [I64] → [I64]
+╰─ if ₁ == [] then []
+   else [₀ (head ₁)] ++ main ₀ (tail ₁)

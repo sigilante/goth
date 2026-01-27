@@ -1,0 +1,5 @@
+# Prime number check
+╭─ main : I64 → Bool
+╰─ if ₀ < 2 then false
+   else if ₀ == 2 then true
+   else not (exists (λ x. ₀ % x == 0) (range 2 (isqrt ₀ + 1)))

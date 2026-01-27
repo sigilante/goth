@@ -1,0 +1,4 @@
+# Fibonacci sequence
+╭─ main : I64 → I64
+╰─ if ₀ < 2 then ₀
+   else main (₀ - 1) + main (₀ - 2)
