@@ -146,7 +146,7 @@ A Goth module contains declarations:
 }
 ```
 
-Operators: `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Pow`, `Eq`, `Neq`, `Lt`, `Gt`, `Leq`, `Geq`, `And`, `Or`, `PlusMinus`
+Operators: `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Pow`, `Eq`, `Neq`, `Lt`, `Gt`, `Leq`, `Geq`, `And`, `Or`, `PlusMinus`, `Write`, `Read`, `Map`, `Filter`, `Compose`, `Bind`, `Concat`, `ZipWith`
 
 #### Unary Operations
 ```json
@@ -421,14 +421,43 @@ Built-in operators (not standalone functions):
 | Product | `Π` | `*/` | `Π [1,2,3,4,5]` → `120` |
 | Compose | `∘` | `.:` | `f ∘ g` (f after g) |
 | Bind | `⤇` | `=>>` | Monadic bind |
+| Write | `▷` | `\|>` | `"hello" ▷ stdout` or `"data" ▷ "/tmp/out.txt"` |
 
 **In JSON AST:**
 ```json
 {"BinOp": ["Map", {"Array": [...]}, {"Lam": ...}]}
 {"BinOp": ["Filter", {"Array": [...]}, {"Lam": ...}]}
+{"BinOp": ["Write", {"Lit": {"String": "hello"}}, {"Name": "stdout"}]}
+{"BinOp": ["Write", {"Lit": {"String": "data"}}, {"Lit": {"String": "/tmp/out.txt"}}]}
 ```
 
 ### 3. Input/Output
+
+**`print`** — prints any value followed by a newline, returns `()`:
+```goth
+print("Hello, world!")
+```
+
+**`▷` (write operator)** — writes to a stream or file, returns `()`. No newline is appended:
+```goth
+"hello" ▷ stdout      # write to stdout (no newline)
+"error" ▷ stderr      # write to stderr
+"data"  ▷ "/tmp/f.txt" # write to file
+```
+
+`stdout` and `stderr` are built-in stream constants. When the RHS of `▷` is a stream, the content is written to that stream. When it is a string, it is treated as a file path.
+
+**In JSON AST:**
+```json
+// print (function application)
+{"App": [{"Name": "print"}, {"Lit": {"String": "hello"}}]}
+
+// ▷ stdout (BinOp Write with stream)
+{"BinOp": ["Write", {"Lit": {"String": "hello"}}, {"Name": "stdout"}]}
+
+// ▷ file (BinOp Write with path)
+{"BinOp": ["Write", {"Lit": {"String": "data"}}, {"Lit": {"String": "/tmp/f.txt"}}]}
+```
 
 **Array output:** Printed as `[1 2 3]` (space-separated, no commas)
 

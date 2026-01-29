@@ -1172,10 +1172,47 @@ toBool(1)              # ⊤
 toChar(65)             # 'A'
 ```
 
-### I/O (Limited)
+### I/O
 
+**Print (with newline):**
 ```goth
 print("Hello, world!")
+# Prints: Hello, world!\n
+# Returns: ()
+```
+
+`print` appends a newline. It accepts any value.
+
+**Write to stdout (no newline):**
+```goth
+"hello" ▷ stdout
+# Prints: hello (no trailing newline)
+# Returns: ()
+```
+
+**Write to stderr:**
+```goth
+"error message" ▷ stderr
+# Prints to stderr: error message
+# Returns: ()
+```
+
+**Write to file:**
+```goth
+"file contents" ▷ "/tmp/output.txt"
+# Writes the string to the given file path
+# Returns: ()
+```
+
+**Unicode:** `▷`
+**ASCII:** `|>`
+
+`stdout` and `stderr` are built-in stream constants. The `▷` operator dispatches on the right-hand side: a stream value writes to that stream (without a newline), a string value writes to that file path.
+
+**Read from file:**
+```goth
+◁ "/tmp/input.txt"
+# Returns: file contents as String
 ```
 
 ---
