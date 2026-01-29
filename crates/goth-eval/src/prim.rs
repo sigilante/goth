@@ -8,15 +8,62 @@ use ordered_float::OrderedFloat;
 #[cfg(unix)]
 static mut ORIGINAL_TERMIOS: Option<libc::termios> = None;
 
+// ============ Uncertainty propagation helpers ============
+
+/// Extract (value, uncertainty) as f64 from an Uncertain value.
+fn uncertain_parts(v: &Value) -> Option<(f64, f64)> {
+    if let Value::Uncertain { value, uncertainty } = v {
+        Some((value.coerce_float()?, uncertainty.coerce_float()?))
+    } else {
+        None
+    }
+}
+
+/// Construct an Uncertain value from f64 parts (uncertainty is always non-negative).
+fn make_uncertain(val: f64, unc: f64) -> Value {
+    Value::Uncertain {
+        value: Box::new(Value::Float(OrderedFloat(val))),
+        uncertainty: Box::new(Value::Float(OrderedFloat(unc.abs()))),
+    }
+}
+
+/// Extract the value part of an Uncertain, or return the value itself.
+/// Used for value-equality comparisons that ignore uncertainty.
+fn uncertain_value(v: &Value) -> Value {
+    if let Value::Uncertain { value, .. } = v {
+        (**value).clone()
+    } else {
+        v.clone()
+    }
+}
+
+/// Additive propagation: δ = √(δa² + δb²)
+fn additive_unc(da: f64, db: f64) -> f64 {
+    (da * da + db * db).sqrt()
+}
+
+/// Multiplicative propagation for a*b: δ = |a*b| * √((δa/a)² + (δb/b)²)
+fn multiplicative_unc(a: f64, b: f64, da: f64, db: f64) -> f64 {
+    let result = a * b;
+    if result == 0.0 {
+        // Avoid division by zero: fall back to linear propagation
+        (b * da).hypot(a * db).abs()
+    } else {
+        let ra = if a != 0.0 { da / a } else { 0.0 };
+        let rb = if b != 0.0 { db / b } else { 0.0 };
+        result.abs() * (ra * ra + rb * rb).sqrt()
+    }
+}
+
 pub fn apply_binop(op: &goth_ast::op::BinOp, left: Value, right: Value) -> EvalResult<Value> {
     use goth_ast::op::BinOp::*;
     match op {
         Add => add(left, right), Sub => sub(left, right), Mul => mul(left, right),
         Div => div(left, right), Pow => pow(left, right), Mod => modulo(left, right),
         PlusMinus => Ok(Value::Uncertain { value: Box::new(left), uncertainty: Box::new(right) }),
-        Eq => Ok(Value::Bool(left.deep_eq(&right))),
+        Eq => Ok(Value::Bool(uncertain_value(&left).deep_eq(&uncertain_value(&right)))),
         StructEq => Ok(Value::Bool(left.deep_eq(&right))),
-        Neq => Ok(Value::Bool(!left.deep_eq(&right))),
+        Neq => Ok(Value::Bool(!uncertain_value(&left).deep_eq(&uncertain_value(&right)))),
         Lt => compare_lt(left, right), Gt => compare_gt(left, right),
         Leq => compare_leq(left, right), Geq => compare_geq(left, right),
         And => logical_and(left, right), Or => logical_or(left, right),
@@ -68,8 +115,8 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::Cos => unary_args(&args, cos), PrimFn::Tan => unary_args(&args, tan),
         PrimFn::Pow => binary_args(&args, pow), PrimFn::Floor => unary_args(&args, floor),
         PrimFn::Ceil => unary_args(&args, ceil), PrimFn::Round => unary_args(&args, round),
-        PrimFn::Eq => binary_args(&args, |a, b| Ok(Value::Bool(a.deep_eq(&b)))),
-        PrimFn::Neq => binary_args(&args, |a, b| Ok(Value::Bool(!a.deep_eq(&b)))),
+        PrimFn::Eq => binary_args(&args, |a, b| Ok(Value::Bool(uncertain_value(&a).deep_eq(&uncertain_value(&b))))),
+        PrimFn::Neq => binary_args(&args, |a, b| Ok(Value::Bool(!uncertain_value(&a).deep_eq(&uncertain_value(&b))))),
         PrimFn::Lt => binary_args(&args, compare_lt), PrimFn::Gt => binary_args(&args, compare_gt),
         PrimFn::Leq => binary_args(&args, compare_leq), PrimFn::Geq => binary_args(&args, compare_geq),
         PrimFn::And => binary_args(&args, logical_and), PrimFn::Or => binary_args(&args, logical_or),
@@ -251,6 +298,23 @@ fn binary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Val
 
 fn add(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
+        // Uncertain + Uncertain: additive propagation
+        (Value::Uncertain { .. }, Value::Uncertain { .. }) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a + b, additive_unc(da, db)))
+        }
+        // Uncertain + scalar / scalar + Uncertain: uncertainty passes through
+        (Value::Uncertain { .. }, _) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let b = right.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot add Uncertain and {}", right.type_name())))?;
+            Ok(make_uncertain(a + b, da))
+        }
+        (_, Value::Uncertain { .. }) => {
+            let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot add {} and Uncertain", left.type_name())))?;
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a + b, db))
+        }
         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 + b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 + b.0))),
@@ -268,6 +332,21 @@ fn add(left: Value, right: Value) -> EvalResult<Value> {
 
 fn sub(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
+        (Value::Uncertain { .. }, Value::Uncertain { .. }) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a - b, additive_unc(da, db)))
+        }
+        (Value::Uncertain { .. }, _) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let b = right.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot subtract {} from Uncertain", right.type_name())))?;
+            Ok(make_uncertain(a - b, da))
+        }
+        (_, Value::Uncertain { .. }) => {
+            let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot subtract Uncertain from {}", left.type_name())))?;
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a - b, db))
+        }
         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 - b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 - b.0))),
@@ -283,6 +362,21 @@ fn sub(left: Value, right: Value) -> EvalResult<Value> {
 
 fn mul(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
+        (Value::Uncertain { .. }, Value::Uncertain { .. }) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a * b, multiplicative_unc(a, b, da, db)))
+        }
+        (Value::Uncertain { .. }, _) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let b = right.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot multiply Uncertain and {}", right.type_name())))?;
+            Ok(make_uncertain(a * b, (da * b).abs()))
+        }
+        (_, Value::Uncertain { .. }) => {
+            let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot multiply {} and Uncertain", left.type_name())))?;
+            let (b, db) = uncertain_parts(&right).unwrap();
+            Ok(make_uncertain(a * b, (a * db).abs()))
+        }
         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 * b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 * b.0))),
@@ -300,6 +394,28 @@ fn mul(left: Value, right: Value) -> EvalResult<Value> {
 
 fn div(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
+        (Value::Uncertain { .. }, Value::Uncertain { .. }) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let (b, db) = uncertain_parts(&right).unwrap();
+            if b == 0.0 { return Err(EvalError::DivisionByZero); }
+            let result = a / b;
+            let ra = if a != 0.0 { da / a } else { 0.0 };
+            let rb = db / b;
+            Ok(make_uncertain(result, result.abs() * (ra * ra + rb * rb).sqrt()))
+        }
+        (Value::Uncertain { .. }, _) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let b = right.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot divide Uncertain by {}", right.type_name())))?;
+            if b == 0.0 { return Err(EvalError::DivisionByZero); }
+            Ok(make_uncertain(a / b, (da / b).abs()))
+        }
+        (_, Value::Uncertain { .. }) => {
+            let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot divide {} by Uncertain", left.type_name())))?;
+            let (b, db) = uncertain_parts(&right).unwrap();
+            if b == 0.0 { return Err(EvalError::DivisionByZero); }
+            let result = a / b;
+            Ok(make_uncertain(result, result.abs() * (db / b).abs()))
+        }
         (Value::Int(a), Value::Int(b)) => if *b == 0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Int(a / b)) },
         (Value::Float(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(a.0 / b.0))) },
         (Value::Int(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(*a as f64 / b.0))) },
@@ -319,6 +435,31 @@ fn modulo(left: Value, right: Value) -> EvalResult<Value> {
 
 fn pow(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
+        // (a ± δa) ^ (b ± δb): full general case
+        (Value::Uncertain { .. }, Value::Uncertain { .. }) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let (b, db) = uncertain_parts(&right).unwrap();
+            let result = a.powf(b);
+            let term_a = if a != 0.0 { b * da / a } else { 0.0 };
+            let term_b = if a > 0.0 { a.ln() * db } else { 0.0 };
+            Ok(make_uncertain(result, result.abs() * (term_a * term_a + term_b * term_b).sqrt()))
+        }
+        // (a ± δa) ^ n: δ = |a^n * n * δa / a|
+        (Value::Uncertain { .. }, _) => {
+            let (a, da) = uncertain_parts(&left).unwrap();
+            let b = right.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot raise Uncertain to power {}", right.type_name())))?;
+            let result = a.powf(b);
+            let unc = if a != 0.0 { (result * b * da / a).abs() } else { 0.0 };
+            Ok(make_uncertain(result, unc))
+        }
+        // a ^ (b ± δb): δ = |a^b * ln(a) * δb|
+        (_, Value::Uncertain { .. }) => {
+            let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot raise {} to uncertain power", left.type_name())))?;
+            let (b, db) = uncertain_parts(&right).unwrap();
+            let result = a.powf(b);
+            let unc = if a > 0.0 { (result * a.ln() * db).abs() } else { 0.0 };
+            Ok(make_uncertain(result, unc))
+        }
         (Value::Int(a), Value::Int(b)) => if *b >= 0 { Ok(Value::Int(a.pow(*b as u32))) } else { Ok(Value::Float(OrderedFloat((*a as f64).powi(*b as i32)))) },
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0.powf(b.0)))),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(OrderedFloat(a.0.powi(*b as i32)))),
@@ -329,6 +470,10 @@ fn pow(left: Value, right: Value) -> EvalResult<Value> {
 
 fn negate(value: Value) -> EvalResult<Value> {
     match value {
+        Value::Uncertain { .. } => {
+            let (a, da) = uncertain_parts(&value).unwrap();
+            Ok(make_uncertain(-a, da))
+        }
         Value::Int(n) => Ok(Value::Int(-n)),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(-f.0))),
         Value::Tensor(t) => Ok(Value::Tensor(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into()))))),
@@ -337,30 +482,140 @@ fn negate(value: Value) -> EvalResult<Value> {
 }
 
 fn abs(value: Value) -> EvalResult<Value> {
-    match value { Value::Int(n) => Ok(Value::Int(n.abs())), Value::Float(f) => Ok(Value::Float(OrderedFloat(f.0.abs()))), _ => Err(EvalError::type_error("numeric", &value)) }
+    match value {
+        Value::Uncertain { .. } => {
+            let (a, da) = uncertain_parts(&value).unwrap();
+            Ok(make_uncertain(a.abs(), da))
+        }
+        Value::Int(n) => Ok(Value::Int(n.abs())),
+        Value::Float(f) => Ok(Value::Float(OrderedFloat(f.0.abs()))),
+        _ => Err(EvalError::type_error("numeric", &value)),
+    }
 }
 
-fn exp(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.exp()))) }
-fn ln(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("ln requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.ln()))) } }
-fn log10(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log10 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log10()))) } }
-fn log2(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log2 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log2()))) } }
-fn sqrt(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < 0.0 { Err(EvalError::type_error_msg("sqrt requires non-negative argument")) } else { Ok(Value::Float(OrderedFloat(f.sqrt()))) } }
-fn sin(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sin()))) }
-fn cos(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cos()))) }
-fn tan(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tan()))) }
-fn asin(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("asin requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.asin()))) } }
-fn acos(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("acos requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.acos()))) } }
-fn atan(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.atan()))) }
-fn sinh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sinh()))) }
-fn cosh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cosh()))) }
-fn tanh(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tanh()))) }
-fn floor(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.floor() as i128)) }
-fn ceil(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.ceil() as i128)) }
-fn round(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.round() as i128)) }
-fn sign(value: Value) -> EvalResult<Value> { let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(if f > 0.0 { 1.0 } else if f < 0.0 { -1.0 } else { 0.0 }))) }
+fn exp(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { let r = a.exp(); return Ok(make_uncertain(r, r * da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.exp())))
+}
+fn ln(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a <= 0.0 { return Err(EvalError::type_error_msg("ln requires positive argument")); } return Ok(make_uncertain(a.ln(), da / a.abs())); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("ln requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.ln()))) }
+}
+fn log10(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a <= 0.0 { return Err(EvalError::type_error_msg("log10 requires positive argument")); } return Ok(make_uncertain(a.log10(), da / (a.abs() * std::f64::consts::LN_10))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log10 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log10()))) }
+}
+fn log2(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a <= 0.0 { return Err(EvalError::type_error_msg("log2 requires positive argument")); } return Ok(make_uncertain(a.log2(), da / (a.abs() * std::f64::consts::LN_2))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("log2 requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.log2()))) }
+}
+fn sqrt(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a < 0.0 { return Err(EvalError::type_error_msg("sqrt requires non-negative argument")); } let r = a.sqrt(); return Ok(make_uncertain(r, da / (2.0 * r))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < 0.0 { Err(EvalError::type_error_msg("sqrt requires non-negative argument")) } else { Ok(Value::Float(OrderedFloat(f.sqrt()))) }
+}
+fn sin(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.sin(), a.cos().abs() * da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sin())))
+}
+fn cos(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.cos(), a.sin().abs() * da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cos())))
+}
+fn tan(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { let c = a.cos(); return Ok(make_uncertain(a.tan(), da / (c * c))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tan())))
+}
+fn asin(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a < -1.0 || a > 1.0 { return Err(EvalError::type_error_msg("asin requires argument in [-1, 1]")); } return Ok(make_uncertain(a.asin(), da / (1.0 - a * a).sqrt())); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("asin requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.asin()))) }
+}
+fn acos(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { if a < -1.0 || a > 1.0 { return Err(EvalError::type_error_msg("acos requires argument in [-1, 1]")); } return Ok(make_uncertain(a.acos(), da / (1.0 - a * a).sqrt())); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < -1.0 || f > 1.0 { Err(EvalError::type_error_msg("acos requires argument in [-1, 1]")) } else { Ok(Value::Float(OrderedFloat(f.acos()))) }
+}
+fn atan(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.atan(), da / (1.0 + a * a))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.atan())))
+}
+fn sinh(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.sinh(), a.cosh() * da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sinh())))
+}
+fn cosh(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.cosh(), a.sinh().abs() * da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cosh())))
+}
+fn tanh(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { let c = a.cosh(); return Ok(make_uncertain(a.tanh(), da / (c * c))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.tanh())))
+}
+fn floor(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.floor(), da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.floor() as i128))
+}
+fn ceil(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.ceil(), da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.ceil() as i128))
+}
+fn round(value: Value) -> EvalResult<Value> {
+    if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.round(), da)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Int(f.round() as i128))
+}
+fn sign(value: Value) -> EvalResult<Value> {
+    // sign is exact: no uncertainty propagation
+    if let Some((a, _da)) = uncertain_parts(&value) { return Ok(Value::Float(OrderedFloat(if a > 0.0 { 1.0 } else if a < 0.0 { -1.0 } else { 0.0 }))); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(if f > 0.0 { 1.0 } else if f < 0.0 { -1.0 } else { 0.0 })))
+}
+
+// Digamma (ψ) function via finite differences for uncertainty propagation.
+fn digamma_approx(x: f64) -> f64 {
+    let h = 1e-7;
+    let gx = lanczos_gamma(x);
+    if gx.abs() < 1e-300 { return 0.0; }
+    (lanczos_gamma(x + h).ln() - lanczos_gamma(x - h).ln()) / (2.0 * h)
+}
+
+/// Raw Lanczos gamma computation (extracted so digamma can call it).
+fn lanczos_gamma(x: f64) -> f64 {
+    let g = 7.0_f64;
+    let c = [
+        0.99999999999980993,
+        676.5203681218851,
+        -1259.1392167224028,
+        771.32342877765313,
+        -176.61502916214059,
+        12.507343278686905,
+        -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7,
+    ];
+    if x < 0.5 {
+        let z = 1.0 - x;
+        let mut sum = c[0];
+        for i in 1..9 { sum += c[i] / (z + (i as f64) - 1.0); }
+        let t = z + g - 0.5;
+        let gamma_z = (2.0 * std::f64::consts::PI).sqrt() * t.powf(z - 0.5) * (-t).exp() * sum;
+        std::f64::consts::PI / ((std::f64::consts::PI * x).sin() * gamma_z)
+    } else {
+        let z = x - 1.0;
+        let mut sum = c[0];
+        for i in 1..9 { sum += c[i] / (z + (i as f64)); }
+        let t = z + g + 0.5;
+        (2.0 * std::f64::consts::PI).sqrt() * t.powf(z + 0.5) * (-t).exp() * sum
+    }
+}
 
 // Gamma function using Lanczos approximation
 fn gamma(value: Value) -> EvalResult<Value> {
+    // Uncertainty propagation: d/dx Γ(x) = Γ(x) * ψ(x)
+    if let Some((a, da)) = uncertain_parts(&value) {
+        if a <= 0.0 && a.fract() == 0.0 {
+            return Err(EvalError::type_error_msg("gamma undefined for non-positive integers"));
+        }
+        let gval = lanczos_gamma(a);
+        let unc = (gval * digamma_approx(a) * da).abs();
+        return Ok(make_uncertain(gval, unc));
+    }
     let x = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
     if x <= 0.0 && x.fract() == 0.0 {
         return Err(EvalError::type_error_msg("gamma undefined for non-positive integers"));

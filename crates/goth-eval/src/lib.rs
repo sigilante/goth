@@ -242,6 +242,452 @@ mod tests {
         }
     }
 
+    // ============ Uncertainty Propagation Tests ============
+
+    /// Helper: extract (value, uncertainty) from an Uncertain result
+    fn unc_parts(v: &Value) -> (f64, f64) {
+        match v {
+            Value::Uncertain { value, uncertainty } => {
+                (value.coerce_float().unwrap(), uncertainty.coerce_float().unwrap())
+            }
+            _ => panic!("Expected Uncertain, got {:?}", v),
+        }
+    }
+
+    /// Helper: make an uncertain expression (a ± da)
+    fn unc_expr(a: f64, da: f64) -> Expr {
+        Expr::binop(BinOp::PlusMinus, Expr::float(a), Expr::float(da))
+    }
+
+    /// Assert approximate equality within epsilon
+    fn assert_approx(actual: f64, expected: f64, eps: f64, msg: &str) {
+        assert!((actual - expected).abs() < eps,
+            "{}: expected {}, got {} (diff {})", msg, expected, actual, (actual - expected).abs());
+    }
+
+    #[test]
+    fn test_uncertain_add() {
+        // (5.0 ± 0.1) + (3.0 ± 0.2) → 8.0 ± √(0.01 + 0.04) = 8.0 ± 0.22360...
+        let expr = Expr::binop(BinOp::Add, unc_expr(5.0, 0.1), unc_expr(3.0, 0.2));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 8.0, 1e-10, "add value");
+        assert_approx(u, (0.01_f64 + 0.04).sqrt(), 1e-10, "add uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_sub() {
+        // (10.0 ± 0.3) - (4.0 ± 0.1) → 6.0 ± √(0.09 + 0.01) = 6.0 ± 0.31622...
+        let expr = Expr::binop(BinOp::Sub, unc_expr(10.0, 0.3), unc_expr(4.0, 0.1));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 6.0, 1e-10, "sub value");
+        assert_approx(u, (0.09_f64 + 0.01).sqrt(), 1e-10, "sub uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_mul() {
+        // (4.0 ± 0.1) × (3.0 ± 0.2) → 12.0 ± 12 * √((0.1/4)² + (0.2/3)²)
+        let expr = Expr::binop(BinOp::Mul, unc_expr(4.0, 0.1), unc_expr(3.0, 0.2));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        let expected_u = 12.0 * ((0.1/4.0_f64).powi(2) + (0.2/3.0_f64).powi(2)).sqrt();
+        assert_approx(v, 12.0, 1e-10, "mul value");
+        assert_approx(u, expected_u, 1e-10, "mul uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_div() {
+        // (10.0 ± 0.5) / (2.0 ± 0.1) → 5.0 ± 5 * √((0.5/10)² + (0.1/2)²)
+        let expr = Expr::binop(BinOp::Div, unc_expr(10.0, 0.5), unc_expr(2.0, 0.1));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        let expected_u = 5.0 * ((0.5/10.0_f64).powi(2) + (0.1/2.0_f64).powi(2)).sqrt();
+        assert_approx(v, 5.0, 1e-10, "div value");
+        assert_approx(u, expected_u, 1e-10, "div uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_scalar_add() {
+        // (5.0 ± 0.1) + 3.0 → 8.0 ± 0.1
+        let expr = Expr::binop(BinOp::Add, unc_expr(5.0, 0.1), Expr::float(3.0));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 8.0, 1e-10, "scalar add value");
+        assert_approx(u, 0.1, 1e-10, "scalar add uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_scalar_mul() {
+        // (5.0 ± 0.1) × 3.0 → 15.0 ± 0.3
+        let expr = Expr::binop(BinOp::Mul, unc_expr(5.0, 0.1), Expr::float(3.0));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 15.0, 1e-10, "scalar mul value");
+        assert_approx(u, 0.3, 1e-10, "scalar mul uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_neg() {
+        // -(5.0 ± 0.1) → -5.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Neg, Box::new(unc_expr(5.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, -5.0, 1e-10, "neg value");
+        assert_approx(u, 0.1, 1e-10, "neg uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_sqrt() {
+        // √(4.0 ± 0.1) → 2.0 ± 0.1/(2*2) = 2.0 ± 0.025
+        let expr = Expr::UnaryOp(UnaryOp::Sqrt, Box::new(unc_expr(4.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 2.0, 1e-10, "sqrt value");
+        assert_approx(u, 0.025, 1e-10, "sqrt uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_sin() {
+        // sin(0.0 ± 0.1) → 0.0 ± |cos(0)| * 0.1 = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Sin, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "sin value");
+        assert_approx(u, 0.1, 1e-10, "sin uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_cos() {
+        // cos(0.0 ± 0.1) → 1.0 ± |sin(0)| * 0.1 = 1.0 ± 0.0
+        let expr = Expr::UnaryOp(UnaryOp::Cos, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 1.0, 1e-10, "cos value");
+        assert_approx(u, 0.0, 1e-10, "cos uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_exp() {
+        // exp(1.0 ± 0.1) → e ± e * 0.1
+        let e_val = std::f64::consts::E;
+        let expr = Expr::UnaryOp(UnaryOp::Exp, Box::new(unc_expr(1.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, e_val, 1e-10, "exp value");
+        assert_approx(u, e_val * 0.1, 1e-10, "exp uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_ln() {
+        // ln(1.0 ± 0.1) → 0.0 ± 0.1/|1.0| = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Ln, Box::new(unc_expr(1.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "ln value");
+        assert_approx(u, 0.1, 1e-10, "ln uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_pow() {
+        // (2.0 ± 0.1) ^ 3 → 8.0 ± |8 * 3 * 0.1 / 2| = 8.0 ± 1.2
+        let expr = Expr::binop(BinOp::Pow, unc_expr(2.0, 0.1), Expr::int(3));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 8.0, 1e-10, "pow value");
+        assert_approx(u, 1.2, 1e-10, "pow uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_chained() {
+        // (2.0 ± 0.1) × (3.0 ± 0.2) + (1.0 ± 0.05)
+        // First: 6.0 ± 6*√((0.1/2)² + (0.2/3)²) = 6.0 ± 0.5
+        // Then: 7.0 ± √(0.5² + 0.05²)
+        let mul_expr = Expr::binop(BinOp::Mul, unc_expr(2.0, 0.1), unc_expr(3.0, 0.2));
+        let expr = Expr::binop(BinOp::Add, mul_expr, unc_expr(1.0, 0.05));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 7.0, 1e-10, "chained value");
+        // intermediate uncertainty from mul
+        let mul_u = 6.0 * ((0.1/2.0_f64).powi(2) + (0.2/3.0_f64).powi(2)).sqrt();
+        let expected_u = (mul_u.powi(2) + 0.05_f64.powi(2)).sqrt();
+        assert_approx(u, expected_u, 1e-10, "chained uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_comparison() {
+        // (5.0 ± 0.1) = (5.0 ± 0.2) → true (compares values, ignores uncertainty)
+        let expr = Expr::binop(BinOp::Eq, unc_expr(5.0, 0.1), unc_expr(5.0, 0.2));
+        assert_eq!(eval(&expr).unwrap(), Value::Bool(true));
+    }
+
+    #[test]
+    fn test_uncertain_abs() {
+        // abs(-3.0 ± 0.2) → 3.0 ± 0.2
+        let expr = Expr::UnaryOp(UnaryOp::Abs, Box::new(unc_expr(-3.0, 0.2)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 3.0, 1e-10, "abs value");
+        assert_approx(u, 0.2, 1e-10, "abs uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_atan() {
+        // atan(1.0 ± 0.1) → π/4 ± 0.1/(1+1²) = π/4 ± 0.05
+        let expr = Expr::UnaryOp(UnaryOp::Atan, Box::new(unc_expr(1.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, std::f64::consts::FRAC_PI_4, 1e-10, "atan value");
+        assert_approx(u, 0.05, 1e-10, "atan uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_log10() {
+        // log10(100.0 ± 1.0) → 2.0 ± 1.0 / (100 * ln10)
+        let expr = Expr::UnaryOp(UnaryOp::Log10, Box::new(unc_expr(100.0, 1.0)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 2.0, 1e-10, "log10 value");
+        assert_approx(u, 1.0 / (100.0 * std::f64::consts::LN_10), 1e-10, "log10 uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_tanh() {
+        // tanh(0.0 ± 0.1) → 0.0 ± sech²(0) * 0.1 = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Tanh, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "tanh value");
+        assert_approx(u, 0.1, 1e-10, "tanh uncertainty");  // sech²(0) = 1
+    }
+
+    #[test]
+    fn test_uncertain_gamma() {
+        // Γ(3.0 ± 0.1) → 2.0 ± |Γ(3) * ψ(3) * 0.1|
+        // ψ(3) = 1 - γ + 1/1 + 1/2 = 1 + 1/2 - γ_euler ≈ 0.9227...
+        // but we just check the value is 2.0 and uncertainty is reasonable
+        let expr = Expr::UnaryOp(UnaryOp::Gamma, Box::new(unc_expr(3.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 2.0, 1e-6, "gamma value");
+        // ψ(3) ≈ 0.9227..., so uncertainty ≈ 2.0 * 0.9227 * 0.1 ≈ 0.1845
+        assert!(u > 0.15 && u < 0.25, "gamma uncertainty {} not in expected range", u);
+    }
+
+    #[test]
+    fn test_uncertain_log2() {
+        // log2(8.0 ± 0.1) → 3.0 ± 0.1 / (8 * ln2)
+        let expr = Expr::UnaryOp(UnaryOp::Log2, Box::new(unc_expr(8.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 3.0, 1e-10, "log2 value");
+        assert_approx(u, 0.1 / (8.0 * std::f64::consts::LN_2), 1e-10, "log2 uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_sinh() {
+        // sinh(0.0 ± 0.1) → 0.0 ± cosh(0) * 0.1 = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Sinh, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "sinh value");
+        assert_approx(u, 0.1, 1e-10, "sinh uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_cosh() {
+        // cosh(0.0 ± 0.1) → 1.0 ± |sinh(0)| * 0.1 = 1.0 ± 0.0
+        let expr = Expr::UnaryOp(UnaryOp::Cosh, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 1.0, 1e-10, "cosh value");
+        assert_approx(u, 0.0, 1e-10, "cosh uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_asin() {
+        // asin(0.0 ± 0.1) → 0.0 ± 0.1/√(1-0) = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Asin, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "asin value");
+        assert_approx(u, 0.1, 1e-10, "asin uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_acos() {
+        // acos(0.0 ± 0.1) → π/2 ± 0.1/√(1-0) = π/2 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Acos, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, std::f64::consts::FRAC_PI_2, 1e-10, "acos value");
+        assert_approx(u, 0.1, 1e-10, "acos uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_tan() {
+        // tan(0.0 ± 0.1) → 0.0 ± sec²(0)*0.1 = 0.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Tan, Box::new(unc_expr(0.0, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 0.0, 1e-10, "tan value");
+        assert_approx(u, 0.1, 1e-10, "tan uncertainty");
+    }
+
+    #[test]
+    fn test_uncertain_floor_ceil_round() {
+        // floor(3.7 ± 0.1) → 3.0 ± 0.1 (uncertainty passes through)
+        let expr = Expr::UnaryOp(UnaryOp::Floor, Box::new(unc_expr(3.7, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 3.0, 1e-10, "floor value");
+        assert_approx(u, 0.1, 1e-10, "floor uncertainty");
+
+        // ceil(3.2 ± 0.1) → 4.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Ceil, Box::new(unc_expr(3.2, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 4.0, 1e-10, "ceil value");
+        assert_approx(u, 0.1, 1e-10, "ceil uncertainty");
+
+        // round(3.5 ± 0.1) → 4.0 ± 0.1
+        let expr = Expr::UnaryOp(UnaryOp::Round, Box::new(unc_expr(3.5, 0.1)));
+        let (v, u) = unc_parts(&eval(&expr).unwrap());
+        assert_approx(v, 4.0, 1e-10, "round value");
+        assert_approx(u, 0.1, 1e-10, "round uncertainty");
+    }
+
+    // ============ Math Library Tests (non-uncertain) ============
+
+    #[test]
+    fn test_math_exp_ln_roundtrip() {
+        // ln(exp(2.0)) ≈ 2.0
+        let expr = Expr::UnaryOp(UnaryOp::Ln, Box::new(
+            Expr::UnaryOp(UnaryOp::Exp, Box::new(Expr::float(2.0)))));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 2.0, 1e-10, "exp/ln roundtrip");
+    }
+
+    #[test]
+    fn test_math_log2_powers() {
+        // log2(1024) = 10
+        let expr = Expr::UnaryOp(UnaryOp::Log2, Box::new(Expr::float(1024.0)));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 10.0, 1e-10, "log2(1024)");
+    }
+
+    #[test]
+    fn test_math_log10_powers() {
+        // log10(1000) = 3
+        let expr = Expr::UnaryOp(UnaryOp::Log10, Box::new(Expr::float(1000.0)));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 3.0, 1e-10, "log10(1000)");
+    }
+
+    #[test]
+    fn test_math_sqrt_perfect() {
+        // √144 = 12
+        let expr = Expr::UnaryOp(UnaryOp::Sqrt, Box::new(Expr::float(144.0)));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 12.0, 1e-10, "sqrt(144)");
+    }
+
+    #[test]
+    fn test_math_trig_identity_sin2_cos2() {
+        // sin²(x) + cos²(x) = 1 for x = 1.23
+        let x = 1.23;
+        let sin_expr = Expr::UnaryOp(UnaryOp::Sin, Box::new(Expr::float(x)));
+        let cos_expr = Expr::UnaryOp(UnaryOp::Cos, Box::new(Expr::float(x)));
+        let sv = eval(&sin_expr).unwrap().coerce_float().unwrap();
+        let cv = eval(&cos_expr).unwrap().coerce_float().unwrap();
+        assert_approx(sv * sv + cv * cv, 1.0, 1e-10, "sin²+cos²=1");
+    }
+
+    #[test]
+    fn test_math_trig_tan_ratio() {
+        // tan(x) = sin(x)/cos(x) for x = 0.7
+        let x = 0.7;
+        let tan_v = eval(&Expr::UnaryOp(UnaryOp::Tan, Box::new(Expr::float(x)))).unwrap().coerce_float().unwrap();
+        let sin_v = eval(&Expr::UnaryOp(UnaryOp::Sin, Box::new(Expr::float(x)))).unwrap().coerce_float().unwrap();
+        let cos_v = eval(&Expr::UnaryOp(UnaryOp::Cos, Box::new(Expr::float(x)))).unwrap().coerce_float().unwrap();
+        assert_approx(tan_v, sin_v / cos_v, 1e-10, "tan=sin/cos");
+    }
+
+    #[test]
+    fn test_math_inverse_trig() {
+        // asin(sin(0.5)) ≈ 0.5, acos(cos(0.5)) ≈ 0.5, atan(tan(0.5)) ≈ 0.5
+        let x = 0.5;
+        let v = eval(&Expr::UnaryOp(UnaryOp::Asin, Box::new(
+            Expr::UnaryOp(UnaryOp::Sin, Box::new(Expr::float(x)))))).unwrap().coerce_float().unwrap();
+        assert_approx(v, x, 1e-10, "asin(sin(x))");
+
+        let v = eval(&Expr::UnaryOp(UnaryOp::Acos, Box::new(
+            Expr::UnaryOp(UnaryOp::Cos, Box::new(Expr::float(x)))))).unwrap().coerce_float().unwrap();
+        assert_approx(v, x, 1e-10, "acos(cos(x))");
+
+        let v = eval(&Expr::UnaryOp(UnaryOp::Atan, Box::new(
+            Expr::UnaryOp(UnaryOp::Tan, Box::new(Expr::float(x)))))).unwrap().coerce_float().unwrap();
+        assert_approx(v, x, 1e-10, "atan(tan(x))");
+    }
+
+    #[test]
+    fn test_math_hyperbolic_identity() {
+        // cosh²(x) - sinh²(x) = 1
+        let x = 1.5;
+        let ch = eval(&Expr::UnaryOp(UnaryOp::Cosh, Box::new(Expr::float(x)))).unwrap().coerce_float().unwrap();
+        let sh = eval(&Expr::UnaryOp(UnaryOp::Sinh, Box::new(Expr::float(x)))).unwrap().coerce_float().unwrap();
+        assert_approx(ch * ch - sh * sh, 1.0, 1e-10, "cosh²-sinh²=1");
+    }
+
+    #[test]
+    fn test_math_tanh_range() {
+        // tanh(x) ∈ (-1, 1) for any finite x; tanh(0) = 0
+        let v = eval(&Expr::UnaryOp(UnaryOp::Tanh, Box::new(Expr::float(0.0)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, 0.0, 1e-10, "tanh(0)=0");
+
+        let v = eval(&Expr::UnaryOp(UnaryOp::Tanh, Box::new(Expr::float(100.0)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, 1.0, 1e-10, "tanh(100)≈1");
+    }
+
+    #[test]
+    fn test_math_gamma_known_values() {
+        // Γ(1) = 1, Γ(2) = 1, Γ(3) = 2, Γ(4) = 6, Γ(5) = 24
+        for (n, expected) in [(1.0, 1.0), (2.0, 1.0), (3.0, 2.0), (4.0, 6.0), (5.0, 24.0)] {
+            let v = eval(&Expr::UnaryOp(UnaryOp::Gamma, Box::new(Expr::float(n)))).unwrap().coerce_float().unwrap();
+            assert_approx(v, expected, 1e-6, &format!("Γ({})", n));
+        }
+    }
+
+    #[test]
+    fn test_math_gamma_half() {
+        // Γ(0.5) = √π
+        let v = eval(&Expr::UnaryOp(UnaryOp::Gamma, Box::new(Expr::float(0.5)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, std::f64::consts::PI.sqrt(), 1e-6, "Γ(0.5)=√π");
+    }
+
+    #[test]
+    fn test_math_floor_ceil_round() {
+        let v = eval(&Expr::UnaryOp(UnaryOp::Floor, Box::new(Expr::float(3.7)))).unwrap();
+        assert_eq!(v, Value::Int(3));
+        let v = eval(&Expr::UnaryOp(UnaryOp::Ceil, Box::new(Expr::float(3.2)))).unwrap();
+        assert_eq!(v, Value::Int(4));
+        let v = eval(&Expr::UnaryOp(UnaryOp::Round, Box::new(Expr::float(3.5)))).unwrap();
+        assert_eq!(v, Value::Int(4));
+        let v = eval(&Expr::UnaryOp(UnaryOp::Round, Box::new(Expr::float(3.4)))).unwrap();
+        assert_eq!(v, Value::Int(3));
+    }
+
+    #[test]
+    fn test_math_abs_sign() {
+        let v = eval(&Expr::UnaryOp(UnaryOp::Abs, Box::new(Expr::float(-5.0)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, 5.0, 1e-10, "abs(-5)");
+
+        let v = eval(&Expr::UnaryOp(UnaryOp::Sign, Box::new(Expr::float(-3.0)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, -1.0, 1e-10, "sign(-3)");
+
+        let v = eval(&Expr::UnaryOp(UnaryOp::Sign, Box::new(Expr::float(0.0)))).unwrap().coerce_float().unwrap();
+        assert_approx(v, 0.0, 1e-10, "sign(0)");
+    }
+
+    #[test]
+    fn test_math_pow_integer() {
+        // 2^10 = 1024
+        let expr = Expr::binop(BinOp::Pow, Expr::int(2), Expr::int(10));
+        let v = eval(&expr).unwrap();
+        assert_eq!(v, Value::Int(1024));
+    }
+
+    #[test]
+    fn test_math_pow_fractional() {
+        // 8^(1/3) ≈ 2.0
+        let expr = Expr::binop(BinOp::Pow, Expr::float(8.0), Expr::binop(BinOp::Div, Expr::float(1.0), Expr::float(3.0)));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 2.0, 1e-10, "8^(1/3)");
+    }
+
+    #[test]
+    fn test_math_modulo() {
+        let expr = Expr::binop(BinOp::Mod, Expr::int(17), Expr::int(5));
+        assert_eq!(eval(&expr).unwrap(), Value::Int(2));
+
+        let expr = Expr::binop(BinOp::Mod, Expr::float(7.5), Expr::float(2.5));
+        let v = eval(&expr).unwrap().coerce_float().unwrap();
+        assert_approx(v, 0.0, 1e-10, "7.5 mod 2.5");
+    }
+
     #[test]
     fn test_curried_with_sqrt() {
         // Test curried function with √ operator

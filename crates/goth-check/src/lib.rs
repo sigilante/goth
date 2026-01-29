@@ -638,9 +638,58 @@ mod tests {
     }
 
     #[test]
+    fn test_uncertain_arithmetic_type() {
+        let mut checker = TypeChecker::new();
+        // (F64 ± F64) + (F64 ± F64) → Uncertain(F64, F64)
+        let expr = Expr::BinOp(
+            BinOp::Add,
+            Box::new(Expr::BinOp(
+                BinOp::PlusMinus,
+                Box::new(Expr::Lit(Literal::Float(1.0))),
+                Box::new(Expr::Lit(Literal::Float(0.1))),
+            )),
+            Box::new(Expr::BinOp(
+                BinOp::PlusMinus,
+                Box::new(Expr::Lit(Literal::Float(2.0))),
+                Box::new(Expr::Lit(Literal::Float(0.2))),
+            )),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        match ty {
+            Type::Uncertain(v, u) => {
+                assert_eq!(*v, Type::Prim(PrimType::F64));
+                assert_eq!(*u, Type::Prim(PrimType::F64));
+            }
+            other => panic!("Expected Uncertain type, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_uncertain_unary_type() {
+        let mut checker = TypeChecker::new();
+        // √(F64 ± F64) → Uncertain(F64, F64)
+        let expr = Expr::UnaryOp(
+            goth_ast::op::UnaryOp::Sqrt,
+            Box::new(Expr::BinOp(
+                BinOp::PlusMinus,
+                Box::new(Expr::Lit(Literal::Float(4.0))),
+                Box::new(Expr::Lit(Literal::Float(0.1))),
+            )),
+        );
+        let ty = checker.infer(&expr).unwrap();
+        match ty {
+            Type::Uncertain(v, u) => {
+                assert_eq!(*v, Type::Prim(PrimType::F64));
+                assert_eq!(*u, Type::Prim(PrimType::F64));
+            }
+            other => panic!("Expected Uncertain type, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_comparison_operators() {
         let mut checker = TypeChecker::new();
-        
+
         for op in [BinOp::Lt, BinOp::Gt, BinOp::Leq, BinOp::Geq, BinOp::Eq, BinOp::Neq] {
             let expr = Expr::BinOp(
                 op.clone(),
