@@ -23,7 +23,14 @@ pub enum Value {
     Thunk(Thunk),
     Ref(Rc<RefCell<Value>>),
     Uncertain { value: Box<Value>, uncertainty: Box<Value> },
+    Stream(StreamKind),
     Error(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StreamKind {
+    Stdout,
+    Stderr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,7 +135,8 @@ impl Value {
             Value::Tuple(_) => "Tuple", Value::Record(_) => "Record", Value::Variant { .. } => "Variant",
             Value::Closure(_) => "Closure", Value::Primitive(_) => "Primitive",
             Value::Partial { .. } => "Partial", Value::Thunk(_) => "Thunk",
-            Value::Ref(_) => "Ref", Value::Uncertain { .. } => "Uncertain", Value::Error(_) => "Error",
+            Value::Ref(_) => "Ref", Value::Uncertain { .. } => "Uncertain",
+            Value::Stream(_) => "Stream", Value::Error(_) => "Error",
         }
     }
 
@@ -296,8 +304,15 @@ impl std::fmt::Display for Value {
             Value::Thunk(_) => write!(f, "<thunk>"),
             Value::Ref(_) => write!(f, "<ref>"),
             Value::Uncertain { value, uncertainty } => write!(f, "{}±{}", value, uncertainty),
+            Value::Stream(kind) => write!(f, "<stream:{}>", kind),
             Value::Error(msg) => write!(f, "Error: {}", msg),
         }
+    }
+}
+
+impl std::fmt::Display for StreamKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self { StreamKind::Stdout => write!(f, "stdout"), StreamKind::Stderr => write!(f, "stderr") }
     }
 }
 

@@ -1,6 +1,6 @@
 //! Evaluator for Goth
 
-use crate::value::{Value, Tensor, Closure, Env, PrimFn};
+use crate::value::{Value, Tensor, Closure, Env, PrimFn, StreamKind};
 use crate::error::{EvalError, EvalResult, OptionExt};
 use crate::prim;
 use goth_ast::expr::{Expr, MatchArm, FieldAccess, CastKind, DoOp};
@@ -79,6 +79,9 @@ impl Evaluator {
             ("endsWith", PrimFn::EndsWith), ("contains", PrimFn::Contains),
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
+        // Register stream constants
+        self.globals.borrow_mut().insert("stdout".to_string(), Value::Stream(StreamKind::Stdout));
+        self.globals.borrow_mut().insert("stderr".to_string(), Value::Stream(StreamKind::Stderr));
     }
 
     pub fn define(&mut self, name: impl Into<String>, value: Value) { self.globals.borrow_mut().insert(name.into(), value); }
@@ -454,11 +457,31 @@ impl Evaluator {
         Ok(Value::Closure(Closure { arity: 1, body, env, preconditions: vec![], postconditions: vec![] }))
     }
 
-    fn eval_write(&mut self, content: Value, path: Value) -> EvalResult<Value> {
+    fn eval_write(&mut self, content: Value, target: Value) -> EvalResult<Value> {
+        // If target is a stream, write to stdout/stderr
+        if let Value::Stream(kind) = &target {
+            let content_str = match &content {
+                Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String", &content))?,
+                other => format!("{}", other),
+            };
+            match kind {
+                StreamKind::Stdout => {
+                    use std::io::Write;
+                    print!("{}", content_str);
+                    std::io::stdout().flush().map_err(|e| EvalError::io_error(format!("flush stdout: {}", e)))?;
+                }
+                StreamKind::Stderr => {
+                    use std::io::Write;
+                    eprint!("{}", content_str);
+                    std::io::stderr().flush().map_err(|e| EvalError::io_error(format!("flush stderr: {}", e)))?;
+                }
+            }
+            return Ok(Value::Unit);
+        }
         // Extract path as string
-        let path_str = match &path {
-            Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String", &path))?,
-            _ => return Err(EvalError::type_error("String", &path)),
+        let path_str = match &target {
+            Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String or Stream", &target))?,
+            _ => return Err(EvalError::type_error("String or Stream", &target)),
         };
         // Extract content as string
         let content_str = match &content {

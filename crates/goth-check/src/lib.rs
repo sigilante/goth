@@ -64,7 +64,9 @@ impl TypeChecker {
                      "write", "flush", "readKey", "rawModeEnter", "rawModeExit", "sleep",
                      // String operations (for wc-like utilities)
                      "lines", "words", "bytes",
-                     "strEq", "startsWith", "endsWith", "contains"] {
+                     "strEq", "startsWith", "endsWith", "contains",
+                     // Stream constants
+                     "stdout", "stderr"] {
             if let Some(ty) = builtins::primitive_type(prim) {
                 ctx.define_global(prim, ty);
             }

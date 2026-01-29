@@ -765,6 +765,10 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 Type::Prim(PrimType::Bool),
             ))
         }
+        // Stream values (stdout, stderr) — typed as Unit for now
+        "stdout" | "stderr" => {
+            Some(Type::unit())
+        }
         // String concatenation (⧺ is now handled by concat which preserves Char type)
         "strConcat" => {
             // String → String → String (concatenate two strings)
