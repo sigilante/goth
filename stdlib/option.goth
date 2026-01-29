@@ -1,26 +1,313 @@
 # Goth Standard Library - Option Type
 # For optional values that may or may not be present
+#
+# Option is encoded as a tuple ⟨Bool, α⟩ where:
+#   - ⟨⊤, value⟩ represents Some(value)
+#   - ⟨⊥, _⟩ represents None (second element is undefined/placeholder)
+#
+# This encoding allows pattern matching and works with the current
+# type system limitations around polymorphism.
+#
+# Convention: Functions ending in 'I' work with ⟨Bool, ℤ⟩
+#             Functions ending in 'F' work with ⟨Bool, F⟩
+#             Generic functions (where possible) have no suffix
 
-# Option type definition
-enum Option τ where Some τ | None
+# ============ Type Aliases (Documentation) ============
+# OptionI = ⟨Bool, ℤ⟩   -- Option of integer
+# OptionF = ⟨Bool, F⟩   -- Option of float
+# OptionB = ⟨Bool, Bool⟩ -- Option of bool
 
-# Check if option has a value (monomorphic for now)
-╭─ isSomeI : I → Bool
-╰─ match ₀ {
-    Some _ → ⊤;
-    None → ⊥
-  }
+# ============ Constructors ============
 
-# Check if option is empty
-╭─ isNoneI : I → Bool
-╰─ match ₀ {
-    Some _ → ⊥;
-    None → ⊤
-  }
+# Create Some value (integer)
+╭─ someI : ℤ → ⟨Bool, ℤ⟩
+╰─ ⟨⊤, ₀⟩
 
-# Get value or default (for integer options)
-╭─ getOrElseI : I → I → I
-╰─ match ₁ {
-    Some x → x;
-    None → ₀
-  }
+# Create Some value (float)
+╭─ someF : F → ⟨Bool, F⟩
+╰─ ⟨⊤, ₀⟩
+
+# Create Some value (bool)
+╭─ someB : Bool → ⟨Bool, Bool⟩
+╰─ ⟨⊤, ₀⟩
+
+# Create None (integer) - uses 0 as placeholder
+╭─ noneI : ⟨Bool, ℤ⟩
+╰─ ⟨⊥, 0⟩
+
+# Create None (float) - uses 0.0 as placeholder
+╭─ noneF : ⟨Bool, F⟩
+╰─ ⟨⊥, 0.0⟩
+
+# Create None (bool) - uses ⊥ as placeholder
+╭─ noneB : ⟨Bool, Bool⟩
+╰─ ⟨⊥, ⊥⟩
+
+# ============ Predicates ============
+
+# Check if option has a value (generic - works with any ⟨Bool, α⟩)
+╭─ isSome : ⟨Bool, α⟩ → Bool
+╰─ ₀.0
+
+# Check if option is empty (generic)
+╭─ isNone : ⟨Bool, α⟩ → Bool
+╰─ ¬(₀.0)
+
+# Integer-specific versions
+╭─ isSomeI : ⟨Bool, ℤ⟩ → Bool
+╰─ ₀.0
+
+╭─ isNoneI : ⟨Bool, ℤ⟩ → Bool
+╰─ ¬(₀.0)
+
+# Float-specific versions
+╭─ isSomeF : ⟨Bool, F⟩ → Bool
+╰─ ₀.0
+
+╭─ isNoneF : ⟨Bool, F⟩ → Bool
+╰─ ¬(₀.0)
+
+# ============ Extractors ============
+
+# Get value or default (integer)
+╭─ getOrElseI : ℤ → ⟨Bool, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get value or default (float)
+╭─ getOrElseF : F → ⟨Bool, F⟩ → F
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get value or default (bool)
+╭─ getOrElseB : Bool → ⟨Bool, Bool⟩ → Bool
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Unsafe get - assumes Some (integer)
+# Use only when you're certain the option is Some
+╭─ unsafeGetI : ⟨Bool, ℤ⟩ → ℤ
+╰─ ₀.1
+
+# Unsafe get - assumes Some (float)
+╭─ unsafeGetF : ⟨Bool, F⟩ → F
+╰─ ₀.1
+
+# Get value or compute default (integer)
+╭─ getOrComputeI : (⟨⟩ → ℤ) → ⟨Bool, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁ ⟨⟩
+
+# Get value or compute default (float)
+╭─ getOrComputeF : (⟨⟩ → F) → ⟨Bool, F⟩ → F
+╰─ if ₀.0 then ₀.1 else ₁ ⟨⟩
+
+# ============ Transformations ============
+
+# Map function over option (integer → integer)
+╭─ mapOptI : (ℤ → ℤ) → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1⟩ else ⟨⊥, 0⟩
+
+# Map function over option (float → float)
+╭─ mapOptF : (F → F) → ⟨Bool, F⟩ → ⟨Bool, F⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1⟩ else ⟨⊥, 0.0⟩
+
+# Map function over option (integer → float)
+╭─ mapOptIF : (ℤ → F) → ⟨Bool, ℤ⟩ → ⟨Bool, F⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1⟩ else ⟨⊥, 0.0⟩
+
+# Map function over option (float → integer)
+╭─ mapOptFI : (F → ℤ) → ⟨Bool, F⟩ → ⟨Bool, ℤ⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1⟩ else ⟨⊥, 0⟩
+
+# FlatMap / bind (integer)
+╭─ flatMapOptI : (ℤ → ⟨Bool, ℤ⟩) → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₀.0 then ₁ ₀.1 else ⟨⊥, 0⟩
+
+# FlatMap / bind (float)
+╭─ flatMapOptF : (F → ⟨Bool, F⟩) → ⟨Bool, F⟩ → ⟨Bool, F⟩
+╰─ if ₀.0 then ₁ ₀.1 else ⟨⊥, 0.0⟩
+
+# Filter option by predicate (integer)
+╭─ filterOptI : (ℤ → Bool) → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₀.0 ∧ ₁ ₀.1 then ₀ else ⟨⊥, 0⟩
+
+# Filter option by predicate (float)
+╭─ filterOptF : (F → Bool) → ⟨Bool, F⟩ → ⟨Bool, F⟩
+╰─ if ₀.0 ∧ ₁ ₀.1 then ₀ else ⟨⊥, 0.0⟩
+
+# ============ Combining Options ============
+
+# Or else: return first if Some, else second (integer)
+╭─ orElseOptI : ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₁.0 then ₁ else ₀
+
+# Or else: return first if Some, else second (float)
+╭─ orElseOptF : ⟨Bool, F⟩ → ⟨Bool, F⟩ → ⟨Bool, F⟩
+╰─ if ₁.0 then ₁ else ₀
+
+# And then: return second if first is Some, else None (integer)
+╭─ andThenOptI : ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₁.0 then ₀ else ⟨⊥, 0⟩
+
+# Zip two options: Some only if both are Some (integer)
+╭─ zipOptI : ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩ → ⟨Bool, ⟨ℤ, ℤ⟩⟩
+╰─ if ₁.0 ∧ ₀.0 then ⟨⊤, ⟨₁.1, ₀.1⟩⟩ else ⟨⊥, ⟨0, 0⟩⟩
+
+# Zip two options with function (integer)
+╭─ zipWithOptI : (ℤ → ℤ → ℤ) → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₁.0 ∧ ₀.0 then ⟨⊤, ₂ ₁.1 ₀.1⟩ else ⟨⊥, 0⟩
+
+# ============ Conversion ============
+
+# Convert to list (empty or singleton) - integer
+╭─ optToListI : ⟨Bool, ℤ⟩ → [n]ℤ
+╰─ if ₀.0 then [₀.1] else []
+
+# Convert to list (empty or singleton) - float
+╭─ optToListF : ⟨Bool, F⟩ → [n]F
+╰─ if ₀.0 then [₀.1] else []
+
+# Convert list head to option - integer
+╭─ listHeadOptI : [n]ℤ → ⟨Bool, ℤ⟩
+╰─ if len ₀ > 0 then ⟨⊤, ₀[0]⟩ else ⟨⊥, 0⟩
+
+# Convert list head to option - float
+╭─ listHeadOptF : [n]F → ⟨Bool, F⟩
+╰─ if len ₀ > 0 then ⟨⊤, ₀[0]⟩ else ⟨⊥, 0.0⟩
+
+# Convert list last to option - integer
+╭─ listLastOptI : [n]ℤ → ⟨Bool, ℤ⟩
+╰─ if len ₀ > 0 then ⟨⊤, ₀[len ₀ - 1]⟩ else ⟨⊥, 0⟩
+
+# Convert list last to option - float
+╭─ listLastOptF : [n]F → ⟨Bool, F⟩
+╰─ if len ₀ > 0 then ⟨⊤, ₀[len ₀ - 1]⟩ else ⟨⊥, 0.0⟩
+
+# ============ Safe Operations ============
+
+# Safe division (returns None on divide by zero) - integer
+╭─ safeDivI : ℤ → ℤ → ⟨Bool, ℤ⟩
+╰─ if ₀ = 0 then ⟨⊥, 0⟩ else ⟨⊤, ₁ / ₀⟩
+
+# Safe division - float
+╭─ safeDivF : F → F → ⟨Bool, F⟩
+╰─ if ₀ = 0.0 then ⟨⊥, 0.0⟩ else ⟨⊤, ₁ / ₀⟩
+
+# Safe modulo (returns None on divide by zero)
+╭─ safeModI : ℤ → ℤ → ⟨Bool, ℤ⟩
+╰─ if ₀ = 0 then ⟨⊥, 0⟩ else ⟨⊤, ₁ % ₀⟩
+
+# Safe square root (returns None for negative) - float
+╭─ safeSqrtF : F → ⟨Bool, F⟩
+╰─ if ₀ < 0.0 then ⟨⊥, 0.0⟩ else ⟨⊤, √₀⟩
+
+# Safe log (returns None for non-positive) - float
+╭─ safeLogF : F → ⟨Bool, F⟩
+╰─ if ₀ ≤ 0.0 then ⟨⊥, 0.0⟩ else ⟨⊤, ln ₀⟩
+
+# Safe array index - integer
+╭─ safeIndexI : ℤ → [n]ℤ → ⟨Bool, ℤ⟩
+╰─ if ₁ ≥ 0 ∧ ₁ < len ₀ then ⟨⊤, ₀[₁]⟩ else ⟨⊥, 0⟩
+
+# Safe array index - float
+╭─ safeIndexF : ℤ → [n]F → ⟨Bool, F⟩
+╰─ if ₁ ≥ 0 ∧ ₁ < len ₀ then ⟨⊤, ₀[₁]⟩ else ⟨⊥, 0.0⟩
+
+# ============ Folding ============
+
+# Fold option (integer)
+╭─ foldOptI : β → (ℤ → β) → ⟨Bool, ℤ⟩ → β
+╰─ if ₀.0 then ₁ ₀.1 else ₂
+
+# Fold option (float)
+╭─ foldOptF : β → (F → β) → ⟨Bool, F⟩ → β
+╰─ if ₀.0 then ₁ ₀.1 else ₂
+
+# ============ Boolean Checks ============
+
+# Check if option contains specific value (integer)
+╭─ containsOptI : ℤ → ⟨Bool, ℤ⟩ → Bool
+╰─ ₀.0 ∧ ₀.1 = ₁
+
+# Check if option contains specific value (float)
+╭─ containsOptF : F → ⟨Bool, F⟩ → Bool
+╰─ ₀.0 ∧ ₀.1 = ₁
+
+# Check if option value satisfies predicate (integer)
+╭─ existsOptI : (ℤ → Bool) → ⟨Bool, ℤ⟩ → Bool
+╰─ ₀.0 ∧ ₁ ₀.1
+
+# Check if option value satisfies predicate (float)
+╭─ existsOptF : (F → Bool) → ⟨Bool, F⟩ → Bool
+╰─ ₀.0 ∧ ₁ ₀.1
+
+# Check if None or value satisfies predicate (integer)
+╭─ forallOptI : (ℤ → Bool) → ⟨Bool, ℤ⟩ → Bool
+╰─ ¬(₀.0) ∨ ₁ ₀.1
+
+# Check if None or value satisfies predicate (float)
+╭─ forallOptF : (F → Bool) → ⟨Bool, F⟩ → Bool
+╰─ ¬(₀.0) ∨ ₁ ₀.1
+
+# ============ Comparison ============
+
+# Compare two options (integer) - both must be same variant
+╭─ eqOptI : ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩ → Bool
+╰─ if ₁.0 ∧ ₀.0 then ₁.1 = ₀.1
+   else if ¬(₁.0) ∧ ¬(₀.0) then ⊤
+   else ⊥
+
+# Compare two options (float)
+╭─ eqOptF : ⟨Bool, F⟩ → ⟨Bool, F⟩ → Bool
+╰─ if ₁.0 ∧ ₀.0 then ₁.1 = ₀.1
+   else if ¬(₁.0) ∧ ¬(₀.0) then ⊤
+   else ⊥
+
+# ============ Utility ============
+
+# Apply function if Some, do nothing if None (for side effects)
+╭─ forEachOptI : (ℤ → ⟨⟩) → ⟨Bool, ℤ⟩ → ⟨⟩
+╰─ if ₀.0 then ₁ ₀.1 else ⟨⟩
+
+# Tap: apply function for side effect, return original option
+╭─ tapOptI : (ℤ → ⟨⟩) → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ if ₀.0 then let _ = ₁ ₀.1 in ₀ else ₀
+
+# ============ Creating Options from Conditions ============
+
+# Create Some if condition is true, else None (integer)
+╭─ whenI : Bool → ℤ → ⟨Bool, ℤ⟩
+╰─ if ₁ then ⟨⊤, ₀⟩ else ⟨⊥, 0⟩
+
+# Create Some if condition is true, else None (float)
+╭─ whenF : Bool → F → ⟨Bool, F⟩
+╰─ if ₁ then ⟨⊤, ₀⟩ else ⟨⊥, 0.0⟩
+
+# Create Some if predicate passes, else None (integer)
+╭─ filterToOptI : (ℤ → Bool) → ℤ → ⟨Bool, ℤ⟩
+╰─ if ₁ ₀ then ⟨⊤, ₀⟩ else ⟨⊥, 0⟩
+
+# Create Some if predicate passes, else None (float)
+╭─ filterToOptF : (F → Bool) → F → ⟨Bool, F⟩
+╰─ if ₁ ₀ then ⟨⊤, ₀⟩ else ⟨⊥, 0.0⟩
+
+# Create Some if value is non-zero, else None (integer)
+╭─ nonZeroOptI : ℤ → ⟨Bool, ℤ⟩
+╰─ if ₀ ≠ 0 then ⟨⊤, ₀⟩ else ⟨⊥, 0⟩
+
+# Create Some if value is positive, else None (integer)
+╭─ positiveOptI : ℤ → ⟨Bool, ℤ⟩
+╰─ if ₀ > 0 then ⟨⊤, ₀⟩ else ⟨⊥, 0⟩
+
+# Create Some if value is non-negative, else None (integer)
+╭─ nonNegativeOptI : ℤ → ⟨Bool, ℤ⟩
+╰─ if ₀ ≥ 0 then ⟨⊤, ₀⟩ else ⟨⊥, 0⟩
+
+# ============ String Representation ============
+
+# Convert option to string for display (integer)
+╭─ showOptI : ⟨Bool, ℤ⟩ → String
+╰─ if ₀.0 then strConcat "Some(" (strConcat (toString ₀.1) ")")
+   else "None"
+
+# Convert option to string for display (float)
+╭─ showOptF : ⟨Bool, F⟩ → String
+╰─ if ₀.0 then strConcat "Some(" (strConcat (toString ₀.1) ")")
+   else "None"

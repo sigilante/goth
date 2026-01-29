@@ -1,0 +1,474 @@
+# Goth Standard Library - Mathematical Functions
+# Advanced mathematical operations beyond the prelude basics
+#
+# Built-in math functions available:
+#   Arithmetic: +, -, ×, /, %, ^
+#   Roots: √ (sqrt)
+#   Exponential: exp, ln, log₁₀, log₂
+#   Trigonometric: sin, cos, tan, asin, acos, atan
+#   Hyperbolic: sinh, cosh, tanh
+#   Rounding: ⌊⌋ (floor), ⌈⌉ (ceil), round
+#   Special: Γ (gamma function), abs, sign
+#
+# Note: Some algorithms (gcd, factorial) that typically use recursion
+# are implemented using closed-form solutions or iterative approaches
+# due to interpreter limitations with multi-argument recursion.
+
+# ============ Constants ============
+
+# Pi (also built-in as π)
+let pi = 3.14159265358979323846
+
+# Euler's number e (also built-in as 𝕖)
+let euler = 2.71828182845904523536
+
+# Golden ratio φ
+let goldenRatio = (1.0 + √5.0) / 2.0
+
+# Square root of 2
+let sqrtTwo = √2.0
+
+# Square root of 3
+let sqrtThree = √3.0
+
+# Natural log of 2
+let lnTwo = ln 2.0
+
+# Natural log of 10
+let lnTen = ln 10.0
+
+# ============ Basic Operations ============
+
+# Absolute value (integer)
+╭─ absI : ℤ → ℤ
+╰─ if ₀ < 0 then 0 - ₀ else ₀
+
+# Absolute value (float)
+╭─ absF : F → F
+╰─ if ₀ < 0.0 then 0.0 - ₀ else ₀
+
+# Sign function (integer): returns -1, 0, or 1
+╭─ signI : ℤ → ℤ
+╰─ if ₀ < 0 then -1 else if ₀ > 0 then 1 else 0
+
+# Sign function (float): returns -1.0, 0.0, or 1.0
+╭─ signF : F → F
+╰─ if ₀ < 0.0 then -1.0 else if ₀ > 0.0 then 1.0 else 0.0
+
+# Copy sign: magnitude of first, sign of second
+╭─ copySign : F → F → F
+╰─ if ₀ < 0.0 then 0.0 - (if ₁ < 0.0 then 0.0 - ₁ else ₁)
+   else (if ₁ < 0.0 then 0.0 - ₁ else ₁)
+
+# ============ Power and Root Functions ============
+
+# Integer power (for small non-negative exponents)
+# Uses: base^exp via built-in ^
+╭─ pow : F → F → F
+╰─ ₁ ^ ₀
+
+# Square
+╭─ sq : F → F
+╰─ ₀ × ₀
+
+# Cube
+╭─ cb : F → F
+╰─ ₀ × ₀ × ₀
+
+# Fourth power
+╭─ pow4 : F → F
+╰─ let x2 = ₀ × ₀ in x2 × x2
+
+# Square root (alias for √)
+╭─ sqrt : F → F
+╰─ √₀
+
+# Cube root
+╭─ cbrt : F → F
+╰─ if ₀ < 0.0 then 0.0 - ((0.0 - ₀) ^ (1.0 / 3.0))
+   else ₀ ^ (1.0 / 3.0)
+
+# Nth root
+╭─ nthRoot : F → F → F
+╰─ ₀ ^ (1.0 / ₁)
+
+# Hypotenuse: sqrt(a² + b²) - more numerically stable
+╭─ hypot : F → F → F
+╰─ √(₁ × ₁ + ₀ × ₀)
+
+# ============ Exponential and Logarithmic ============
+
+# Exponential (alias)
+╭─ exp : F → F
+╰─ 𝕖 ^ ₀
+
+# Natural log (alias)
+╭─ log : F → F
+╰─ ln ₀
+
+# Log base 10 (alias)
+╭─ log10 : F → F
+╰─ log₁₀ ₀
+
+# Log base 2 (alias)
+╭─ log2 : F → F
+╰─ log₂ ₀
+
+# Log with arbitrary base
+╭─ logBase : F → F → F
+╰─ ln ₀ / ln ₁
+
+# exp(x) - 1, more accurate for small x
+╭─ expm1 : F → F
+╰─ exp ₀ - 1.0
+
+# log(1 + x), more accurate for small x
+╭─ log1p : F → F
+╰─ ln (1.0 + ₀)
+
+# 2^x
+╭─ exp2 : F → F
+╰─ 2.0 ^ ₀
+
+# 10^x
+╭─ exp10 : F → F
+╰─ 10.0 ^ ₀
+
+# ============ Trigonometric Functions ============
+
+# Basic trig (built-in: sin, cos, tan, asin, acos, atan)
+
+# Secant
+╭─ sec : F → F
+╰─ 1.0 / cos ₀
+
+# Cosecant
+╭─ csc : F → F
+╰─ 1.0 / sin ₀
+
+# Cotangent
+╭─ cot : F → F
+╰─ cos ₀ / sin ₀
+
+# Two-argument arctangent (atan2)
+╭─ atan2 : F → F → F
+╰─ if ₀ > 0.0 then atan (₁ / ₀)
+   else if ₀ < 0.0 ∧ ₁ ≥ 0.0 then atan (₁ / ₀) + π
+   else if ₀ < 0.0 ∧ ₁ < 0.0 then atan (₁ / ₀) - π
+   else if ₀ = 0.0 ∧ ₁ > 0.0 then π / 2.0
+   else if ₀ = 0.0 ∧ ₁ < 0.0 then 0.0 - π / 2.0
+   else 0.0
+
+# Sine squared
+╭─ sin2 : F → F
+╰─ let s = sin ₀ in s × s
+
+# Cosine squared
+╭─ cos2 : F → F
+╰─ let c = cos ₀ in c × c
+
+# Sinc function: sin(x)/x, with sinc(0) = 1
+╭─ sinc : F → F
+╰─ if ₀ = 0.0 then 1.0 else sin ₀ / ₀
+
+# ============ Angle Conversion ============
+
+# Degrees to radians
+╭─ degToRad : F → F
+╰─ ₀ × π / 180.0
+
+# Radians to degrees
+╭─ radToDeg : F → F
+╰─ ₀ × 180.0 / π
+
+# Normalize angle to [0, 2π)
+╭─ normalizeAngle : F → F
+╰─ let tau = 2.0 × π
+   in ₀ - tau × ⌊₀ / tau⌋
+
+# Normalize angle to [-π, π)
+╭─ normalizeAngleSigned : F → F
+╰─ let tau = 2.0 × π
+   in let a = ₀ - tau × ⌊₀ / tau⌋
+   in if a ≥ π then a - tau else a
+
+# ============ Hyperbolic Functions ============
+
+# Built-in: sinh, cosh, tanh
+
+# Hyperbolic secant
+╭─ sech : F → F
+╰─ 1.0 / cosh ₀
+
+# Hyperbolic cosecant
+╭─ csch : F → F
+╰─ 1.0 / sinh ₀
+
+# Hyperbolic cotangent
+╭─ coth : F → F
+╰─ cosh ₀ / sinh ₀
+
+# Inverse hyperbolic sine
+╭─ asinh : F → F
+╰─ ln (₀ + √(₀ × ₀ + 1.0))
+
+# Inverse hyperbolic cosine
+╭─ acosh : F → F
+╰─ ln (₀ + √(₀ × ₀ - 1.0))
+
+# Inverse hyperbolic tangent
+╭─ atanh : F → F
+╰─ 0.5 × ln ((1.0 + ₀) / (1.0 - ₀))
+
+# ============ Number Theory (Integer) ============
+
+# Check if even
+╭─ isEven : ℤ → Bool
+╰─ ₀ % 2 = 0
+
+# Check if odd
+╭─ isOdd : ℤ → Bool
+╰─ ₀ % 2 ≠ 0
+
+# Check if divisible
+╭─ divides : ℤ → ℤ → Bool
+╰─ ₀ % ₁ = 0
+
+# Integer division (floor division)
+╭─ floorDiv : ℤ → ℤ → ℤ
+╰─ ₁ / ₀
+
+# Modulo (always non-negative for positive divisor)
+╭─ mod : ℤ → ℤ → ℤ
+╰─ let r = ₁ % ₀
+   in if r < 0 then r + ₀ else r
+
+# Quotient and remainder as pair
+╭─ quotRem : ℤ → ℤ → ⟨ℤ, ℤ⟩
+╰─ ⟨₁ / ₀, ₁ % ₀⟩
+
+# ============ Factorial and Combinatorics ============
+
+# Factorial using gamma function: n! = Γ(n+1)
+╭─ factorial : ℤ → F
+╰─ Γ (toFloat ₀ + 1.0)
+
+# Double factorial approximation for small values
+# n!! = n × (n-2) × (n-4) × ...
+╭─ doubleFactorial : ℤ → F
+╰─ if ₀ ≤ 0 then 1.0
+   else if ₀ % 2 = 0 then
+     # Even: 2^(n/2) × (n/2)!
+     let k = ₀ / 2
+     in (2.0 ^ toFloat k) × Γ (toFloat k + 1.0)
+   else
+     # Odd: n! / (n/2)! / 2^(n/2) where n/2 is floor
+     Γ (toFloat ₀ + 1.0) / (Γ (toFloat (₀ / 2) + 1.0) × (2.0 ^ toFloat (₀ / 2)))
+
+# Binomial coefficient C(n,k) = n! / (k! × (n-k)!)
+# Using gamma function for numerical stability
+╭─ binomial : ℤ → ℤ → F
+╰─ if ₀ < 0 ∨ ₀ > ₁ then 0.0
+   else Γ (toFloat ₁ + 1.0) / (Γ (toFloat ₀ + 1.0) × Γ (toFloat (₁ - ₀) + 1.0))
+
+# Permutations P(n,k) = n! / (n-k)!
+╭─ permutations : ℤ → ℤ → F
+╰─ if ₀ < 0 ∨ ₀ > ₁ then 0.0
+   else Γ (toFloat ₁ + 1.0) / Γ (toFloat (₁ - ₀) + 1.0)
+
+# ============ Special Functions ============
+
+# Gamma function (built-in as Γ)
+╭─ gamma : F → F
+╰─ Γ ₀
+
+# Log-gamma function (more stable for large values)
+╭─ lgamma : F → F
+╰─ ln (Γ ₀)
+
+# Beta function: B(a,b) = Γ(a)Γ(b)/Γ(a+b)
+╭─ beta : F → F → F
+╰─ Γ ₁ × Γ ₀ / Γ (₁ + ₀)
+
+# Error function approximation (using tanh approximation)
+╭─ erf : F → F
+╰─ let x = ₀
+   in let t = 1.0 / (1.0 + 0.5 × (if x < 0.0 then 0.0 - x else x))
+   in let tau = t × exp (0.0 - x × x - 1.26551223 +
+        t × (1.00002368 + t × (0.37409196 + t × (0.09678418 +
+        t × (-0.18628806 + t × (0.27886807 + t × (-1.13520398 +
+        t × (1.48851587 + t × (-0.82215223 + t × 0.17087277)))))))))
+   in if x ≥ 0.0 then 1.0 - tau else tau - 1.0
+
+# Complementary error function
+╭─ erfc : F → F
+╰─ 1.0 - erf ₀
+
+# ============ Rounding and Remainder ============
+
+# Floor (built-in as ⌊⌋)
+╭─ floor : F → F
+╰─ ⌊₀⌋
+
+# Ceiling (built-in as ⌈⌉)
+╭─ ceil : F → F
+╰─ ⌈₀⌉
+
+# Round to nearest integer
+╭─ round : F → F
+╰─ ⌊₀ + 0.5⌋
+
+# Round away from zero
+╭─ roundAwayFromZero : F → F
+╰─ if ₀ ≥ 0.0 then ⌈₀⌉ else ⌊₀⌋
+
+# Truncate toward zero
+╭─ trunc : F → F
+╰─ if ₀ ≥ 0.0 then ⌊₀⌋ else ⌈₀⌉
+
+# Fractional part (always positive)
+╭─ frac : F → F
+╰─ ₀ - ⌊₀⌋
+
+# Round to n decimal places
+╭─ roundTo : ℤ → F → F
+╰─ let scale = 10.0 ^ toFloat ₁
+   in ⌊₀ × scale + 0.5⌋ / scale
+
+# ============ Comparison and Bounds ============
+
+# Minimum of two floats
+╭─ minF : F → F → F
+╰─ if ₁ < ₀ then ₁ else ₀
+
+# Maximum of two floats
+╭─ maxF : F → F → F
+╰─ if ₁ > ₀ then ₁ else ₀
+
+# Minimum of two integers
+╭─ minI : ℤ → ℤ → ℤ
+╰─ if ₁ < ₀ then ₁ else ₀
+
+# Maximum of two integers
+╭─ maxI : ℤ → ℤ → ℤ
+╰─ if ₁ > ₀ then ₁ else ₀
+
+# Clamp value to range [lo, hi]
+╭─ clamp : F → F → F → F
+╰─ if ₀ < ₂ then ₂ else if ₀ > ₁ then ₁ else ₀
+
+# Clamp integer to range
+╭─ clampI : ℤ → ℤ → ℤ → ℤ
+╰─ if ₀ < ₂ then ₂ else if ₀ > ₁ then ₁ else ₀
+
+# ============ Interpolation ============
+
+# Linear interpolation: lerp(t, a, b) = a + t*(b-a)
+╭─ lerp : F → F → F → F
+╰─ ₁ + ₂ × (₀ - ₁)
+
+# Inverse lerp: find t such that lerp(t,a,b) = x
+╭─ invLerp : F → F → F → F
+╰─ (₀ - ₂) / (₁ - ₂)
+
+# Remap value from one range to another
+╭─ remap : F → F → F → F → F → F
+╰─ let t = (₀ - ₄) / (₃ - ₄)
+   in ₂ + t × (₁ - ₂)
+
+# Smooth step (cubic Hermite interpolation)
+╭─ smoothstep : F → F → F → F
+╰─ let t = if ₀ ≤ ₂ then 0.0 else if ₀ ≥ ₁ then 1.0 else (₀ - ₂) / (₁ - ₂)
+   in t × t × (3.0 - 2.0 × t)
+
+# Smoother step (quintic interpolation)
+╭─ smootherstep : F → F → F → F
+╰─ let t = if ₀ ≤ ₂ then 0.0 else if ₀ ≥ ₁ then 1.0 else (₀ - ₂) / (₁ - ₂)
+   in t × t × t × (t × (t × 6.0 - 15.0) + 10.0)
+
+# ============ Geometry (2D) ============
+
+# Distance between two points
+╭─ distance2D : F → F → F → F → F
+╰─ let dx = ₂ - ₀
+   in let dy = ₃ - ₁
+   in √(dx × dx + dy × dy)
+
+# Squared distance (avoids sqrt)
+╭─ distanceSq2D : F → F → F → F → F
+╰─ let dx = ₂ - ₀
+   in let dy = ₃ - ₁
+   in dx × dx + dy × dy
+
+# Midpoint between two points
+╭─ midpoint2D : F → F → F → F → ⟨F, F⟩
+╰─ ⟨(₃ + ₁) / 2.0, (₂ + ₀) / 2.0⟩
+
+# Angle from origin to point (in radians)
+╭─ angle2D : F → F → F
+╰─ atan2 ₀ ₁
+
+# ============ Geometry (3D) ============
+
+# Distance in 3D
+╭─ distance3D : F → F → F → F → F → F → F
+╰─ let dx = ₃ - ₀
+   in let dy = ₄ - ₁
+   in let dz = ₅ - ₂
+   in √(dx × dx + dy × dy + dz × dz)
+
+# Squared distance in 3D
+╭─ distanceSq3D : F → F → F → F → F → F → F
+╰─ let dx = ₃ - ₀
+   in let dy = ₄ - ₁
+   in let dz = ₅ - ₂
+   in dx × dx + dy × dy + dz × dz
+
+# ============ Statistics (Single Values) ============
+
+# Standard normal PDF: φ(x) = exp(-x²/2) / √(2π)
+╭─ normalPDF : F → F
+╰─ exp (0.0 - ₀ × ₀ / 2.0) / √(2.0 × π)
+
+# Standard normal CDF approximation
+╭─ normalCDF : F → F
+╰─ 0.5 × (1.0 + erf (₀ / √2.0))
+
+# General normal PDF with mean μ and std σ
+╭─ gaussianPDF : F → F → F → F
+╰─ let z = (₀ - ₂) / ₁
+   in exp (0.0 - z × z / 2.0) / (₁ × √(2.0 × π))
+
+# ============ Numerical Utilities ============
+
+# Check if approximately equal (within epsilon)
+╭─ approxEq : F → F → F → Bool
+╰─ let diff = ₁ - ₂
+   in (if diff < 0.0 then 0.0 - diff else diff) < ₀
+
+# Check if approximately zero
+╭─ approxZero : F → F → Bool
+╰─ (if ₀ < 0.0 then 0.0 - ₀ else ₀) < ₁
+
+# Relative error
+╭─ relativeError : F → F → F
+╰─ if ₀ = 0.0 then (if ₁ < 0.0 then 0.0 - ₁ else ₁)
+   else let diff = ₁ - ₀
+        in (if diff < 0.0 then 0.0 - diff else diff) / (if ₀ < 0.0 then 0.0 - ₀ else ₀)
+
+# Machine epsilon (approximate)
+let epsilon = 2.220446049250313e-16
+
+# Check if finite (not inf or nan) - approximation
+╭─ isFinite : F → Bool
+╰─ ₀ = ₀ ∧ ₀ - ₀ = 0.0
+
+# ============ Polynomial Evaluation ============
+
+# Evaluate polynomial using Horner's method
+# coeffs are [a₀, a₁, a₂, ...] for a₀ + a₁x + a₂x² + ...
+╭─ polyEval : [n]F → F → F
+╰─ let coeffs = reverse ₁
+   in if len coeffs = 0 then 0.0
+   else let result = coeffs ↦ λ→ ₀
+        in Σ (iota (len coeffs) ↦ λ→ ₂[₀] × (₁ ^ toFloat ₀))
