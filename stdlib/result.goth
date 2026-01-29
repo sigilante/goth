@@ -1,26 +1,382 @@
 # Goth Standard Library - Result Type
-# For computations that may succeed or fail
+# For computations that may succeed or fail with an error
+#
+# Result is encoded as a triple ⟨Bool, α, β⟩ where:
+#   - ⟨⊤, value, _⟩ represents Ok(value)
+#   - ⟨⊥, _, error⟩ represents Err(error)
+#
+# The first element is the "isOk" flag:
+#   - .0 = ⊤ means success, .1 contains the value
+#   - .0 = ⊥ means failure, .2 contains the error
+#
+# Convention: Functions use suffixes to indicate types:
+#   - II = Result with integer value, integer error
+#   - IF = Result with integer value, float error
+#   - IS = Result with integer value, string error
+#   - FI, FF, FS = float value variants
+#   - SI, SF, SS = string value variants
 
-# Result type definition
-enum Result ok err where Ok ok | Err err
+# ============ Type Aliases (Documentation) ============
+# ResultII = ⟨Bool, ℤ, ℤ⟩      -- Result with int value, int error
+# ResultIS = ⟨Bool, ℤ, String⟩ -- Result with int value, string error
+# ResultFF = ⟨Bool, F, F⟩      -- Result with float value, float error
+# ResultFS = ⟨Bool, F, String⟩ -- Result with float value, string error
 
-# Check if result is success (monomorphic for now)
-╭─ isOkI : I → Bool
-╰─ match ₀ {
-    Ok _ → ⊤;
-    Err _ → ⊥
-  }
+# ============ Constructors ============
 
-# Check if result is error
-╭─ isErrI : I → Bool
-╰─ match ₀ {
-    Ok _ → ⊥;
-    Err _ → ⊤
-  }
+# Create Ok result (integer value, integer error type)
+╭─ okII : ℤ → ⟨Bool, ℤ, ℤ⟩
+╰─ ⟨⊤, ₀, 0⟩
 
-# Get success value or default
-╭─ unwrapOrI : I → I → I
-╰─ match ₁ {
-    Ok x → x;
-    Err _ → ₀
-  }
+# Create Err result (integer value type, integer error)
+╭─ errII : ℤ → ⟨Bool, ℤ, ℤ⟩
+╰─ ⟨⊥, 0, ₀⟩
+
+# Create Ok result (integer value, string error type)
+╭─ okIS : ℤ → ⟨Bool, ℤ, String⟩
+╰─ ⟨⊤, ₀, ""⟩
+
+# Create Err result (integer value type, string error)
+╭─ errIS : String → ⟨Bool, ℤ, String⟩
+╰─ ⟨⊥, 0, ₀⟩
+
+# Create Ok result (float value, float error type)
+╭─ okFF : F → ⟨Bool, F, F⟩
+╰─ ⟨⊤, ₀, 0.0⟩
+
+# Create Err result (float value type, float error)
+╭─ errFF : F → ⟨Bool, F, F⟩
+╰─ ⟨⊥, 0.0, ₀⟩
+
+# Create Ok result (float value, string error type)
+╭─ okFS : F → ⟨Bool, F, String⟩
+╰─ ⟨⊤, ₀, ""⟩
+
+# Create Err result (float value type, string error)
+╭─ errFS : String → ⟨Bool, F, String⟩
+╰─ ⟨⊥, 0.0, ₀⟩
+
+# ============ Predicates ============
+
+# Check if result is Ok (generic)
+╭─ isOk : ⟨Bool, α, β⟩ → Bool
+╰─ ₀.0
+
+# Check if result is Err (generic)
+╭─ isErr : ⟨Bool, α, β⟩ → Bool
+╰─ ¬(₀.0)
+
+# Type-specific versions
+╭─ isOkII : ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ₀.0
+
+╭─ isErrII : ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ¬(₀.0)
+
+╭─ isOkIS : ⟨Bool, ℤ, String⟩ → Bool
+╰─ ₀.0
+
+╭─ isErrIS : ⟨Bool, ℤ, String⟩ → Bool
+╰─ ¬(₀.0)
+
+╭─ isOkFF : ⟨Bool, F, F⟩ → Bool
+╰─ ₀.0
+
+╭─ isErrFF : ⟨Bool, F, F⟩ → Bool
+╰─ ¬(₀.0)
+
+╭─ isOkFS : ⟨Bool, F, String⟩ → Bool
+╰─ ₀.0
+
+╭─ isErrFS : ⟨Bool, F, String⟩ → Bool
+╰─ ¬(₀.0)
+
+# ============ Extractors ============
+
+# Get Ok value or default (integer/integer)
+╭─ unwrapOrII : ℤ → ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get Ok value or default (integer/string)
+╭─ unwrapOrIS : ℤ → ⟨Bool, ℤ, String⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get Ok value or default (float/float)
+╭─ unwrapOrFF : F → ⟨Bool, F, F⟩ → F
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get Ok value or default (float/string)
+╭─ unwrapOrFS : F → ⟨Bool, F, String⟩ → F
+╰─ if ₀.0 then ₀.1 else ₁
+
+# Get Err value or default (integer/integer)
+╭─ unwrapErrOrII : ℤ → ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₁ else ₀.2
+
+# Get Err value or default (integer/string)
+╭─ unwrapErrOrIS : String → ⟨Bool, ℤ, String⟩ → String
+╰─ if ₀.0 then ₁ else ₀.2
+
+# Unsafe get Ok value (assumes Ok)
+╭─ unsafeUnwrapII : ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ ₀.1
+
+╭─ unsafeUnwrapFF : ⟨Bool, F, F⟩ → F
+╰─ ₀.1
+
+# Unsafe get Err value (assumes Err)
+╭─ unsafeUnwrapErrII : ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ ₀.2
+
+╭─ unsafeUnwrapErrIS : ⟨Bool, ℤ, String⟩ → String
+╰─ ₀.2
+
+# Get Ok value or compute default
+╭─ unwrapOrComputeII : (⟨⟩ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁ ⟨⟩
+
+# Get Ok value or compute from error
+╭─ unwrapOrElseII : (ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁ ₀.2
+
+╭─ unwrapOrElseIS : (String → ℤ) → ⟨Bool, ℤ, String⟩ → ℤ
+╰─ if ₀.0 then ₀.1 else ₁ ₀.2
+
+# ============ Transformations ============
+
+# Map function over Ok value (integer/integer → integer/integer)
+╭─ mapResII : (ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1, 0⟩ else ₀
+
+# Map function over Ok value (float/string → float/string)
+╭─ mapResFS : (F → F) → ⟨Bool, F, String⟩ → ⟨Bool, F, String⟩
+╰─ if ₀.0 then ⟨⊤, ₁ ₀.1, ""⟩ else ₀
+
+# Map function over Err value (integer/integer)
+╭─ mapErrII : (ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₀ else ⟨⊥, 0, ₁ ₀.2⟩
+
+# Map function over Err value (integer/string)
+╭─ mapErrIS : (String → String) → ⟨Bool, ℤ, String⟩ → ⟨Bool, ℤ, String⟩
+╰─ if ₀.0 then ₀ else ⟨⊥, 0, ₁ ₀.2⟩
+
+# Bimap: map over both Ok and Err
+╭─ bimapII : (ℤ → ℤ) → (ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ⟨⊤, ₂ ₀.1, 0⟩ else ⟨⊥, 0, ₁ ₀.2⟩
+
+# FlatMap / bind (integer/integer)
+╭─ flatMapResII : (ℤ → ⟨Bool, ℤ, ℤ⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₁ ₀.1 else ₀
+
+# FlatMap / bind (float/string)
+╭─ flatMapResFS : (F → ⟨Bool, F, String⟩) → ⟨Bool, F, String⟩ → ⟨Bool, F, String⟩
+╰─ if ₀.0 then ₁ ₀.1 else ₀
+
+# FlatMap over error
+╭─ flatMapErrII : (ℤ → ⟨Bool, ℤ, ℤ⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₀ else ₁ ₀.2
+
+# ============ Combining Results ============
+
+# Or else: return first if Ok, else second (integer/integer)
+╭─ orElseResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₁.0 then ₁ else ₀
+
+# Or else with function: compute alternative from error
+╭─ orElseWithII : (ℤ → ⟨Bool, ℤ, ℤ⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₀ else ₁ ₀.2
+
+# And then: sequence two results (integer/integer)
+╭─ andThenResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₁.0 then ₀ else ₁
+
+# And: combine two results, keep first Ok value
+╭─ andResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₁.0 ∧ ₀.0 then ₁ else if ¬(₁.0) then ₁ else ₀
+
+# Zip two results: Ok only if both are Ok
+╭─ zipResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ⟨ℤ, ℤ⟩, ℤ⟩
+╰─ if ₁.0 ∧ ₀.0 then ⟨⊤, ⟨₁.1, ₀.1⟩, 0⟩
+   else if ¬(₁.0) then ⟨⊥, ⟨0, 0⟩, ₁.2⟩
+   else ⟨⊥, ⟨0, 0⟩, ₀.2⟩
+
+# Zip with function
+╭─ zipWithResII : (ℤ → ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₁.0 ∧ ₀.0 then ⟨⊤, ₂ ₁.1 ₀.1, 0⟩
+   else if ¬(₁.0) then ⟨⊥, 0, ₁.2⟩
+   else ⟨⊥, 0, ₀.2⟩
+
+# ============ Conversion ============
+
+# Convert Result to Option (discards error)
+╭─ resToOptII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ⟩
+╰─ ⟨₀.0, ₀.1⟩
+
+╭─ resToOptFS : ⟨Bool, F, String⟩ → ⟨Bool, F⟩
+╰─ ⟨₀.0, ₀.1⟩
+
+# Convert Option to Result (with error value for None)
+╭─ optToResII : ℤ → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ⟨⊤, ₀.1, 0⟩ else ⟨⊥, 0, ₁⟩
+
+╭─ optToResIS : String → ⟨Bool, ℤ⟩ → ⟨Bool, ℤ, String⟩
+╰─ if ₀.0 then ⟨⊤, ₀.1, ""⟩ else ⟨⊥, 0, ₁⟩
+
+# Swap Ok and Err
+╭─ swapResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ ⟨¬(₀.0), ₀.2, ₀.1⟩
+
+# Convert to list (empty or singleton with Ok value)
+╭─ resToListII : ⟨Bool, ℤ, ℤ⟩ → [n]ℤ
+╰─ if ₀.0 then [₀.1] else []
+
+# ============ Safe Operations ============
+
+# Safe division (returns Err on divide by zero)
+╭─ safeDivResII : ℤ → ℤ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀ = 0 then ⟨⊥, 0, -1⟩ else ⟨⊤, ₁ / ₀, 0⟩
+
+╭─ safeDivResIS : ℤ → ℤ → ⟨Bool, ℤ, String⟩
+╰─ if ₀ = 0 then ⟨⊥, 0, "division by zero"⟩ else ⟨⊤, ₁ / ₀, ""⟩
+
+╭─ safeDivResFS : F → F → ⟨Bool, F, String⟩
+╰─ if ₀ = 0.0 then ⟨⊥, 0.0, "division by zero"⟩ else ⟨⊤, ₁ / ₀, ""⟩
+
+# Safe modulo
+╭─ safeModResIS : ℤ → ℤ → ⟨Bool, ℤ, String⟩
+╰─ if ₀ = 0 then ⟨⊥, 0, "modulo by zero"⟩ else ⟨⊤, ₁ % ₀, ""⟩
+
+# Safe square root
+╭─ safeSqrtResFS : F → ⟨Bool, F, String⟩
+╰─ if ₀ < 0.0 then ⟨⊥, 0.0, "sqrt of negative"⟩ else ⟨⊤, √₀, ""⟩
+
+# Safe log
+╭─ safeLogResFS : F → ⟨Bool, F, String⟩
+╰─ if ₀ ≤ 0.0 then ⟨⊥, 0.0, "log of non-positive"⟩ else ⟨⊤, ln ₀, ""⟩
+
+# Safe array index
+╭─ safeIndexResIS : ℤ → [n]ℤ → ⟨Bool, ℤ, String⟩
+╰─ if ₁ < 0 then ⟨⊥, 0, "negative index"⟩
+   else if ₁ ≥ len ₀ then ⟨⊥, 0, "index out of bounds"⟩
+   else ⟨⊤, ₀[₁], ""⟩
+
+╭─ safeIndexResFS : ℤ → [n]F → ⟨Bool, F, String⟩
+╰─ if ₁ < 0 then ⟨⊥, 0.0, "negative index"⟩
+   else if ₁ ≥ len ₀ then ⟨⊥, 0.0, "index out of bounds"⟩
+   else ⟨⊤, ₀[₁], ""⟩
+
+# ============ Folding ============
+
+# Fold result (integer/integer)
+╭─ foldResII : (ℤ → γ) → (ℤ → γ) → ⟨Bool, ℤ, ℤ⟩ → γ
+╰─ if ₀.0 then ₂ ₀.1 else ₁ ₀.2
+
+# Fold result (integer/string)
+╭─ foldResIS : (ℤ → γ) → (String → γ) → ⟨Bool, ℤ, String⟩ → γ
+╰─ if ₀.0 then ₂ ₀.1 else ₁ ₀.2
+
+# ============ Boolean Checks ============
+
+# Check if Ok contains specific value
+╭─ containsResII : ℤ → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ₀.0 ∧ ₀.1 = ₁
+
+# Check if Err contains specific error
+╭─ containsErrII : ℤ → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ¬(₀.0) ∧ ₀.2 = ₁
+
+╭─ containsErrIS : String → ⟨Bool, ℤ, String⟩ → Bool
+╰─ ¬(₀.0) ∧ strEq ₀.2 ₁
+
+# Check if Ok value satisfies predicate
+╭─ existsResII : (ℤ → Bool) → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ₀.0 ∧ ₁ ₀.1
+
+# Check if Err value satisfies predicate
+╭─ existsErrII : (ℤ → Bool) → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ¬(₀.0) ∧ ₁ ₀.2
+
+# Check if Err or Ok value satisfies predicate
+╭─ forallResII : (ℤ → Bool) → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ ¬(₀.0) ∨ ₁ ₀.1
+
+# ============ Comparison ============
+
+# Compare two results
+╭─ eqResII : ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩ → Bool
+╰─ if ₁.0 ∧ ₀.0 then ₁.1 = ₀.1
+   else if ¬(₁.0) ∧ ¬(₀.0) then ₁.2 = ₀.2
+   else ⊥
+
+╭─ eqResIS : ⟨Bool, ℤ, String⟩ → ⟨Bool, ℤ, String⟩ → Bool
+╰─ if ₁.0 ∧ ₀.0 then ₁.1 = ₀.1
+   else if ¬(₁.0) ∧ ¬(₀.0) then strEq ₁.2 ₀.2
+   else ⊥
+
+# ============ Iteration ============
+
+# Apply function if Ok (for side effects)
+╭─ forEachResII : (ℤ → ⟨⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨⟩
+╰─ if ₀.0 then ₁ ₀.1 else ⟨⟩
+
+# Apply function if Err (for side effects)
+╭─ forEachErrII : (ℤ → ⟨⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨⟩
+╰─ if ₀.0 then ⟨⟩ else ₁ ₀.2
+
+# Tap: apply function for side effect, return original
+╭─ tapResII : (ℤ → ⟨⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then let _ = ₁ ₀.1 in ₀ else ₀
+
+# ============ Creating Results from Conditions ============
+
+# Create Ok if condition is true, else Err
+╭─ okIfII : Bool → ℤ → ℤ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₂ then ⟨⊤, ₁, 0⟩ else ⟨⊥, 0, ₀⟩
+
+╭─ okIfIS : Bool → ℤ → String → ⟨Bool, ℤ, String⟩
+╰─ if ₂ then ⟨⊤, ₁, ""⟩ else ⟨⊥, 0, ₀⟩
+
+# Create Ok if predicate passes
+╭─ filterToResII : (ℤ → Bool) → ℤ → ℤ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₂ ₁ then ⟨⊤, ₁, 0⟩ else ⟨⊥, 0, ₀⟩
+
+╭─ filterToResIS : (ℤ → Bool) → ℤ → String → ⟨Bool, ℤ, String⟩
+╰─ if ₂ ₁ then ⟨⊤, ₁, ""⟩ else ⟨⊥, 0, ₀⟩
+
+# Ensure value satisfies predicate
+╭─ ensureII : (ℤ → Bool) → ℤ → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 ∧ ₂ ₀.1 then ₀ else ⟨⊥, 0, ₁⟩
+
+# ============ String Representation ============
+
+# Convert result to string for display
+╭─ showResII : ⟨Bool, ℤ, ℤ⟩ → String
+╰─ if ₀.0 then strConcat "Ok(" (strConcat (toString ₀.1) ")")
+   else strConcat "Err(" (strConcat (toString ₀.2) ")")
+
+╭─ showResIS : ⟨Bool, ℤ, String⟩ → String
+╰─ if ₀.0 then strConcat "Ok(" (strConcat (toString ₀.1) ")")
+   else strConcat "Err(" (strConcat ₀.2 ")")
+
+╭─ showResFS : ⟨Bool, F, String⟩ → String
+╰─ if ₀.0 then strConcat "Ok(" (strConcat (toString ₀.1) ")")
+   else strConcat "Err(" (strConcat ₀.2 ")")
+
+# ============ Error Handling Patterns ============
+
+# Try: run function, catch errors with handler
+╭─ tryII : (ℤ → ⟨Bool, ℤ, ℤ⟩) → (ℤ → ℤ) → ℤ → ℤ
+╰─ let res = ₂ ₀
+   in if res.0 then res.1 else ₁ res.2
+
+# Catch: recover from error with default
+╭─ catchII : ⟨Bool, ℤ, ℤ⟩ → ℤ → ℤ
+╰─ if ₁.0 then ₁.1 else ₀
+
+# Recover: transform error to Ok
+╭─ recoverII : (ℤ → ℤ) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₀ else ⟨⊤, ₁ ₀.2, 0⟩
+
+# Inspect error without changing result
+╭─ inspectErrII : (ℤ → ⟨⟩) → ⟨Bool, ℤ, ℤ⟩ → ⟨Bool, ℤ, ℤ⟩
+╰─ if ₀.0 then ₀ else let _ = ₁ ₀.2 in ₀

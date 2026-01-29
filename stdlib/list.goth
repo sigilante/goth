@@ -1,5 +1,9 @@
 # Goth Standard Library - List Operations
 # Common operations on arrays/lists
+#
+# Note: Some higher-order recursive functions (foldl, foldr) are provided
+# but may have limitations in the current interpreter. Prefer using
+# built-in reduction operators (Σ, Π, ↦, ▸) where possible.
 
 # ============ Access Operations ============
 
@@ -37,6 +41,14 @@
 ╭─ append : [n]α → [m]α → [k]α
 ╰─ ₁ ⧺ ₀
 
+# Replicate: create list of n copies of value
+╭─ replicate : ℤ → α → [n]α
+╰─ iota ₁ ↦ λ→ ₁
+
+# Generate range from start to end (inclusive)
+╭─ rangeTo : ℤ → ℤ → [n]ℤ
+╰─ iota (₀ - ₁ + 1) ↦ λ→ ₀ + ₂
+
 # ============ Transformation Operations ============
 
 # Map function over list
@@ -51,9 +63,13 @@
 ╭─ rev : [n]α → [n]α
 ╰─ reverse ₀
 
+# Zip two lists with function
+╭─ zipWith : (α → β → γ) → [n]α → [n]β → [n]γ
+╰─ ₁ ⊗ ₀ ₂
+
 # Zip two lists into pairs
 ╭─ zip : [n]α → [n]β → [n]⟨α, β⟩
-╰─ ₁ ⊗ ₀
+╰─ ₁ ⊗ ₀ λ→ ⟨₁, ₀⟩
 
 # ============ Reduction Operations ============
 
@@ -77,6 +93,10 @@
 ╭─ count : [n]α → (α → Bool) → ℤ
 ╰─ len (₁ ▸ ₀)
 
+# Check if none satisfy predicate
+╭─ none : [n]α → (α → Bool) → Bool
+╰─ len (₁ ▸ ₀) = 0
+
 # ============ Statistics ============
 
 ╭─ mean : [n]F → F
@@ -88,13 +108,196 @@
 ╭─ maximum : [n]F → F
 ╰─ max/ ₀
 
+# Variance (population variance)
+╭─ variance : [n]F → F
+╰─ let μ = Σ ₀ / len ₀
+   in Σ (₀ ↦ λ→ (₀ - μ) × (₀ - μ)) / len ₀
+
 # ============ Search Operations ============
 
 # Check if element is in list
 ╭─ elem : α → [n]α → Bool
 ╰─ len (₀ ▸ λ→ ₀ = ₁) > 0
 
+# Check if element is not in list
+╭─ notElem : α → [n]α → Bool
+╰─ len (₀ ▸ λ→ ₀ = ₁) = 0
+
 # Find first index of element (returns -1 if not found)
 ╭─ indexOf : α → [n]α → ℤ
 ╰─ let matches = iota (len ₀) ▸ λ→ ₁[₀] = ₂
    in if len matches > 0 then matches[0] else -1
+
+# Find index of first element satisfying predicate (returns -1 if not found)
+╭─ findIndex : (α → Bool) → [n]α → ℤ
+╰─ let matches = iota (len ₀) ▸ λ→ ₂ (₁[₀])
+   in if len matches > 0 then matches[0] else -1
+
+# Find last index of element (returns -1 if not found)
+╭─ lastIndexOf : α → [n]α → ℤ
+╰─ let matches = iota (len ₀) ▸ λ→ ₁[₀] = ₂
+   in if len matches > 0 then matches[len matches - 1] else -1
+
+# ============ Predicate-Based Operations ============
+
+# Partition list into (elements satisfying predicate, elements not satisfying)
+╭─ partition : (α → Bool) → [n]α → ⟨[m]α, [k]α⟩
+╰─ ⟨₁ ▸ ₀, ₁ ▸ λ→ ¬(₁ ₀)⟩
+
+# Get indices where predicate holds
+╭─ indicesWhere : (α → Bool) → [n]α → [m]ℤ
+╰─ iota (len ₀) ▸ λ→ ₂ (₁[₀])
+
+# Select elements at given indices
+╭─ selectAt : [m]ℤ → [n]α → [m]α
+╰─ ₁ ↦ λ→ ₁[₀]
+
+# ============ Subsequence Operations ============
+
+# Take every nth element
+╭─ everyNth : ℤ → [n]α → [m]α
+╰─ iota ((len ₀ + ₁ - 1) / ₁) ↦ λ→ ₁[₀ × ₂]
+
+# Get chunk of list from index start of size n
+╭─ slice : ℤ → ℤ → [n]α → [m]α
+╰─ take ₁ (drop ₂ ₀)
+
+# Count how many windows of size n fit in list
+╭─ windowCount : ℤ → [n]α → ℤ
+╰─ if len ₀ < ₁ then 0 else len ₀ - ₁ + 1
+
+# ============ Comparison Operations ============
+
+# Check if list is sorted (ascending)
+╭─ isSorted : [n]F → Bool
+╰─ if len ₀ ≤ 1 then ⊤
+   else all (iota (len ₀ - 1)) λ→ ₁[₀] ≤ ₁[₀ + 1]
+
+# Check if list is sorted descending
+╭─ isSortedDesc : [n]F → Bool
+╰─ if len ₀ ≤ 1 then ⊤
+   else all (iota (len ₀ - 1)) λ→ ₁[₀] ≥ ₁[₀ + 1]
+
+# Check if two lists are equal (same length and elements)
+╭─ eqList : [n]α → [m]α → Bool
+╰─ if len ₁ ≠ len ₀ then ⊥
+   else all (iota (len ₁)) λ→ ₂[₀] = ₁[₀]
+
+# Check if list starts with prefix
+╭─ isPrefixOf : [m]α → [n]α → Bool
+╰─ if len ₁ > len ₀ then ⊥
+   else all (iota (len ₁)) λ→ ₂[₀] = ₁[₀]
+
+# Check if list ends with suffix
+╭─ isSuffixOf : [m]α → [n]α → Bool
+╰─ if len ₁ > len ₀ then ⊥
+   else let offset = len ₀ - len ₁
+        in all (iota (len ₁)) λ→ ₂[₀] = ₁[offset + ₀]
+
+# ============ Transformation Operations (Extended) ============
+
+# Update element at index
+╭─ updateAt : ℤ → α → [n]α → [n]α
+╰─ iota (len ₀) ↦ λ→ if ₀ = ₃ then ₂ else ₁[₀]
+
+# Swap elements at two indices
+╭─ swapAt : ℤ → ℤ → [n]α → [n]α
+╰─ iota (len ₀) ↦ λ→ if ₀ = ₃ then ₁[₂]
+                     else if ₀ = ₂ then ₁[₃]
+                     else ₁[₀]
+
+# Rotate list left by n positions
+╭─ rotateLeft : ℤ → [n]α → [n]α
+╰─ if len ₀ = 0 then ₀
+   else let n = ₁ % len ₀
+        in drop n ₀ ⧺ take n ₀
+
+# Rotate list right by n positions
+╭─ rotateRight : ℤ → [n]α → [n]α
+╰─ if len ₀ = 0 then ₀
+   else let n = ₁ % len ₀
+        in drop (len ₀ - n) ₀ ⧺ take (len ₀ - n) ₀
+
+# ============ Numeric List Operations ============
+
+# Differences between consecutive elements
+╭─ diffs : [n]F → [m]F
+╰─ if len ₀ ≤ 1 then []
+   else iota (len ₀ - 1) ↦ λ→ ₁[₀ + 1] - ₁[₀]
+
+# Dot product of two vectors
+╭─ dotProd : [n]F → [n]F → F
+╰─ Σ (₁ ⊗ ₀ λ→ ₁ × ₀)
+
+# Element-wise addition
+╭─ addVec : [n]F → [n]F → [n]F
+╰─ ₁ ⊗ ₀ λ→ ₁ + ₀
+
+# Element-wise subtraction
+╭─ subVec : [n]F → [n]F → [n]F
+╰─ ₁ ⊗ ₀ λ→ ₁ - ₀
+
+# Element-wise multiplication
+╭─ mulVec : [n]F → [n]F → [n]F
+╰─ ₁ ⊗ ₀ λ→ ₁ × ₀
+
+# Scale vector by scalar
+╭─ scaleVec : F → [n]F → [n]F
+╰─ ₀ ↦ λ→ ₀ × ₂
+
+# Normalize vector (make unit length)
+╭─ normalize : [n]F → [n]F
+╰─ let n = √(Σ (₀ ↦ λ→ ₀ × ₀))
+   in ₀ ↦ λ→ ₀ / n
+
+# ============ Utility Operations ============
+
+# Check if list is empty
+╭─ null : [n]α → Bool
+╰─ len ₀ = 0
+
+# Check if list is non-empty
+╭─ notNull : [n]α → Bool
+╰─ len ₀ > 0
+
+# Get length as integer
+╭─ size : [n]α → ℤ
+╰─ len ₀
+
+# Safe head (returns default if empty)
+╭─ headOr : α → [n]α → α
+╰─ if len ₀ = 0 then ₁ else ₀[0]
+
+# Safe last (returns default if empty)
+╭─ lastOr : α → [n]α → α
+╰─ if len ₀ = 0 then ₁ else ₀[len ₀ - 1]
+
+# Uncons: split into head and tail (returns pair)
+╭─ uncons : [n]α → ⟨α, [m]α⟩
+╰─ ⟨₀[0], drop 1 ₀⟩
+
+# Unsnoc: split into init and last (returns pair)
+╭─ unsnoc : [n]α → ⟨[m]α, α⟩
+╰─ ⟨take (len ₀ - 1) ₀, ₀[len ₀ - 1]⟩
+
+# ============ Singleton & Pair Operations ============
+
+# Create singleton list
+╭─ singleton : α → [1]α
+╰─ [₀]
+
+# Create pair from two elements
+╭─ pair : α → β → ⟨α, β⟩
+╰─ ⟨₁, ₀⟩
+
+# Get first element of pair
+╭─ fst : ⟨α, β⟩ → α
+╰─ ₀.0
+
+# Get second element of pair
+╭─ snd : ⟨α, β⟩ → β
+╰─ ₀.1
+
+# Map over both elements of pair
+╭─ mapPair : (α → γ) → (β → δ) → ⟨α, β⟩ → ⟨γ, δ⟩
+╰─ ⟨₂ ₀.0, ₁ ₀.1⟩

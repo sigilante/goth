@@ -84,6 +84,22 @@ pub fn binop_type(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
 
 fn numeric_binop(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
     match (left, right) {
+        // Uncertain × Uncertain → Uncertain
+        (Type::Uncertain(v1, _), Type::Uncertain(v2, _)) => {
+            let result = numeric_binop(op, v1, v2)?;
+            Ok(Type::Uncertain(Box::new(result.clone()), Box::new(result)))
+        }
+        // Uncertain × scalar → Uncertain
+        (Type::Uncertain(v1, _), _) => {
+            let result = numeric_binop(op, v1, right)?;
+            Ok(Type::Uncertain(Box::new(result.clone()), Box::new(result)))
+        }
+        // scalar × Uncertain → Uncertain
+        (_, Type::Uncertain(v2, _)) => {
+            let result = numeric_binop(op, left, v2)?;
+            Ok(Type::Uncertain(Box::new(result.clone()), Box::new(result)))
+        }
+
         // Scalar × Scalar
         (Type::Prim(p1), Type::Prim(p2)) if p1.is_numeric() && p2.is_numeric() => {
             // Promote to wider type
@@ -296,10 +312,11 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
     use UnaryOp::*;
     
     match op {
-        // Negation: numeric → numeric
+        // Negation: numeric → numeric, Uncertain → Uncertain
         Neg => {
             match operand {
                 Type::Prim(p) if p.is_numeric() => Ok(operand.clone()),
+                Type::Uncertain(_, _) => Ok(operand.clone()),
                 Type::Tensor(sh, el) => {
                     let inner = unaryop_type(Neg, el)?;
                     Ok(Type::Tensor(sh.clone(), Box::new(inner)))
@@ -365,6 +382,7 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
         }
 
         // Sqrt, Floor, Ceil, Round, and math functions: T → F64 (where T is numeric)
+        // For Uncertain inputs: f(T ± T) → F64 ± F64
         UnaryOp::Sqrt | UnaryOp::Floor | UnaryOp::Ceil | UnaryOp::Round
         | UnaryOp::Gamma | UnaryOp::Ln | UnaryOp::Log10 | UnaryOp::Log2 | UnaryOp::Exp
         | UnaryOp::Sin | UnaryOp::Cos | UnaryOp::Tan
@@ -373,6 +391,10 @@ pub fn unaryop_type(op: UnaryOp, operand: &Type) -> TypeResult<Type> {
         | UnaryOp::Abs | UnaryOp::Sign => {
             match operand {
                 Type::Prim(p) if p.is_numeric() => Ok(Type::Prim(PrimType::F64)),
+                Type::Uncertain(_, _) => {
+                    let f64_ty = Type::Prim(PrimType::F64);
+                    Ok(Type::Uncertain(Box::new(f64_ty.clone()), Box::new(f64_ty)))
+                }
                 Type::Tensor(sh, el) => {
                     let inner = unaryop_type(op, el)?;
                     Ok(Type::Tensor(sh.clone(), Box::new(inner)))

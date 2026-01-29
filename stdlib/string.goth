@@ -1,35 +1,149 @@
 # Goth Standard Library - String Operations
 # Utilities for working with strings
+#
+# Note: Strings in Goth are immutable sequences of characters.
+# Many operations use the `chars` primitive to convert to char arrays
+# for manipulation, though converting back to strings has limitations.
+#
+# Built-in primitives used:
+#   chars      - String → [n]Char
+#   strConcat  - String → String → String (also ⧺)
+#   toString   - α → String
+#   lines      - String → [n]String
+#   words      - String → [n]String
+#   bytes      - String → [n]I64
+#   strEq      - String → String → Bool
+#   startsWith - String → String → Bool
+#   endsWith   - String → String → Bool
+#   contains   - String → String → Bool
 
-# String length
+# ============ Basic Properties ============
+
+# String length (number of characters)
 ╭─ strLen : String → ℤ
 ╰─ len (chars ₀)
 
 # Check if string is empty
 ╭─ strEmpty : String → Bool
-╰─ strLen ₀ = 0
+╰─ len (chars ₀) = 0
 
-# String concatenation (uses strConcat primitive)
+# Check if string is non-empty
+╭─ strNonEmpty : String → Bool
+╰─ len (chars ₀) > 0
+
+# Check if string is blank (empty or only whitespace)
+# Note: checks for space, tab, newline
+╭─ strBlank : String → Bool
+╰─ len (words ₀) = 0
+
+# ============ Comparison ============
+
+# String equality (wrapper for strEq)
+╭─ strEqual : String → String → Bool
+╰─ strEq ₁ ₀
+
+# String inequality
+╭─ strNotEqual : String → String → Bool
+╰─ ¬(strEq ₁ ₀)
+
+# Check if string starts with prefix
+╭─ hasPrefix : String → String → Bool
+╰─ startsWith ₁ ₀
+
+# Check if string ends with suffix
+╭─ hasSuffix : String → String → Bool
+╰─ endsWith ₁ ₀
+
+# Check if string contains substring
+╭─ hasSubstring : String → String → Bool
+╰─ contains ₁ ₀
+
+# ============ Concatenation ============
+
+# Concatenate two strings
 ╭─ concat : String → String → String
 ╰─ strConcat ₁ ₀
 
-# Concatenate array of strings
-╭─ joinStrings : [n]String → String
-╰─ match len ₀ {
-    0 → "";
-    1 → ₀[0];
-    _ → strConcat (₀[0]) (joinStrings (drop 1 ₀))
-  }
+# Concatenate with separator
+╭─ concatWith : String → String → String → String
+╰─ strConcat (strConcat ₂ ₁) ₀
 
-# Repeat a string n times
-# After pattern 'n' binds, indices shift: String is at ₂, count was at ₁ but now n is at ₀
-╭─ repeatStr : String → ℤ → String
-╰─ match ₀ {
-    0 → "";
-    n → strConcat ₂ (repeatStr ₂ (n - 1))
-  }
+# ============ Character Access ============
 
-# Convert integer to string (uses toString primitive)
+# Get characters as array
+╭─ toChars : String → [n]Char
+╰─ chars ₀
+
+# Get first character (unsafe - assumes non-empty)
+╭─ strHead : String → Char
+╰─ (chars ₀)[0]
+
+# Get last character (unsafe - assumes non-empty)
+╭─ strLast : String → Char
+╰─ let cs = chars ₀ in cs[len cs - 1]
+
+# Get character at index (unsafe - no bounds check)
+╭─ charAt : ℤ → String → Char
+╰─ (chars ₀)[₁]
+
+# Get character at index with default
+╭─ charAtOr : ℤ → Char → String → Char
+╰─ let cs = chars ₀
+   in if ₂ ≥ 0 ∧ ₂ < len cs then cs[₂] else ₁
+
+# ============ Splitting ============
+
+# Split string into lines
+╭─ toLines : String → [n]String
+╰─ lines ₀
+
+# Split string into words (whitespace-separated)
+╭─ toWords : String → [n]String
+╰─ words ₀
+
+# Get bytes of string
+╭─ toBytes : String → [n]ℤ
+╰─ bytes ₀
+
+# Count lines in string
+╭─ lineCount : String → ℤ
+╰─ len (lines ₀)
+
+# Count words in string
+╭─ wordCount : String → ℤ
+╰─ len (words ₀)
+
+# Count bytes in string
+╭─ byteCount : String → ℤ
+╰─ len (bytes ₀)
+
+# ============ Substrings (via char arrays) ============
+
+# Take first n characters (as char array)
+╭─ takeChars : ℤ → String → [m]Char
+╰─ take ₁ (chars ₀)
+
+# Drop first n characters (as char array)
+╭─ dropChars : ℤ → String → [m]Char
+╰─ drop ₁ (chars ₀)
+
+# Get substring as char array (from index, count chars)
+╭─ sliceChars : ℤ → ℤ → String → [m]Char
+╰─ take ₁ (drop ₂ (chars ₀))
+
+# Take last n characters (as char array)
+╭─ takeLastChars : ℤ → String → [m]Char
+╰─ let cs = chars ₀
+   in drop (len cs - ₁) cs
+
+# Drop last n characters (as char array)
+╭─ dropLastChars : ℤ → String → [m]Char
+╰─ let cs = chars ₀
+   in take (len cs - ₁) cs
+
+# ============ Conversion ============
+
+# Convert integer to string
 ╭─ intToStr : ℤ → String
 ╰─ toString ₀
 
@@ -41,15 +155,220 @@
 ╭─ boolToStr : Bool → String
 ╰─ if ₀ then "true" else "false"
 
-# Take first n characters of a string (helper)
-# Args: count, char array. Returns String.
-╭─ strTakeHelper : I → [n]Char → String
-╰─ match len ₀ {
-     0 → "";
-     _ → if ₁ < 1 then ""
-         else strConcat (toString (₀[0])) (strTakeHelper (₁ - 1) (drop 1 ₀))
-   }
+# Convert char to string
+╭─ charToStr : Char → String
+╰─ toString ₀
 
-# Take first n characters of a string
-╭─ strTake : I → String → String
-╰─ strTakeHelper ₁ (chars ₀)
+# ============ Character Properties ============
+
+# Check if character is a digit (0-9)
+╭─ isDigit : Char → Bool
+╰─ ₀ ≥ '0' ∧ ₀ ≤ '9'
+
+# Check if character is lowercase letter
+╭─ isLower : Char → Bool
+╰─ ₀ ≥ 'a' ∧ ₀ ≤ 'z'
+
+# Check if character is uppercase letter
+╭─ isUpper : Char → Bool
+╰─ ₀ ≥ 'A' ∧ ₀ ≤ 'Z'
+
+# Check if character is a letter
+╭─ isAlpha : Char → Bool
+╰─ (₀ ≥ 'a' ∧ ₀ ≤ 'z') ∨ (₀ ≥ 'A' ∧ ₀ ≤ 'Z')
+
+# Check if character is alphanumeric
+╭─ isAlphaNum : Char → Bool
+╰─ (₀ ≥ 'a' ∧ ₀ ≤ 'z') ∨ (₀ ≥ 'A' ∧ ₀ ≤ 'Z') ∨ (₀ ≥ '0' ∧ ₀ ≤ '9')
+
+# Check if character is whitespace (space, tab, newline, carriage return)
+╭─ isSpace : Char → Bool
+╰─ ₀ = ' ' ∨ ₀ = '\t' ∨ ₀ = '\n' ∨ ₀ = '\r'
+
+# Check if character is ASCII
+╭─ isAscii : Char → Bool
+╰─ toInt ₀ ≥ 0 ∧ toInt ₀ ≤ 127
+
+# Check if character is printable ASCII
+╭─ isPrintable : Char → Bool
+╰─ toInt ₀ ≥ 32 ∧ toInt ₀ ≤ 126
+
+# ============ Character Conversion ============
+
+# Convert lowercase to uppercase
+╭─ toUpperChar : Char → Char
+╰─ if ₀ ≥ 'a' ∧ ₀ ≤ 'z'
+   then toChar (toInt ₀ - 32)
+   else ₀
+
+# Convert uppercase to lowercase
+╭─ toLowerChar : Char → Char
+╰─ if ₀ ≥ 'A' ∧ ₀ ≤ 'Z'
+   then toChar (toInt ₀ + 32)
+   else ₀
+
+# Get digit value (0-9), returns -1 for non-digits
+╭─ digitValue : Char → ℤ
+╰─ if ₀ ≥ '0' ∧ ₀ ≤ '9'
+   then toInt ₀ - toInt '0'
+   else -1
+
+# Convert digit to character
+╭─ digitChar : ℤ → Char
+╰─ toChar (₀ + toInt '0')
+
+# ============ String Analysis (via char arrays) ============
+
+# Check if all characters satisfy predicate
+╭─ strAll : (Char → Bool) → String → Bool
+╰─ let cs = chars ₀
+   in len (cs ▸ ₁) = len cs
+
+# Check if any character satisfies predicate
+╭─ strAny : (Char → Bool) → String → Bool
+╰─ len (chars ₀ ▸ ₁) > 0
+
+# Count characters satisfying predicate
+╭─ strCount : (Char → Bool) → String → ℤ
+╰─ len (chars ₀ ▸ ₁)
+
+# Check if string contains only digits
+╭─ isNumeric : String → Bool
+╰─ let cs = chars ₀
+   in len cs > 0 ∧ len (cs ▸ λ→ ₀ ≥ '0' ∧ ₀ ≤ '9') = len cs
+
+# Check if string contains only letters
+╭─ isAlphabetic : String → Bool
+╰─ let cs = chars ₀
+   in len cs > 0 ∧ len (cs ▸ λ→ (₀ ≥ 'a' ∧ ₀ ≤ 'z') ∨ (₀ ≥ 'A' ∧ ₀ ≤ 'Z')) = len cs
+
+# Check if string is all lowercase
+╭─ isAllLower : String → Bool
+╰─ let cs = chars ₀
+   in len cs > 0 ∧ len (cs ▸ λ→ ¬(₀ ≥ 'A' ∧ ₀ ≤ 'Z')) = len cs
+
+# Check if string is all uppercase
+╭─ isAllUpper : String → Bool
+╰─ let cs = chars ₀
+   in len cs > 0 ∧ len (cs ▸ λ→ ¬(₀ ≥ 'a' ∧ ₀ ≤ 'z')) = len cs
+
+# ============ Character Array Transformations ============
+
+# Convert char array to uppercase
+╭─ toUpperChars : [n]Char → [n]Char
+╰─ ₀ ↦ λ→ if ₀ ≥ 'a' ∧ ₀ ≤ 'z' then toChar (toInt ₀ - 32) else ₀
+
+# Convert char array to lowercase
+╭─ toLowerChars : [n]Char → [n]Char
+╰─ ₀ ↦ λ→ if ₀ ≥ 'A' ∧ ₀ ≤ 'Z' then toChar (toInt ₀ + 32) else ₀
+
+# Reverse char array
+╭─ reverseChars : [n]Char → [n]Char
+╰─ reverse ₀
+
+# Filter characters by predicate
+╭─ filterChars : (Char → Bool) → String → [m]Char
+╰─ chars ₀ ▸ ₁
+
+# Keep only alphanumeric characters
+╭─ keepAlphaNum : String → [m]Char
+╰─ chars ₀ ▸ λ→ (₀ ≥ 'a' ∧ ₀ ≤ 'z') ∨ (₀ ≥ 'A' ∧ ₀ ≤ 'Z') ∨ (₀ ≥ '0' ∧ ₀ ≤ '9')
+
+# Keep only digits
+╭─ keepDigits : String → [m]Char
+╰─ chars ₀ ▸ λ→ ₀ ≥ '0' ∧ ₀ ≤ '9'
+
+# ============ String Search ============
+
+# Find first index of character (returns -1 if not found)
+╭─ indexOfChar : Char → String → ℤ
+╰─ let cs = chars ₀
+   in let matches = iota (len cs) ▸ λ→ cs[₀] = ₂
+   in if len matches > 0 then matches[0] else -1
+
+# Find last index of character (returns -1 if not found)
+╭─ lastIndexOfChar : Char → String → ℤ
+╰─ let cs = chars ₀
+   in let matches = iota (len cs) ▸ λ→ cs[₀] = ₂
+   in if len matches > 0 then matches[len matches - 1] else -1
+
+# Count occurrences of character
+╭─ countChar : Char → String → ℤ
+╰─ len (chars ₀ ▸ λ→ ₀ = ₂)
+
+# ============ Word/Line Operations ============
+
+# Get word at index (0-based)
+╭─ wordAt : ℤ → String → String
+╰─ (words ₀)[₁]
+
+# Get line at index (0-based)
+╭─ lineAt : ℤ → String → String
+╰─ (lines ₀)[₁]
+
+# Get first word
+╭─ firstWord : String → String
+╰─ let ws = words ₀
+   in if len ws > 0 then ws[0] else ""
+
+# Get last word
+╭─ lastWord : String → String
+╰─ let ws = words ₀
+   in if len ws > 0 then ws[len ws - 1] else ""
+
+# Get first line
+╭─ firstLine : String → String
+╰─ let ls = lines ₀
+   in if len ls > 0 then ls[0] else ""
+
+# Get last line
+╭─ lastLine : String → String
+╰─ let ls = lines ₀
+   in if len ls > 0 then ls[len ls - 1] else ""
+
+# ============ Numeric Parsing ============
+
+# Parse string as integer (uses parseInt primitive)
+╭─ parseIntStr : String → ℤ
+╰─ parseInt ₀
+
+# Parse string as float (uses parseFloat primitive)
+╭─ parseFloatStr : String → F
+╰─ parseFloat ₀
+
+# ============ Common String Constants ============
+
+# Empty string
+let emptyStr = ""
+
+# Newline character as string
+let newline = "\n"
+
+# Tab character as string
+let tab = "\t"
+
+# Space character as string
+let space = " "
+
+# Digits string
+let digits = "0123456789"
+
+# Lowercase letters
+let lowerLetters = "abcdefghijklmnopqrstuvwxyz"
+
+# Uppercase letters
+let upperLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+# ============ Utility ============
+
+# Repeat character n times (as char array)
+╭─ repeatChar : ℤ → Char → [n]Char
+╰─ iota ₁ ↦ λ→ ₁
+
+# Create padding of n spaces (as char array)
+╭─ spaces : ℤ → [n]Char
+╰─ iota ₀ ↦ λ→ ' '
+
+# Check if string is a single character
+╭─ isSingleChar : String → Bool
+╰─ len (chars ₀) = 1

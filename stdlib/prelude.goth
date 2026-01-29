@@ -1,13 +1,17 @@
 # Goth Standard Library - Prelude
 # Core functions imported by default
+#
+# This module provides fundamental operations that are useful across
+# all Goth programs. It includes combinators, boolean logic, numeric
+# operations, and basic utility functions.
 
 # ============ Core Combinators ============
 
-# Identity function
+# Identity function: returns its argument unchanged
 ╭─ id : α → α
 ╰─ ₀
 
-# Constant function (returns first argument, ignores second)
+# Constant function: returns first argument, ignores second
 ╭─ const : α → β → α
 ╰─ ₁
 
@@ -19,80 +23,393 @@
 ╭─ compose : (β → γ) → (α → β) → α → γ
 ╰─ ₂ (₁ ₀)
 
+# Apply function to argument (flip of $)
+╭─ apply : α → (α → β) → β
+╰─ ₀ ₁
+
+# Apply argument to function (flip of apply)
+╭─ applyTo : (α → β) → α → β
+╰─ ₁ ₀
+
+# On combinator: (f `on` g) x y = f (g x) (g y)
+╭─ on : (β → β → γ) → (α → β) → α → α → γ
+╰─ ₃ (₂ ₁) (₂ ₀)
+
 # ============ Boolean Operations ============
 
+# Logical NOT
 ╭─ not : Bool → Bool
 ╰─ if ₀ then ⊥ else ⊤
 
+# Logical AND
 ╭─ and : Bool → Bool → Bool
 ╰─ if ₁ then ₀ else ⊥
 
+# Logical OR
 ╭─ or : Bool → Bool → Bool
 ╰─ if ₁ then ⊤ else ₀
 
-# ============ Numeric Operations ============
+# Logical XOR (exclusive or)
+╭─ xor : Bool → Bool → Bool
+╰─ if ₁ then (if ₀ then ⊥ else ⊤) else ₀
 
-╭─ double : F → F
-╰─ ₀ × 2.0
+# Logical NAND
+╭─ nand : Bool → Bool → Bool
+╰─ if ₁ then (if ₀ then ⊥ else ⊤) else ⊤
 
-╭─ square : F → F
-╰─ ₀ × ₀
+# Logical NOR
+╭─ nor : Bool → Bool → Bool
+╰─ if ₁ then ⊥ else (if ₀ then ⊥ else ⊤)
 
-╭─ cube : F → F
-╰─ ₀ × ₀ × ₀
+# Logical implication: a → b (if a then b, else true)
+╭─ implies : Bool → Bool → Bool
+╰─ if ₁ then ₀ else ⊤
 
-╭─ inc : ℤ → ℤ
-╰─ ₀ + 1
+# Logical equivalence (XNOR)
+╭─ iff : Bool → Bool → Bool
+╰─ if ₁ then ₀ else (if ₀ then ⊥ else ⊤)
 
-╭─ dec : ℤ → ℤ
-╰─ ₀ - 1
+# Boolean to integer (⊥ = 0, ⊤ = 1)
+╭─ boolToInt : Bool → ℤ
+╰─ if ₀ then 1 else 0
 
-╭─ isZero : ℤ → Bool
-╰─ ₀ = 0
-
-╭─ isPositive : ℤ → Bool
-╰─ ₀ > 0
-
-╭─ isNegative : ℤ → Bool
-╰─ ₀ < 0
+# Integer to boolean (0 = ⊥, else ⊤)
+╭─ intToBool : ℤ → Bool
+╰─ ₀ ≠ 0
 
 # ============ Comparison Operations ============
 
+# Minimum of two values
 ╭─ min : F → F → F
 ╰─ if ₁ < ₀ then ₁ else ₀
 
+# Maximum of two values
 ╭─ max : F → F → F
 ╰─ if ₁ > ₀ then ₁ else ₀
 
+# Clamp value to range [lo, hi]
 ╭─ clamp : F → F → F → F
-╰─ max ₂ (min ₁ ₀)
+╰─ if ₀ < ₂ then ₂
+   else if ₀ > ₁ then ₁
+   else ₀
 
-# ============ Array/List Operations ============
+# Check if value is in range [lo, hi] (inclusive)
+╭─ between : F → F → F → Bool
+╰─ ₀ ≥ ₂ ∧ ₀ ≤ ₁
 
-╭─ head : [n]α → α
-╰─ ₀[0]
+# Check if value is in range (lo, hi) (exclusive)
+╭─ betweenExcl : F → F → F → Bool
+╰─ ₀ > ₂ ∧ ₀ < ₁
 
-╭─ length : [n]α → ℤ
-╰─ len ₀
+# Integer minimum
+╭─ minInt : ℤ → ℤ → ℤ
+╰─ if ₁ < ₀ then ₁ else ₀
 
+# Integer maximum
+╭─ maxInt : ℤ → ℤ → ℤ
+╰─ if ₁ > ₀ then ₁ else ₀
+
+# ============ Numeric Predicates ============
+
+# Check if zero
+╭─ isZero : ℤ → Bool
+╰─ ₀ = 0
+
+# Check if positive (> 0)
+╭─ isPositive : ℤ → Bool
+╰─ ₀ > 0
+
+# Check if negative (< 0)
+╭─ isNegative : ℤ → Bool
+╰─ ₀ < 0
+
+# Check if non-negative (>= 0)
+╭─ isNonNegative : ℤ → Bool
+╰─ ₀ ≥ 0
+
+# Check if non-positive (<= 0)
+╭─ isNonPositive : ℤ → Bool
+╰─ ₀ ≤ 0
+
+# Check if even
+╭─ isEven : ℤ → Bool
+╰─ ₀ % 2 = 0
+
+# Check if odd
+╭─ isOdd : ℤ → Bool
+╰─ ₀ % 2 ≠ 0
+
+# Check if divisible by n
+╭─ isDivisibleBy : ℤ → ℤ → Bool
+╰─ ₁ % ₀ = 0
+
+# ============ Integer Operations ============
+
+# Increment by 1
+╭─ inc : ℤ → ℤ
+╰─ ₀ + 1
+
+# Decrement by 1
+╭─ dec : ℤ → ℤ
+╰─ ₀ - 1
+
+# Negate integer
+╭─ negateInt : ℤ → ℤ
+╰─ 0 - ₀
+
+# Absolute value (integer)
+╭─ absInt : ℤ → ℤ
+╰─ if ₀ < 0 then 0 - ₀ else ₀
+
+# Sign of integer (-1, 0, or 1)
+╭─ signInt : ℤ → ℤ
+╰─ if ₀ < 0 then -1
+   else if ₀ > 0 then 1
+   else 0
+
+# Integer division (truncates toward zero)
+╭─ divInt : ℤ → ℤ → ℤ
+╰─ ₁ / ₀
+
+# Integer modulo
+╭─ modInt : ℤ → ℤ → ℤ
+╰─ ₁ % ₀
+
+# Euclidean division (result always non-negative when divisor positive)
+╭─ divMod : ℤ → ℤ → ⟨ℤ, ℤ⟩
+╰─ ⟨₁ / ₀, ₁ % ₀⟩
+
+# ============ Float Operations ============
+
+# Double a number
+╭─ double : F → F
+╰─ ₀ × 2.0
+
+# Halve a number
+╭─ half : F → F
+╰─ ₀ / 2.0
+
+# Square a number
+╭─ square : F → F
+╰─ ₀ × ₀
+
+# Cube a number
+╭─ cube : F → F
+╰─ ₀ × ₀ × ₀
+
+# Negate a float
+╭─ negate : F → F
+╰─ 0.0 - ₀
+
+# Reciprocal (1/x)
+╭─ recip : F → F
+╰─ 1.0 / ₀
+
+# Absolute value (float)
+╭─ absF : F → F
+╰─ if ₀ < 0.0 then 0.0 - ₀ else ₀
+
+# Sign of float (-1.0, 0.0, or 1.0)
+╭─ signF : F → F
+╰─ if ₀ < 0.0 then -1.0
+   else if ₀ > 0.0 then 1.0
+   else 0.0
+
+# Linear interpolation: lerp t a b = a + t*(b-a)
+╭─ lerp : F → F → F → F
+╰─ ₁ + ₂ × (₀ - ₁)
+
+# Inverse lerp: what t gives this value between a and b?
+╭─ invLerp : F → F → F → F
+╰─ (₂ - ₁) / (₀ - ₁)
+
+# Smooth step (cubic interpolation)
+╭─ smoothstep : F → F → F → F
+╰─ let t = clamp ((₀ - ₂) / (₁ - ₂)) 0.0 1.0
+   in t × t × (3.0 - 2.0 × t)
+
+# ============ Rounding Operations ============
+
+# Floor (round toward negative infinity)
+╭─ floor : F → F
+╰─ ⌊₀⌋
+
+# Ceiling (round toward positive infinity)
+╭─ ceil : F → F
+╰─ ⌈₀⌉
+
+# Round to nearest integer
+╭─ round : F → F
+╰─ ⌊₀ + 0.5⌋
+
+# Truncate toward zero
+╭─ trunc : F → F
+╰─ if ₀ < 0.0 then ⌈₀⌉ else ⌊₀⌋
+
+# Fractional part
+╭─ frac : F → F
+╰─ ₀ - ⌊₀⌋
+
+# ============ Trigonometric Functions ============
+# Note: Built-in trig functions: sin, cos, tan, asin, acos, atan
+
+# Secant
+╭─ sec : F → F
+╰─ 1.0 / cos ₀
+
+# Cosecant
+╭─ csc : F → F
+╰─ 1.0 / sin ₀
+
+# Cotangent
+╭─ cot : F → F
+╰─ cos ₀ / sin ₀
+
+# Convert degrees to radians
+╭─ toRadians : F → F
+╰─ ₀ × π / 180.0
+
+# Convert radians to degrees
+╭─ toDegrees : F → F
+╰─ ₀ × 180.0 / π
+
+# ============ Exponential and Logarithmic ============
+# Note: Built-in: exp, ln, log₁₀, log₂, √
+
+# Power of 2
+╭─ pow2 : F → F
+╰─ 2.0 ^ ₀
+
+# Power of 10
+╭─ pow10 : F → F
+╰─ 10.0 ^ ₀
+
+# Square root (alias)
+╭─ sqrt : F → F
+╰─ √₀
+
+# Cube root
+╭─ cbrt : F → F
+╰─ ₀ ^ (1.0 / 3.0)
+
+# Natural logarithm (alias)
+╭─ log : F → F
+╰─ ln ₀
+
+# Logarithm base b
+╭─ logBase : F → F → F
+╰─ ln ₀ / ln ₁
+
+# Hyperbolic functions are built-in: sinh, cosh, tanh
+
+# ============ Array/List Basic Operations ============
+# Note: head, length, sum, product, mean, minimum, maximum
+# are defined in list.goth. Import that module for these.
+
+# Check if empty
 ╭─ isEmpty : [n]α → Bool
 ╰─ len ₀ = 0
 
-╭─ replicate : ℤ → α → [n]α
-╰─ [₁; ₀]
-
-# ============ Reduction Operations ============
-
-╭─ sum : [n]F → F
-╰─ Σ ₀
-
-╭─ product : [n]F → F
-╰─ */ ₀
-
-╭─ mean : [n]F → F
-╰─ Σ ₀ / len ₀
+# Check if non-empty
+╭─ nonEmpty : [n]α → Bool
+╰─ len ₀ > 0
 
 # ============ Mathematical Constants ============
-# These are built-in: π (pi), 𝕖 (e)
-# tau is 2π
-let tau = 2.0 × 3.14159265358979323846
+# Built-in: π (pi), 𝕖 (e)
+
+# Tau = 2π (full circle in radians)
+let tau = 2.0 × π
+
+# Golden ratio φ = (1 + √5) / 2
+let phi = (1.0 + √5.0) / 2.0
+
+# Euler-Mascheroni constant (approximate)
+let gamma = 0.5772156649015329
+
+# Square root of 2
+let sqrt2 = √2.0
+
+# Square root of 3
+let sqrt3 = √3.0
+
+# Natural log of 2
+let ln2 = ln 2.0
+
+# Natural log of 10
+let ln10 = ln 10.0
+
+# ============ Tuple Operations ============
+
+# Create a pair
+╭─ pair : α → β → ⟨α, β⟩
+╰─ ⟨₁, ₀⟩
+
+# Get first element of pair
+╭─ fst : ⟨α, β⟩ → α
+╰─ ₀.0
+
+# Get second element of pair
+╭─ snd : ⟨α, β⟩ → β
+╰─ ₀.1
+
+# Swap elements of pair
+╭─ swap : ⟨α, β⟩ → ⟨β, α⟩
+╰─ ⟨₀.1, ₀.0⟩
+
+# Apply function to first element
+╭─ mapFst : (α → γ) → ⟨α, β⟩ → ⟨γ, β⟩
+╰─ ⟨₁ ₀.0, ₀.1⟩
+
+# Apply function to second element
+╭─ mapSnd : (β → γ) → ⟨α, β⟩ → ⟨α, γ⟩
+╰─ ⟨₀.0, ₁ ₀.1⟩
+
+# Apply two functions to pair elements
+╭─ bimap : (α → γ) → (β → δ) → ⟨α, β⟩ → ⟨γ, δ⟩
+╰─ ⟨₂ ₀.0, ₁ ₀.1⟩
+
+# Duplicate value into pair
+╭─ dup : α → ⟨α, α⟩
+╰─ ⟨₀, ₀⟩
+
+# Create triple
+╭─ triple : α → β → γ → ⟨α, β, γ⟩
+╰─ ⟨₂, ₁, ₀⟩
+
+# ============ Conditional Helpers ============
+
+# If-then-else as function
+╭─ ifThenElse : Bool → α → α → α
+╰─ if ₂ then ₁ else ₀
+
+# Guard: return value if condition true, else default
+╭─ guard : Bool → α → α → α
+╰─ if ₂ then ₁ else ₀
+
+# Unless: opposite of when
+╭─ unless : Bool → α → α → α
+╰─ if ₂ then ₀ else ₁
+
+# ============ Numeric Conversions ============
+
+# Integer to float
+╭─ intToFloat : ℤ → F
+╰─ toFloat ₀
+
+# Float to integer (truncates)
+╭─ floatToInt : F → ℤ
+╰─ toInt ₀
+
+# ============ Utility Functions ============
+
+# Always returns unit (useful for side effects)
+╭─ unit : α → ⟨⟩
+╰─ ⟨⟩
+
+# Error/undefined placeholder (returns 0, use with caution)
+╭─ undefined : ℤ
+╰─ 0 / 0
+
+# Assert-like: returns value if condition true
+╭─ ensuring : Bool → α → α
+╰─ if ₁ then ₀ else ₀
