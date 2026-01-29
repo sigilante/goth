@@ -54,7 +54,17 @@ pub fn binop_type(op: BinOp, left: &Type, right: &Type) -> TypeResult<Type> {
         Bind => {
             bind_type(left, right)
         }
-        
+
+        // Write: String × String → ()
+        Write => {
+            write_type(left, right)
+        }
+
+        // Read: String × _ → String (left is path, right is ignored or used for pipeline)
+        Read => {
+            read_type(left, right)
+        }
+
         // Custom operators - not yet supported
         Custom(name) => {
             Err(TypeError::InvalidBinOp {
@@ -263,6 +273,22 @@ fn bind_type(arr: &Type, func: &Type) -> TypeResult<Type> {
             right: func.clone(),
         })
     }
+}
+
+/// Write: String × String → ()
+fn write_type(_content: &Type, _path: &Type) -> TypeResult<Type> {
+    // For now, accept any types and return Unit
+    // A more strict version would check that both are String
+    Ok(Type::unit())
+}
+
+/// Read: String × _ → String
+fn read_type(_path: &Type, _right: &Type) -> TypeResult<Type> {
+    // Returns the file contents as a String (char tensor)
+    Ok(Type::Tensor(
+        Shape(vec![Dim::Var("?".into())]),
+        Box::new(Type::Prim(PrimType::Char)),
+    ))
 }
 
 /// Get type of a unary operation
@@ -739,8 +765,8 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 Type::Prim(PrimType::Bool),
             ))
         }
-        // String concatenation
-        "strConcat" | "⧺" => {
+        // String concatenation (⧺ is now handled by concat which preserves Char type)
+        "strConcat" => {
             // String → String → String (concatenate two strings)
             Some(Type::func_n(
                 [

@@ -53,6 +53,7 @@ impl EvalError {
     pub fn shape_mismatch(msg: impl Into<String>) -> Self { EvalError::ShapeMismatch(msg.into()) }
     pub fn not_implemented(what: impl Into<String>) -> Self { EvalError::NotImplemented(what.into()) }
     pub fn internal(msg: impl Into<String>) -> Self { EvalError::Internal(msg.into()) }
+    pub fn io_error(msg: impl Into<String>) -> Self { EvalError::IoError(msg.into()) }
 }
 
 pub trait OptionExt<T> {

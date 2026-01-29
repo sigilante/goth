@@ -38,6 +38,10 @@ pub enum BinOp {
     ZipWith,  // ⊗
     Concat,   // ⊕
 
+    // File I/O
+    Write,    // ▷ (content ▷ "path")
+    Read,     // ◁ ("path" ◁)
+
     // User-defined (by name)
     Custom(Box<str>),
 }
@@ -115,6 +119,8 @@ impl BinOp {
             BinOp::Bind => "⤇",
             BinOp::ZipWith => "⊗",
             BinOp::Concat => "⊕",
+            BinOp::Write => "▷",
+            BinOp::Read => "◁",
             BinOp::Custom(_) => "?",
         }
     }
@@ -143,6 +149,8 @@ impl BinOp {
             BinOp::Bind => "=>",
             BinOp::ZipWith => "*:",
             BinOp::Concat => "+:",
+            BinOp::Write => ">!",
+            BinOp::Read => "<!",
             BinOp::Custom(_) => "??",
         }
     }
@@ -157,16 +165,17 @@ impl BinOp {
             BinOp::And => 6,
             BinOp::Or => 5,
             BinOp::Map | BinOp::Filter | BinOp::Bind | BinOp::Compose => 4,
-            BinOp::Custom(_) => 3,
+            BinOp::Write | BinOp::Read => 3,
+            BinOp::Custom(_) => 2,
         }
     }
 
     /// Get operator associativity
     pub fn assoc(&self) -> Assoc {
         match self {
-            BinOp::Pow | BinOp::Compose | BinOp::Map | BinOp::Filter | BinOp::Bind => Assoc::Right,
+            BinOp::Pow | BinOp::Compose | BinOp::Map | BinOp::Filter | BinOp::Bind | BinOp::Read => Assoc::Right,
             BinOp::Eq | BinOp::Neq | BinOp::Lt | BinOp::Gt | BinOp::Leq | BinOp::Geq => Assoc::None,
-            _ => Assoc::Left,
+            _ => Assoc::Left,  // includes Write
         }
     }
 }

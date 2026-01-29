@@ -756,6 +756,8 @@ impl<'a> Parser<'a> {
             Token::Compose => BinOp::Compose,
             Token::ZipWith => BinOp::ZipWith,
             Token::Concat => BinOp::Concat,
+            Token::Write => BinOp::Write,
+            Token::Read => BinOp::Read,
             _ => BinOp::Add, // fallback
         }
     }

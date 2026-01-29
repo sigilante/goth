@@ -206,6 +206,14 @@ pub enum Token {
     #[token("++")]
     Concat,
 
+    // ============ File I/O ============
+    #[token("▷")]
+    #[token(">!")]
+    Write,
+    #[token("◁")]
+    #[token("<!")]
+    Read,
+
     // ============ Reduction ============
     #[token("Σ")]
     #[token("+/")]
@@ -536,13 +544,14 @@ impl Token {
             Token::Caret => Some(9),
             Token::Compose => Some(10),
             Token::Map | Token::Filter | Token::Bind => Some(2),
+            Token::Write | Token::Read => Some(1),
             _ => None,
         }
     }
 
     /// Check if operator is right-associative
     pub fn is_right_assoc(&self) -> bool {
-        matches!(self, Token::Caret | Token::Arrow | Token::Map | Token::Filter | Token::Bind | Token::Compose)
+        matches!(self, Token::Caret | Token::Arrow | Token::Map | Token::Filter | Token::Bind | Token::Compose | Token::Read)
     }
 }
 

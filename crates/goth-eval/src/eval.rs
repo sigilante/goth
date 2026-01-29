@@ -154,6 +154,8 @@ impl Evaluator {
             BinOp::Compose => { let f = self.eval_with_env(left, env)?; let g = self.eval_with_env(right, env)?; self.eval_compose(f, g) }
             BinOp::And => { let left_val = self.eval_with_env(left, env)?; match left_val { Value::Bool(false) => Ok(Value::Bool(false)), Value::Bool(true) => self.eval_with_env(right, env), _ => Err(EvalError::type_error("Bool", &left_val)) } }
             BinOp::Or => { let left_val = self.eval_with_env(left, env)?; match left_val { Value::Bool(true) => Ok(Value::Bool(true)), Value::Bool(false) => self.eval_with_env(right, env), _ => Err(EvalError::type_error("Bool", &left_val)) } }
+            BinOp::Write => { let content = self.eval_with_env(left, env)?; let path = self.eval_with_env(right, env)?; self.eval_write(content, path) }
+            BinOp::Read => { let path = self.eval_with_env(left, env)?; self.eval_read(path) }
             _ => { let left_val = self.eval_with_env(left, env)?; let right_val = self.eval_with_env(right, env)?; prim::apply_binop(op, left_val, right_val) }
         }
     }
@@ -452,6 +454,35 @@ impl Evaluator {
         Ok(Value::Closure(Closure { arity: 1, body, env, preconditions: vec![], postconditions: vec![] }))
     }
 
+    fn eval_write(&mut self, content: Value, path: Value) -> EvalResult<Value> {
+        // Extract path as string
+        let path_str = match &path {
+            Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String", &path))?,
+            _ => return Err(EvalError::type_error("String", &path)),
+        };
+        // Extract content as string
+        let content_str = match &content {
+            Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String", &content))?,
+            _ => return Err(EvalError::type_error("String", &content)),
+        };
+        // Write to file
+        std::fs::write(&path_str, &content_str)
+            .map_err(|e| EvalError::io_error(format!("Failed to write '{}': {}", path_str, e)))?;
+        Ok(Value::Unit)
+    }
+
+    fn eval_read(&mut self, path: Value) -> EvalResult<Value> {
+        // Extract path as string
+        let path_str = match &path {
+            Value::Tensor(t) => tensor_to_string(t).ok_or_else(|| EvalError::type_error("String", &path))?,
+            _ => return Err(EvalError::type_error("String", &path)),
+        };
+        // Read from file
+        let contents = std::fs::read_to_string(&path_str)
+            .map_err(|e| EvalError::io_error(format!("Failed to read '{}': {}", path_str, e)))?;
+        Ok(Value::string(&contents))
+    }
+
     fn eval_do(&mut self, init: &Expr, ops: &[DoOp], env: &Env) -> EvalResult<Value> {
         let mut current = self.eval_with_env(init, env)?;
         for op in ops {
@@ -468,6 +499,21 @@ impl Evaluator {
 }
 
 impl Default for Evaluator { fn default() -> Self { Self::new() } }
+
+/// Helper to convert a tensor to a string.
+/// Handles both native Char tensors and Generic tensors containing Char values.
+fn tensor_to_string(t: &Tensor) -> Option<String> {
+    // First try native char tensor
+    if let Some(s) = t.to_string_value() {
+        return Some(s);
+    }
+    // Then try generic tensor of chars
+    let chars: Option<Vec<char>> = t.iter().map(|v| match v {
+        Value::Char(c) => Some(c),
+        _ => None,
+    }).collect();
+    chars.map(|cs| cs.into_iter().collect())
+}
 
 fn prim_arity(prim: PrimFn) -> usize {
     match prim {

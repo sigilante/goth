@@ -18,7 +18,7 @@ pub fn apply_binop(op: &goth_ast::op::BinOp, left: Value, right: Value) -> EvalR
         Lt => compare_lt(left, right), Gt => compare_gt(left, right),
         Leq => compare_leq(left, right), Geq => compare_geq(left, right),
         And => logical_and(left, right), Or => logical_or(left, right),
-        Compose | Map | Filter | Bind => Err(EvalError::internal("should be handled by evaluator")),
+        Compose | Map | Filter | Bind | Write | Read => Err(EvalError::internal("should be handled by evaluator")),
         ZipWith => zip_with(left, right), Concat => concat(left, right),
         Custom(name) => Err(EvalError::not_implemented(format!("custom operator: {}", name))),
     }
@@ -457,11 +457,28 @@ fn shape(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => 
 fn reverse(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => { let mut data = t.to_vec(); data.reverse(); Ok(Value::Tensor(Tensor::from_values(t.shape.clone(), data))) } Value::Tuple(mut vs) => { vs.reverse(); Ok(Value::Tuple(vs)) } _ => Err(EvalError::type_error("Tensor or Tuple", &value)) } }
 
 fn concat(left: Value, right: Value) -> EvalResult<Value> {
+    use crate::value::TensorData;
     match (&left, &right) {
         (Value::Tensor(a), Value::Tensor(b)) => {
             if a.rank() != 1 || b.rank() != 1 { return Err(EvalError::not_implemented("concat for rank > 1")); }
-            let mut data = a.to_vec(); data.extend(b.iter()); let new_len = a.len() + b.len();
-            Ok(Value::Tensor(Tensor::from_values(vec![new_len], data)))
+            let new_len = a.len() + b.len();
+            // Preserve type-specific tensor data when both sides match
+            let data = match (&a.data, &b.data) {
+                (TensorData::Char(ca), TensorData::Char(cb)) => {
+                    let mut chars = ca.clone(); chars.extend(cb.iter()); TensorData::Char(chars)
+                }
+                (TensorData::Int(ia), TensorData::Int(ib)) => {
+                    let mut ints = ia.clone(); ints.extend(ib.iter()); TensorData::Int(ints)
+                }
+                (TensorData::Float(fa), TensorData::Float(fb)) => {
+                    let mut floats = fa.clone(); floats.extend(fb.iter()); TensorData::Float(floats)
+                }
+                (TensorData::Bool(ba), TensorData::Bool(bb)) => {
+                    let mut bools = ba.clone(); bools.extend(bb.iter()); TensorData::Bool(bools)
+                }
+                _ => { let mut data = a.to_vec(); data.extend(b.iter()); TensorData::Generic(data) }
+            };
+            Ok(Value::Tensor(Tensor { shape: vec![new_len], data }))
         }
         (Value::Tuple(a), Value::Tuple(b)) => { let mut result = a.clone(); result.extend(b.iter().cloned()); Ok(Value::Tuple(result)) }
         _ => Err(EvalError::type_error_msg(format!("Cannot concat {} and {}", left.type_name(), right.type_name()))),
@@ -633,7 +650,7 @@ fn to_string(value: Value) -> EvalResult<Value> {
 fn chars(value: Value) -> EvalResult<Value> {
     match value {
         Value::Tensor(t) => {
-            if let Some(s) = t.to_string_value() {
+            if t.to_string_value().is_some() {
                 // Already a string, return as-is (it's already a char tensor)
                 Ok(Value::Tensor(t))
             } else {

@@ -687,6 +687,8 @@ fn binop_str(op: &crate::op::BinOp, unicode: bool) -> String {
         BinOp::Filter => if unicode { "▸".to_string() } else { "|>".to_string() },
         BinOp::Bind => if unicode { "⤇".to_string() } else { ">>=".to_string() },
         BinOp::ZipWith => if unicode { "⊗".to_string() } else { "<*>".to_string() },
+        BinOp::Write => if unicode { "▷".to_string() } else { ">!".to_string() },
+        BinOp::Read => if unicode { "◁".to_string() } else { "<!".to_string() },
         BinOp::Custom(name) => name.to_string(),
     }
 }
