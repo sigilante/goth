@@ -1,8 +1,8 @@
 # Multiply two uncertain values with relative error propagation
-# Input: a da b db (value±uncertainty for each)
+# Input: two uncertain values (value±uncertainty each)
 # Output: (a×b) ± |a×b|×√((da/a)²+(db/b)²)
-# De Bruijn: ₃ = a, ₂ = da, ₁ = b, ₀ = db
+# De Bruijn: ₁ = first, ₀ = second
 # Property: relative uncertainty adds in quadrature
 
-╭─ main : F64 → F64 → F64 → F64 → (F64 ± F64)
-╰─ (₃ ± ₂) × (₁ ± ₀)
+╭─ main : (F64 ± F64) → (F64 ± F64) → (F64 ± F64)
+╰─ ₁ × ₀

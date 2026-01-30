@@ -664,6 +664,12 @@ fn compare_lt(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Int(a), Value::Float(b)) => Ok(Value::Bool((*a as f64) < b.0)),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(a.0 < *b as f64)),
         (Value::Char(a), Value::Char(b)) => Ok(Value::Bool(a < b)),
+        (Value::Uncertain { value: a, .. }, Value::Uncertain { value: b, .. }) =>
+            compare_lt(*a.clone(), *b.clone()),
+        (Value::Uncertain { value: a, .. }, _) =>
+            compare_lt(*a.clone(), right.clone()),
+        (_, Value::Uncertain { value: b, .. }) =>
+            compare_lt(left.clone(), *b.clone()),
         _ => Err(EvalError::type_error_msg(format!("Cannot compare {} and {}", left.type_name(), right.type_name()))),
     }
 }

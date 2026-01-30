@@ -128,7 +128,13 @@ fn main() {
 
     if let Some(expr) = args.eval {
         // Evaluate expression from command line
-        run_expr(&expr, args.trace, args.parse_only, args.ast, args.check);
+        // Collect extra positional args as expression arguments
+        let mut expr_args: Vec<String> = Vec::new();
+        if let Some(ref file) = args.file {
+            expr_args.push(file.to_string_lossy().to_string());
+        }
+        expr_args.extend(args.program_args.iter().cloned());
+        run_expr(&expr, args.trace, args.parse_only, args.ast, args.check, &expr_args);
         return;
     } else if let Some(file) = args.file {
         // Run file
@@ -141,8 +147,9 @@ fn main() {
     }
 }
 
-fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: bool) {
+fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: bool, program_args: &[String]) {
     use colored::Colorize;
+    use goth_ast::expr::Expr;
 
     // Parse
     let parsed = match parse_expr(source) {
@@ -162,10 +169,29 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
     // Resolve
     let resolved = resolve_expr(parsed);
 
+    // Wrap expression as a lambda applied to CLI args (if any)
+    let final_expr = if program_args.is_empty() {
+        resolved
+    } else {
+        // Build: ((λ→ ... (λ→ body)) arg0 arg1 ...)
+        // Wrap the expression in N nested lambdas, then apply args
+        let arity = program_args.len();
+        let mut lambda_expr = resolved;
+        for _ in 0..arity {
+            lambda_expr = Expr::Lam(Box::new(lambda_expr));
+        }
+        // Apply each argument
+        for arg in program_args {
+            let arg_expr = parse_arg_to_expr(arg);
+            lambda_expr = Expr::app(lambda_expr, arg_expr);
+        }
+        lambda_expr
+    };
+
     // Type check if --check flag is set
     if check {
         let mut type_checker = TypeChecker::new();
-        match type_checker.infer(&resolved) {
+        match type_checker.infer(&final_expr) {
             Ok(ty) => {
                 println!("{}: {}", "Type".cyan(), ty);
             }
@@ -187,7 +213,7 @@ fn run_expr(source: &str, trace: bool, parse_only: bool, show_ast: bool, check: 
         Evaluator::new()
     };
 
-    match evaluator.eval(&resolved) {
+    match evaluator.eval(&final_expr) {
         Ok(value) => {
             println!("{}", value);
         }
@@ -354,10 +380,31 @@ fn run_module_with_main(module: &goth_ast::decl::Module, trace: bool, program_ar
     }
 }
 
+/// Try to parse a CLI argument as an uncertain value (e.g. "1.0±0.05" or "1.0+-0.05")
+fn try_parse_uncertain(arg: &str) -> Option<goth_ast::expr::Expr> {
+    use goth_ast::expr::Expr;
+    use goth_ast::literal::Literal;
+
+    let (left, right) = arg.split_once('±')
+        .or_else(|| arg.split_once("+-"))?;
+    let val = left.parse::<f64>().ok()?;
+    let unc = right.parse::<f64>().ok()?;
+    Some(Expr::BinOp(
+        goth_ast::op::BinOp::PlusMinus,
+        Box::new(Expr::Lit(Literal::Float(val))),
+        Box::new(Expr::Lit(Literal::Float(unc))),
+    ))
+}
+
 /// Parse a CLI argument string into a Goth expression
 fn parse_arg_to_expr(arg: &str) -> goth_ast::expr::Expr {
     use goth_ast::expr::Expr;
     use goth_ast::literal::Literal;
+
+    // Try to parse as uncertain value (e.g. "1.0±0.05" or "1.0+-0.05")
+    if let Some(expr) = try_parse_uncertain(arg) {
+        return expr;
+    }
 
     // Try to parse as integer first
     if let Ok(n) = arg.parse::<i128>() {

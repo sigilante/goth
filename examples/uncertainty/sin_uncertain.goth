@@ -1,8 +1,8 @@
 # Sine of an uncertain value
-# Input: x dx (value±uncertainty, x in radians)
+# Input: uncertain value (value±uncertainty, x in radians)
 # Output: sin(x) ± |cos(x)|×dx
-# De Bruijn: ₁ = x, ₀ = dx
+# De Bruijn: ₀ = uncertain value
 # Property: derivative-based propagation δ(sin x) = |cos x| × δx
 
-╭─ main : F64 → F64 → (F64 ± F64)
-╰─ sin (₁ ± ₀)
+╭─ main : (F64 ± F64) → (F64 ± F64)
+╰─ sin ₀

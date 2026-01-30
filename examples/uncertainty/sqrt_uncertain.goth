@@ -1,9 +1,9 @@
 # Square root of an uncertain value
-# Input: x dx (value±uncertainty)
+# Input: uncertain value (value±uncertainty)
 # Output: √x ± dx/(2√x)
-# De Bruijn: ₁ = x, ₀ = dx
+# De Bruijn: ₀ = uncertain value
 # Precondition: x ≥ 0
 # Property: derivative-based propagation δf = |f'(x)| × δx
 
-╭─ main : F64 → F64 → (F64 ± F64)
-╰─ √(₁ ± ₀)
+╭─ main : (F64 ± F64) → (F64 ± F64)
+╰─ √₀

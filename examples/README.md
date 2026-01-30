@@ -193,18 +193,18 @@ File and stream I/O using the `▷` (write) operator.
 
 ## uncertainty/
 
-First-class uncertain values with automatic error propagation.
+First-class uncertain values with automatic error propagation. Uncertain values can be passed directly as CLI arguments using the `±` or `+-` notation (e.g. `"10.0±0.5"` or `"10.0+-0.5"`).
 
 | File | Description | Example |
 |------|-------------|---------|
-| `measure.goth` | Create an uncertain value | `10.0 0.5 → 10 ± 0.5` |
-| `add_uncertain.goth` | Addition with error propagation | `10 0.3 20 0.4 → 30 ± 0.5` |
-| `mul_uncertain.goth` | Multiplication with relative error | `5 0.1 3 0.2 → 15 ± 1.04...` |
-| `sqrt_uncertain.goth` | Square root with derivative propagation | `9 0.3 → 3 ± 0.05` |
-| `sin_uncertain.goth` | Sine with derivative propagation | `1.0 0.1 → 0.841... ± 0.054...` |
-| `chained_uncertain.goth` | Multi-step propagation: sin(√a + b) | `4 0.1 1 0.05 → ...` |
+| `measure.goth` | Return an uncertain value | `"10.0±0.5" → 10 ± 0.5` |
+| `add_uncertain.goth` | Addition with error propagation | `"10.0±0.3" "20.0±0.4" → 30 ± 0.5` |
+| `mul_uncertain.goth` | Multiplication with relative error | `"5.0±0.1" "3.0±0.2" → 15 ± 1.04...` |
+| `sqrt_uncertain.goth` | Square root with derivative propagation | `"9.0±0.3" → 3 ± 0.05` |
+| `sin_uncertain.goth` | Sine with derivative propagation | `"1.0±0.1" → 0.841... ± 0.054...` |
+| `chained_uncertain.goth` | Multi-step propagation: sin(√a + b) | `"4.0±0.1" "1.0±0.05" → ...` |
 
-**Demonstrates:** The `±` operator, automatic propagation through `+`, `-`, `×`, `/`, `√`, `sin`, `cos`, `exp`, `ln`, etc.
+**Demonstrates:** The `±` operator, automatic propagation through `+`, `-`, `×`, `/`, `√`, `sin`, `cos`, `exp`, `ln`, etc. Ordering comparisons (`<`, `>`, `≤`, `≥`) on uncertain values compare central values.
 
 ---
 
