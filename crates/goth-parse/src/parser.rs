@@ -31,11 +31,13 @@ pub type ParseResult<T> = Result<T, ParseError>;
 /// Parser
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
+    /// End byte offset of the last consumed token (for adjacency checks)
+    last_token_end: usize,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a str) -> Self {
-        Parser { lexer: Lexer::new(source) }
+        Parser { lexer: Lexer::new(source), last_token_end: 0 }
     }
 
     // ============ Utilities ============
@@ -44,8 +46,17 @@ impl<'a> Parser<'a> {
         self.lexer.peek()
     }
 
+    /// Peek at the start byte offset of the next token (for adjacency checks)
+    fn peek_start(&mut self) -> Option<usize> {
+        self.lexer.peek_spanned().map(|s| s.loc.start)
+    }
+
     fn next(&mut self) -> Option<Token> {
-        self.lexer.next()
+        let spanned = self.lexer.next_spanned();
+        if let Some(ref s) = spanned {
+            self.last_token_end = s.loc.end;
+        }
+        spanned.map(|s| s.value)
     }
 
     fn expect(&mut self, expected: Token) -> ParseResult<()> {
@@ -378,6 +389,12 @@ impl<'a> Parser<'a> {
                     );
                     if !can_index {
                         break; // Treat [..] as a separate array, not indexing
+                    }
+                    // Whitespace-sensitive: `expr[i]` (adjacent) = indexing,
+                    // `expr [1,2]` (space) = function application with array arg.
+                    let adjacent = self.peek_start().map_or(false, |s| s == self.last_token_end);
+                    if !adjacent {
+                        break; // Treat [..] as a separate array expression
                     }
                     self.next();
                     let mut indices = vec![self.parse_expr()?];

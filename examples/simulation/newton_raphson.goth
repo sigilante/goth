@@ -1,0 +1,101 @@
+# Newton-Raphson Root Finder
+# Finds cube root of a target value: solve x³ - target = 0
+# f(x) = x³ - target, f'(x) = 3x²
+# Iteration: x' = x - f(x)/f'(x) = x - (x³ - target)/(3x²)
+# Outputs: newton.svg — bar chart of error magnitude per iteration
+#          Also prints CSV to stdout: iteration, estimate, error
+
+# Target value whose cube root we seek
+let target = 27.0
+
+# Number of iterations to run
+let nIter = 10
+
+# Initial guess
+let x0 = 1.0
+
+# True answer for error computation
+let answer = 3.0
+
+# f(x) = x³ - target
+╭─ f : F64 → F64
+╰─ ₀ × ₀ × ₀ - target
+
+# f'(x) = 3x²
+╭─ fprime : F64 → F64
+╰─ 3.0 × ₀ × ₀
+
+# One Newton step: x - f(x)/f'(x)
+╭─ step : F64 → F64
+╰─ ₀ - f ₀ / fprime ₀
+
+# Clamp value to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Absolute value
+╭─ absF : F64 → F64
+╰─ if ₀ < 0.0 then 0.0 - ₀ else ₀
+
+# Collect iteration history: returns array of x values at each step
+# ₂ = current x, ₁ = iteration count, ₀ = max iterations
+# Returns array of [x0, x1, ..., x_n]
+╭─ iterate : F64 → I64 → I64 → [n]F64
+╰─ if ₁ = ₀ then [₂]
+   else [₂] ⊕ iterate (step ₂) (₁ + 1) ₀
+
+# Error at each step (absolute)
+╭─ errorAt : F64 → F64
+╰─ absF (₀ - answer)
+
+# Map error for bar height: scale log10(error) into pixel range
+# SVG chart is 400px tall; we map error [1e-15, 10] → [0, 400]
+# log10(error) ranges from about -15 to 1; map to pixels
+╭─ barHeight : F64 → F64
+╰─ let err = errorAt ₀ in
+   if err < 1.0e-15 then 5.0
+   else let logErr = ln err / ln 10.0 in
+        let frac = (logErr + 16.0) / 17.0 in
+        clamp frac × 380.0 + 10.0
+
+# Temperature-style color for error magnitude (high error = red, low = blue)
+╭─ colorR : F64 → I64
+╰─ toInt (clamp (barHeight ₀ / 390.0) × 255.0)
+
+╭─ colorB : F64 → I64
+╰─ toInt ((1.0 - clamp (barHeight ₀ / 390.0)) × 255.0)
+
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat ",0," (strConcat (toString (colorB ₀)) ")")))
+
+# SVG bar for one iteration
+# ₁ = iteration index, ₀ = x value at that iteration
+╭─ bar : I64 → F64 → String
+╰─ let h = barHeight ₀ in
+   strConcat "<rect x=\"" (strConcat (toString (₂ × 50 + 40)) (strConcat "\" y=\"" (strConcat (toString (toInt (400.0 - h))) (strConcat "\" width=\"40\" height=\"" (strConcat (toString (toInt h)) (strConcat "\" fill=\"" (strConcat (toColorStr ₁) "\"/>\n")))))))
+
+# Recursively build bar SVG strings
+# ₂ = xs array, ₁ = current index, ₀ = accumulator
+╭─ buildBars : [n]F64 → I64 → String → String
+╰─ if ₁ = nIter then ₀
+   else buildBars ₂ (₁ + 1) (strConcat ₀ (bar ₁ ₂[₁]))
+
+# Build CSV output: "iteration,estimate,error\n..."
+# ₂ = xs array, ₁ = current index, ₀ = accumulator
+╭─ buildCsv : [n]F64 → I64 → String → String
+╰─ if ₁ = nIter then ₀
+   else buildCsv ₂ (₁ + 1) (strConcat ₀ (strConcat (toString ₁) (strConcat "," (strConcat (toString ₂[₁]) (strConcat "," (strConcat (toString (errorAt ₂[₁])) "\n"))))))
+
+# Build full SVG document
+╭─ buildSvg : [n]F64 → String
+╰─ let bars = buildBars ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"600\" height=\"440\">\n" (strConcat "<rect width=\"600\" height=\"440\" fill=\"#222\"/>\n" (strConcat bars "</svg>\n"))
+
+# Main: run Newton-Raphson, write SVG and CSV
+╭─ main : I64 → ()
+╰─ let xs = iterate x0 0 nIter in
+   let _ = buildSvg xs ▷ "newton.svg" in
+   let csv = strConcat "iteration,estimate,error\n" (buildCsv xs 0 "") in
+   csv ▷ "newton.csv"

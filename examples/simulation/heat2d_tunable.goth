@@ -1,0 +1,97 @@
+# 2D Heat Diffusion with Tunable Parameters
+# Reads configuration from heat2d_config.goth via use import
+# Edit that file to change grid size, timesteps, diffusion rate, and IC
+# Output: heat2d.svg — n×n heatmap grid
+
+use "heat2d_config.goth"
+
+# Clamp value to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Temperature → red channel (0–255)
+╭─ colorR : F64 → I64
+╰─ toInt (clamp ₀ × 255.0)
+
+# Temperature → blue channel (0–255)
+╭─ colorB : F64 → I64
+╰─ toInt ((1.0 - clamp ₀) × 255.0)
+
+# Build "rgb(R,0,B)" color string from temperature
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat ",0," (strConcat (toString (colorB ₀)) ")")))
+
+# Initial condition: hot block [icLo, icHi) in both row and col
+# ₀ = flat index
+╭─ initCell : I64 → F64
+╰─ let row = ₀ / n in
+   let col = ₁ % n in
+   if row < icLo then 0.0
+   else if row < icHi then
+     if col < icLo then 0.0
+     else if col < icHi then 1.0
+     else 0.0
+   else 0.0
+
+# Boundary-aware grid access: returns 0.0 for out-of-bounds
+# ₂ = grid, ₁ = row, ₀ = col
+╭─ getVal : [n]F64 → I64 → I64 → F64
+╰─ if ₁ < 0 then 0.0
+   else if ₁ > (n - 1) then 0.0
+   else if ₀ < 0 then 0.0
+   else if ₀ > (n - 1) then 0.0
+   else ₂[₁ × n + ₀]
+
+# 5-point stencil at flat index k
+# ₁ = grid, ₀ = flat index k
+╭─ stencil2d : [n]F64 → I64 → F64
+╰─ let grid = ₁ in
+   let k = ₁ in
+   let row = k / n in
+   let col = k % n in
+   let center = grid[k] in
+   let north = getVal grid (row - 1) col in
+   let south = getVal grid (row + 1) col in
+   let west = getVal grid row (col - 1) in
+   let east = getVal grid row (col + 1) in
+   center + r × (north + south + east + west - 4.0 × center)
+
+# One timestep: map stencil over all grid cells
+╭─ stepGrid : [n]F64 → [n]F64
+╰─ let grid = ₀ in
+   ι (n × n) ↦ (λ→ stencil2d grid ₀)
+
+# Recursive time-stepping: evolve grid for t steps
+# ₁ = grid, ₀ = remaining steps
+╭─ evolve : [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₁
+   else evolve (stepGrid ₁) (₀ - 1)
+
+# SVG rectangle for one cell at flat index k
+# ₁ = flat index, ₀ = temperature value
+╭─ cellRect : I64 → F64 → String
+╰─ let k = ₁ in
+   let temp = ₁ in
+   let row = k / n in
+   let col = k % n in
+   strConcat "<rect x=\"" (strConcat (toString (col × cellSz)) (strConcat "\" y=\"" (strConcat (toString (row × cellSz)) (strConcat "\" width=\"" (strConcat (toString cellSz) (strConcat "\" height=\"" (strConcat (toString cellSz) (strConcat "\" fill=\"" (strConcat (toColorStr temp) "\"/>\n")))))))))
+
+# Recursively build SVG rect strings for cells [i..(n × n))
+# ₂ = grid, ₁ = current index, ₀ = accumulator string
+╭─ buildRects : [n]F64 → I64 → String → String
+╰─ if ₁ = (n × n) then ₀
+   else buildRects ₂ (₁ + 1) (strConcat ₀ (cellRect ₁ ₂[₁]))
+
+# Build complete SVG from final grid
+╭─ buildSvg : [n]F64 → String
+╰─ let rects = buildRects ₀ 0 "" in
+   let dim = n × cellSz in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" (strConcat (toString dim) (strConcat "\" height=\"" (strConcat (toString dim) (strConcat "\">\n" (strConcat rects "</svg>\n")))))
+
+# Main: run simulation, write SVG file
+╭─ main : I64 → ()
+╰─ let grid0 = ι (n × n) ↦ (λ→ initCell ₀) in
+   let final = evolve grid0 nt in
+   buildSvg final ▷ "heat2d.svg"

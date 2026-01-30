@@ -127,6 +127,8 @@ impl Value {
     pub fn as_tensor(&self) -> Option<&Tensor> { match self { Value::Tensor(t) => Some(t), _ => None } }
     pub fn as_tuple(&self) -> Option<&[Value]> { match self { Value::Tuple(vs) => Some(vs), Value::Unit => Some(&[]), _ => None } }
     pub fn coerce_float(&self) -> Option<f64> { match self { Value::Float(f) => Some(f.0), Value::Int(n) => Some(*n as f64), _ => None } }
+    /// Coerce to a usize index: accepts Int directly, or Float if it's a whole number.
+    pub fn as_index(&self) -> Option<usize> { match self { Value::Int(n) => Some(*n as usize), Value::Float(f) => { let v = f.0; if v.fract() == 0.0 && v >= 0.0 { Some(v as usize) } else { None } }, _ => None } }
 
     pub fn type_name(&self) -> &'static str {
         match self {

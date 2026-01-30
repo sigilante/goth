@@ -16,14 +16,14 @@ If:           if cond then a else b
 ## De Bruijn Indices (Critical)
 
 Variables are numbered by binding depth, not named:
-- `₀` (or `_0`) = first parameter / most recent binding
-- `₁` (or `_1`) = second parameter / one binding out
-- `₂` (or `_2`) = third parameter / two bindings out
+- `₀` (or `_0`) = most recent binding / last parameter
+- `₁` (or `_1`) = one binding out / second-to-last parameter
+- `₂` (or `_2`) = two bindings out / third-to-last parameter
 
 ```goth
-# Function args: ₀ = first arg, ₁ = second arg
+# Function args: ₀ = last arg, ₁ = second-to-last arg
 ╭─ sub : I64 → I64 → I64
-╰─ ₀ - ₁              # sub 10 3 = 7
+╰─ ₁ - ₀              # sub 10 3 = 7  (₁=10, ₀=3)
 
 # Let shifts indices
 ╭─ example : I64 → I64
@@ -50,7 +50,7 @@ I64 → I64           Function
 ## Common Operators
 
 ```
-Arithmetic:   +  -  ×  /  %  ^    (% also written as mod)
+Arithmetic:   +  -  ×  /  %  ^  ±  (% also written as mod, ± also +-)
 Comparison:   =  ≠  <  >  ≤  ≥
 Equality:     =  (value)  ≡/==  (structural)  ≣/===  (referential, reserved)
 Logical:      ∧  ∨  ¬            (or &&  ||  !)
@@ -160,6 +160,19 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    # Error: shape mismatch
    1 + 2 × x + 3 × x × x
 ```
 
+## Uncertainty Propagation
+
+Goth has first-class uncertain values. Create with `±`, and uncertainty propagates automatically through arithmetic and math functions.
+
+```goth
+# Create uncertain value
+╭─ main : F64 → F64 → (F64 ± F64)
+╰─ let a ← ₁ ± ₀ in        # a = value ± uncertainty
+   √₀ + (2.0 ± 0.1)        # propagates through √ and +
+```
+
+Propagation rules: additive (√(δa²+δb²)) for `+`/`-`, relative error for `×`/`/`, derivative-based for math functions (`√`, `sin`, `cos`, `exp`, `ln`, etc.).
+
 ## Common Mistakes
 
 1. **Wrong index after let**: Each `let` shifts indices by 1
@@ -178,7 +191,13 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    # Error: shape mismatch
    # Argument would be ₂ inside the lambda
    ```
 
-3. **Type mismatch I vs I64**: Use `I64` in signatures
+3. **Indexing vs application**: `arr[i]` (no space) is indexing; `f [1,2]` (with space) is function application
+   ```goth
+   let arr = [10, 20, 30] in arr[1]       # Indexing → 20
+   let f = (λ→ Σ ₀) in f [10, 20, 30]    # Application → 60
+   ```
+
+4. **Type mismatch I vs I64**: Use `I64` in signatures
    ```goth
    # WRONG
    ╭─ main : () → I
@@ -219,9 +238,18 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    # Error: shape mismatch
 | `⊤` | `true` |
 | `⊥` | `false` |
 | `ι` | `iota` |
-| `⧺` | `++` |
+| `⧺` | `strConcat` |
+| `⊕` | `concat` |
 | `⍉` | `transpose` |
 | `·` | `dot` |
+| `±` | `+-` |
+
+## Enforcement Notes
+
+- **Contracts** (`⊢` preconditions, `⊨` postconditions): enforced at runtime
+- **Effect annotations** (`◇io`, `◇mut`, `◇rand`): parsed but **not enforced** — `print` works without `◇io`. Use effect annotations as documentation only; do not rely on them for correctness.
+- **Type annotations**: parsed but type checking is partial
+- **Refinement types** (`{x : F64 | x > 0}`): parsed but predicates not solved
 
 ## Running Code
 

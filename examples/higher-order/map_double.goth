@@ -10,4 +10,4 @@
 
 # Return doubled list for range [1,n]
 ╭─ main : I64 → T
-╰─ (range 1 (₀ + 1)) ▷ double
+╰─ (range 1 (₀ + 1)) ↦ double

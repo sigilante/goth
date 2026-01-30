@@ -132,7 +132,7 @@ impl Evaluator {
             Expr::ArrayFill { shape, value } => { let shape_vals: Vec<usize> = shape.iter().map(|e| { let v = self.eval_with_env(e, env)?; v.as_int().map(|n| n as usize).ok_or_else(|| EvalError::type_error("Int", &v)) }).collect::<Result<_, _>>()?; let fill_val = self.eval_with_env(value, env)?; let size: usize = shape_vals.iter().product(); let data = vec![fill_val; size]; Ok(Value::Tensor(Tensor::from_values(shape_vals, data))) }
             Expr::Variant { constructor, payload } => { let payload_val = match payload { Some(p) => Some(self.eval_with_env(p, env)?), None => None }; Ok(Value::variant(constructor.to_string(), payload_val)) }
             Expr::Field(base, access) => { let val = self.eval_with_env(base, env)?; self.access_field(val, access) }
-            Expr::Index(base, indices) => { let arr = self.eval_with_env(base, env)?; let idx_vals: Vec<usize> = indices.iter().map(|e| { let v = self.eval_with_env(e, env)?; v.as_int().map(|n| n as usize).ok_or_else(|| EvalError::type_error("Int", &v)) }).collect::<Result<_, _>>()?; self.index_value(arr, &idx_vals) }
+            Expr::Index(base, indices) => { let arr = self.eval_with_env(base, env)?; let idx_vals: Vec<usize> = indices.iter().map(|e| { let v = self.eval_with_env(e, env)?; v.as_index().ok_or_else(|| EvalError::type_error("Int", &v)) }).collect::<Result<_, _>>()?; self.index_value(arr, &idx_vals) }
             Expr::Slice { array, start, end } => { let arr = self.eval_with_env(array, env)?; let start_idx = match start { Some(e) => { let v = self.eval_with_env(e, env)?; v.as_int().map(|n| n as usize).unwrap_or(0) } None => 0 }; let end_idx = match end { Some(e) => { let v = self.eval_with_env(e, env)?; v.as_int().map(|n| n as usize) } None => None }; self.slice_value(arr, start_idx, end_idx) }
             Expr::Annot(inner, _ty) => self.eval_with_env(inner, env),
             Expr::Cast { expr, target: _, kind } => { let val = self.eval_with_env(expr, env)?; match kind { CastKind::Static => Ok(val), CastKind::Try => Ok(Value::variant("Some", Some(val))), CastKind::Force => Ok(val) } }
@@ -389,16 +389,20 @@ impl Evaluator {
     fn bind_pattern(&self, pattern: &Pattern, val: Value, env: &mut Env) -> EvalResult<()> { if self.match_pattern(pattern, &val, env)? { Ok(()) } else { Err(EvalError::MatchFailed) } }
 
     fn values_to_tensor(&self, values: Vec<Value>) -> Value {
+        self.values_to_tensor_shaped(vec![values.len()], values)
+    }
+
+    fn values_to_tensor_shaped(&self, shape: Vec<usize>, values: Vec<Value>) -> Value {
         if values.is_empty() { return Value::Tensor(Tensor::from_ints(vec![])); }
         let all_int = values.iter().all(|v| matches!(v, Value::Int(_)));
         let all_float = values.iter().all(|v| matches!(v, Value::Float(_) | Value::Int(_)));
         let all_bool = values.iter().all(|v| matches!(v, Value::Bool(_)));
         let all_char = values.iter().all(|v| matches!(v, Value::Char(_)));
-        if all_int { Value::Tensor(Tensor::from_ints(values.iter().map(|v| v.as_int().unwrap()).collect())) }
-        else if all_float { Value::Tensor(Tensor::from_floats(values.iter().map(|v| v.coerce_float().unwrap()).collect())) }
-        else if all_bool { Value::Tensor(Tensor::from_bools(values.iter().map(|v| v.as_bool().unwrap()).collect())) }
-        else if all_char { let chars: Vec<char> = values.iter().map(|v| v.as_char().unwrap()).collect(); let len = chars.len(); Value::Tensor(Tensor { shape: vec![len], data: crate::value::TensorData::Char(chars) }) }
-        else { Value::Tensor(Tensor::from_values(vec![values.len()], values)) }
+        if all_int { Value::Tensor(Tensor { shape, data: crate::value::TensorData::Int(values.iter().map(|v| v.as_int().unwrap()).collect()) }) }
+        else if all_float { Value::Tensor(Tensor { shape, data: crate::value::TensorData::Float(values.iter().map(|v| ordered_float::OrderedFloat(v.coerce_float().unwrap())).collect()) }) }
+        else if all_bool { Value::Tensor(Tensor { shape, data: crate::value::TensorData::Bool(values.iter().map(|v| v.as_bool().unwrap()).collect()) }) }
+        else if all_char { Value::Tensor(Tensor { shape, data: crate::value::TensorData::Char(values.iter().map(|v| v.as_char().unwrap()).collect()) }) }
+        else { Value::Tensor(Tensor::from_values(shape, values)) }
     }
 
     fn access_field(&self, val: Value, access: &FieldAccess) -> EvalResult<Value> {
@@ -418,14 +422,14 @@ impl Evaluator {
 
     fn slice_value(&self, val: Value, start: usize, end: Option<usize>) -> EvalResult<Value> {
         match val {
-            Value::Tensor(t) => { if t.rank() != 1 { return Err(EvalError::not_implemented("slicing rank > 1")); } let end = end.unwrap_or(t.len()); if start > end || end > t.len() { return Err(EvalError::IndexOutOfBounds { index: end, size: t.len() }); } let data: Vec<Value> = (start..end).map(|i| t.get_flat(i).unwrap()).collect(); Ok(Value::Tensor(Tensor::from_values(vec![data.len()], data))) }
+            Value::Tensor(t) => { if t.rank() != 1 { return Err(EvalError::not_implemented("slicing rank > 1")); } let end = end.unwrap_or(t.len()); if start > end || end > t.len() { return Err(EvalError::IndexOutOfBounds { index: end, size: t.len() }); } let data: Vec<Value> = (start..end).map(|i| t.get_flat(i).unwrap()).collect(); Ok(self.values_to_tensor_shaped(vec![data.len()], data)) }
             _ => Err(EvalError::type_error("Tensor", &val)),
         }
     }
 
     fn eval_map(&mut self, arr: Value, func: Value) -> EvalResult<Value> {
         match arr {
-            Value::Tensor(t) => { let results: Vec<Value> = t.iter().map(|elem| self.apply(func.clone(), elem)).collect::<Result<_, _>>()?; Ok(Value::Tensor(Tensor::from_values(t.shape.clone(), results))) }
+            Value::Tensor(t) => { let shape = t.shape.clone(); let results: Vec<Value> = t.iter().map(|elem| self.apply(func.clone(), elem)).collect::<Result<_, _>>()?; Ok(self.values_to_tensor_shaped(shape, results)) }
             Value::Tuple(vs) => { let results: Vec<Value> = vs.into_iter().map(|elem| self.apply(func.clone(), elem)).collect::<Result<_, _>>()?; Ok(Value::Tuple(results)) }
             _ => Err(EvalError::type_error("Tensor or Tuple", &arr)),
         }
@@ -433,7 +437,7 @@ impl Evaluator {
 
     fn eval_filter(&mut self, arr: Value, pred: Value) -> EvalResult<Value> {
         match arr {
-            Value::Tensor(t) => { let results: Vec<Value> = t.iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(Value::Tensor(Tensor::from_values(vec![results.len()], results))) }
+            Value::Tensor(t) => { let results: Vec<Value> = t.iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(self.values_to_tensor_shaped(vec![results.len()], results)) }
             Value::Tuple(vs) => { let results: Vec<Value> = vs.into_iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(Value::Tuple(results)) }
             _ => Err(EvalError::type_error("Tensor or Tuple", &arr)),
         }
@@ -441,7 +445,7 @@ impl Evaluator {
 
     fn eval_bind(&mut self, arr: Value, func: Value) -> EvalResult<Value> {
         match arr {
-            Value::Tensor(t) => { let mut results = Vec::new(); for elem in t.iter() { let mapped = self.apply(func.clone(), elem)?; match mapped { Value::Tensor(inner) => results.extend(inner.iter()), Value::Tuple(inner) => results.extend(inner), other => results.push(other) } } Ok(Value::Tensor(Tensor::from_values(vec![results.len()], results))) }
+            Value::Tensor(t) => { let mut results = Vec::new(); for elem in t.iter() { let mapped = self.apply(func.clone(), elem)?; match mapped { Value::Tensor(inner) => results.extend(inner.iter()), Value::Tuple(inner) => results.extend(inner), other => results.push(other) } } Ok(self.values_to_tensor_shaped(vec![results.len()], results)) }
             _ => Err(EvalError::type_error("Tensor", &arr)),
         }
     }

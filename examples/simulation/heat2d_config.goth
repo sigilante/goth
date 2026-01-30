@@ -1,0 +1,18 @@
+# 2D Heat Diffusion Configuration
+# Edit these values to tune the simulation
+
+# Grid side length (total cells = n × n)
+let n = 15
+
+# Number of timesteps
+let nt = 30
+
+# Stability ratio r = α·Δt/Δx² (must be < 0.25 for 2D stability)
+let r = 0.2
+
+# Initial hot block: rows [icLo, icHi) and cols [icLo, icHi)
+let icLo = 5
+let icHi = 10
+
+# SVG cell size in pixels
+let cellSz = 30

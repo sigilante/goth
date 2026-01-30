@@ -1,0 +1,101 @@
+# 1D Wave Equation Simulation
+# Leapfrog scheme: u(t+1,i) = 2*u(t,i) - u(t-1,i) + C²*(u(t,i+1) - 2*u(t,i) + u(t,i-1))
+# where C = c*dt/dx is the Courant number
+# Grid: 40 points, 100 timesteps, C = 0.8 (stable when C ≤ 1)
+# Initial: Gaussian pulse, zero velocity
+# Output: wave1d.svg — wave profile at final time
+
+# Grid points
+let nx = 40
+
+# Timesteps
+let nt = 15
+
+# Courant number C = c*dt/dx (must be ≤ 1 for stability)
+let courant = 0.8
+
+# C² precomputed
+let c2 = 0.64
+
+# Clamp to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Absolute value
+╭─ absF : F64 → F64
+╰─ if ₀ < 0.0 then 0.0 - ₀ else ₀
+
+# Initial condition: Gaussian pulse centered at x = 0.5
+# Grid spans [0, 1], dx = 1/(nx-1)
+# ₀ = cell index
+╭─ initCell : I64 → F64
+╰─ let x = toFloat ₀ / toFloat (nx - 1) in
+   let d = x - 0.5 in
+   exp (0.0 - d × d / 0.005)
+
+# Wave stencil: compute u_new[i] from u_cur and u_prev
+# ₂ = u_cur, ₁ = u_prev, ₀ = index i
+╭─ waveStencil : [n]F64 → [n]F64 → I64 → F64
+╰─ if ₀ = 0 then 0.0
+   else if ₀ = (nx - 1) then 0.0
+   else 2.0 × ₂[₀] - ₁[₀] + c2 × (₂[₀ - 1] + ₂[₀ + 1] - 2.0 × ₂[₀])
+
+# One timestep: produce u_new from u_cur and u_prev
+# ₁ = u_cur, ₀ = u_prev
+╭─ stepWave : [n]F64 → [n]F64 → [n]F64
+╰─ let cur = ₁ in
+   let prev = ₁ in
+   ι nx ↦ (λ→ waveStencil cur prev ₀)
+
+# Recursive time-stepping
+# ₂ = u_cur, ₁ = u_prev, ₀ = remaining steps
+╭─ evolve : [n]F64 → [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₂
+   else let unew = stepWave ₂ ₁ in
+        evolve unew ₃ (₁ - 1)
+
+# Color mapping: blue for negative, white for zero, red for positive
+╭─ colorR : F64 → I64
+╰─ if ₀ > 0.0 then toInt (clamp ₀ × 255.0)
+   else 0
+
+╭─ colorG : F64 → I64
+╰─ 0
+
+╭─ colorB : F64 → I64
+╰─ if ₀ < 0.0 then toInt (clamp (0.0 - ₀) × 255.0)
+   else 0
+
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat "," (strConcat (toString (colorG ₀)) (strConcat "," (strConcat (toString (colorB ₀)) ")")))))
+
+# SVG bar for one cell — vertical bar chart of wave amplitude
+# Bar extends up (positive) or down (negative) from centerline at y=200
+# ₁ = index, ₀ = amplitude value
+╭─ cellBar : I64 → F64 → String
+╰─ strConcat "<rect x=\"" (strConcat (toString (₁ × 20)) (strConcat "\" y=\"" (strConcat (toString (if ₀ > 0.0 then 200 - toInt (absF ₀ × 180.0) else 200)) (strConcat "\" width=\"18\" height=\"" (strConcat (toString (toInt (absF ₀ × 180.0))) (strConcat "\" fill=\"" (strConcat (toColorStr ₀) "\"/>\n")))))))
+
+# Recursively build SVG bars
+# ₂ = grid, ₁ = current index, ₀ = accumulator
+╭─ buildBars : [n]F64 → I64 → String → String
+╰─ if ₁ = nx then ₀
+   else buildBars ₂ (₁ + 1) (strConcat ₀ (cellBar ₁ ₂[₁]))
+
+# Build CSV: index,x,amplitude
+╭─ buildCsv : [n]F64 → I64 → String → String
+╰─ if ₁ = nx then ₀
+   else buildCsv ₂ (₁ + 1) (strConcat ₀ (strConcat (toString ₁) (strConcat "," (strConcat (toString (toFloat ₁ / toFloat (nx - 1))) (strConcat "," (strConcat (toString ₂[₁]) "\n"))))))
+
+# Build full SVG
+╭─ buildSvg : [n]F64 → String
+╰─ let bars = buildBars ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"400\">\n" (strConcat "<rect width=\"800\" height=\"400\" fill=\"#222\"/>\n" (strConcat "<line x1=\"0\" y1=\"200\" x2=\"800\" y2=\"200\" stroke=\"#555\" stroke-width=\"1\"/>\n" (strConcat bars "</svg>\n")))
+
+# Main: run simulation, write outputs
+╭─ main : I64 → ()
+╰─ let u0 = ι nx ↦ (λ→ initCell ₀) in
+   let final = evolve u0 u0 nt in
+   let _ = buildSvg final ▷ "wave1d.svg" in
+   strConcat "index,x,amplitude\n" (buildCsv final 0 "") ▷ "wave1d.csv"

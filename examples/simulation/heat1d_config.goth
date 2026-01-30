@@ -1,0 +1,15 @@
+# 1D Heat Diffusion Configuration
+# Edit these values to tune the simulation
+
+# Grid points along the bar
+let nx = 20
+
+# Number of timesteps
+let nt = 50
+
+# Stability ratio r = α·Δt/Δx² (must be < 0.5 for stability)
+let r = 0.4
+
+# Initial hot region: cells from icLo to icHi (exclusive) are 1.0
+let icLo = 8
+let icHi = 12

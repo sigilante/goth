@@ -8,4 +8,5 @@
 ╰─ ₀ > 0
 
 ╭─ main : I64 → Bool
-╰─ all isPositive (range 1 (₀ + 1))
+╰─ let arr = range 1 (₀ + 1) in
+   Σ (arr ↦ (λ→ toInt (isPositive ₀))) == len arr

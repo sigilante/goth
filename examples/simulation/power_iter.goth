@@ -1,0 +1,113 @@
+# Eigenvalue Power Iteration
+# Finds dominant eigenvalue and eigenvector of a symmetric matrix
+# Algorithm: v' = A*v / ||A*v||, λ = v'·(A*v')
+# Matrix: 4×4 symmetric (flat storage, row-major)
+# Output: power_iter.svg — bar chart of eigenvector components
+#         power_iter.csv — iteration, eigenvalue estimate
+
+# Matrix dimension
+let dim = 4
+
+# Number of iterations
+let nIter = 20
+
+# 4×4 symmetric matrix (flat, row-major):
+# [ 4  1  2  0 ]
+# [ 1  3  1  1 ]
+# [ 2  1  5  2 ]
+# [ 0  1  2  3 ]
+# Dominant eigenvalue ≈ 7.57
+╭─ matA : I64 → F64
+╰─ [4.0, 1.0, 2.0, 0.0, 1.0, 3.0, 1.0, 1.0, 2.0, 1.0, 5.0, 2.0, 0.0, 1.0, 2.0, 3.0][₀]
+
+# Matrix-vector multiply: y = A*x
+# ₁ = A (as function I64→F64), but we use matA directly
+# Computes row i of A·x by dotting row i with x
+# ₁ = x vector, ₀ = row index i
+╭─ matvecRow : [n]F64 → I64 → F64
+╰─ Σ (ι dim ↦ (λ→ matA (₁ × dim + ₀) × ₂[₀]))
+
+# Full matrix-vector product: returns new vector
+╭─ matvec : [n]F64 → [n]F64
+╰─ let x = ₀ in
+   ι dim ↦ (λ→ matvecRow x ₀)
+
+# Vector L2 norm
+╭─ vecNorm : [n]F64 → F64
+╰─ √(Σ (₀ ↦ (λ→ ₀ × ₀)))
+
+# Scale vector by scalar: s * v
+# ₁ = scalar, ₀ = vector
+╭─ scaleVec : F64 → [n]F64 → [n]F64
+╰─ ₀ ↦ (λ→ ₀ × ₂)
+
+# Dot product of two vectors
+╭─ dotVec : [n]F64 → [n]F64 → F64
+╰─ Σ (ι dim ↦ (λ→ ₂[₀] × ₁[₀]))
+
+# One power iteration step: v -> A*v / ||A*v||
+╭─ powerStep : [n]F64 → [n]F64
+╰─ let av = matvec ₀ in
+   let nrm = vecNorm av in
+   scaleVec (1.0 / nrm) av
+
+# Compute eigenvalue estimate: λ = v · (A*v)
+╭─ eigenvalue : [n]F64 → F64
+╰─ dotVec ₀ (matvec ₀)
+
+# Collect eigenvalue history over iterations
+# ₂ = current v, ₁ = iteration, ₀ = max iterations
+╭─ eigenHist : [n]F64 → I64 → I64 → [n]F64
+╰─ if ₁ = ₀ then [eigenvalue ₂]
+   else [eigenvalue ₂] ⊕ eigenHist (powerStep ₂) (₁ + 1) ₀
+
+# Run power iteration to get final eigenvector
+# ₁ = v, ₀ = remaining iterations
+╭─ iterateVec : [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₁
+   else iterateVec (powerStep ₁) (₀ - 1)
+
+# Absolute value
+╭─ absF : F64 → F64
+╰─ if ₀ < 0.0 then 0.0 - ₀ else ₀
+
+# Clamp to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Color for eigenvector component (positive=green, negative=orange)
+╭─ toColorStr : F64 → String
+╰─ if ₀ > 0.0 then strConcat "rgb(0," (strConcat (toString (toInt (clamp ₀ × 255.0))) ",0)")
+   else strConcat "rgb(255," (strConcat (toString (toInt (clamp (1.0 - absF ₀) × 180.0))) ",0)")
+
+# SVG bar for eigenvector component
+# ₁ = index, ₀ = component value
+╭─ vecBar : I64 → F64 → String
+╰─ strConcat "<rect x=\"" (strConcat (toString (₁ × 100 + 50)) (strConcat "\" y=\"" (strConcat (toString (if ₀ > 0.0 then 200 - toInt (absF ₀ × 180.0) else 200)) (strConcat "\" width=\"80\" height=\"" (strConcat (toString (toInt (absF ₀ × 180.0))) (strConcat "\" fill=\"" (strConcat (toColorStr ₀) "\"/>\n")))))))
+
+# Build eigenvector bar chart
+# ₂ = vec, ₁ = index, ₀ = accumulator
+╭─ buildVecBars : [n]F64 → I64 → String → String
+╰─ if ₁ = dim then ₀
+   else buildVecBars ₂ (₁ + 1) (strConcat ₀ (vecBar ₁ ₂[₁]))
+
+# Build eigenvalue convergence CSV
+# ₂ = eigenvalue history, ₁ = index, ₀ = accumulator
+╭─ buildCsv : [n]F64 → I64 → String → String
+╰─ if ₁ = nIter then ₀
+   else buildCsv ₂ (₁ + 1) (strConcat ₀ (strConcat (toString ₁) (strConcat "," (strConcat (toString ₂[₁]) "\n"))))
+
+# Build full SVG
+╭─ buildSvg : [n]F64 → String
+╰─ let bars = buildVecBars ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"500\" height=\"400\">\n" (strConcat "<rect width=\"500\" height=\"400\" fill=\"#222\"/>\n" (strConcat "<line x1=\"0\" y1=\"200\" x2=\"500\" y2=\"200\" stroke=\"#555\" stroke-width=\"1\"/>\n" (strConcat bars "</svg>\n")))
+
+# Main: run power iteration, output SVG and CSV
+╭─ main : I64 → ()
+╰─ let v0 = ι dim ↦ (λ→ 1.0) in
+   let finalVec = iterateVec v0 nIter in
+   let hist = eigenHist v0 0 nIter in
+   let _ = buildSvg finalVec ▷ "power_iter.svg" in
+   strConcat "iteration,eigenvalue\n" (buildCsv hist 0 "") ▷ "power_iter.csv"

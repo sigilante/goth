@@ -87,6 +87,19 @@ Classic computer science algorithms.
 | `isqrt` | ⌊√n⌋ | `50 → 7` | integer sqrt |
 | `modpow` | b^e mod m | `2 10 1000 → 24` | fast exponentiation |
 
+### 6. Uncertainty (6 tests) - `examples/uncertainty/`
+
+Uncertain value creation and error propagation through operations.
+
+| Test | Description | Input → Output | Contract |
+|------|-------------|----------------|----------|
+| `measure` | Create uncertain value | `10.5 0.3 → 10.5±0.3` | value ± uncertainty |
+| `add_uncertain` | Additive propagation | `10 0.3 20 0.4 → 30±0.5` | δ = √(δa² + δb²) |
+| `mul_uncertain` | Multiplicative propagation | `5 0.1 3 0.2 → 15±1.04` | relative error quadrature |
+| `sqrt_uncertain` | Sqrt propagation | `9 0.3 → 3±0.05` | δ = δx / (2√x) |
+| `sin_uncertain` | Trig propagation | `1.0 0.1 → 0.841±0.054` | δ = \|cos x\| × δx |
+| `chained_uncertain` | Multi-step propagation | `4 0.2 1 0.1 → 0.141±0.111` | sin(√(a±δa)+(b±δb)) |
+
 ## Running Tests
 
 ```bash
@@ -142,7 +155,8 @@ For multi-argument functions, indices count from most-recent binding:
 | Higher-Order | 10 | ✓ |
 | Numeric | 8 | ✓ |
 | Algorithms | 6 | ✓ |
-| **Total** | **48** | |
+| Uncertainty | 6 | ✓ |
+| **Total** | **54** | |
 
 ## Future Additions
 

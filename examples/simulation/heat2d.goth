@@ -1,0 +1,95 @@
+# 2D Heat Diffusion with SVG Visualization
+# 5-point stencil: u' = u + r*(u_N + u_S + u_E + u_W - 4*u)
+# Grid: 15×15 = 225 cells (flat), 30 timesteps, r = 0.2
+# Output: heat2d.svg — 15×15 heatmap grid
+
+# Clamp value to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Temperature → red channel (0–255)
+╭─ colorR : F64 → I64
+╰─ toInt (clamp ₀ × 255.0)
+
+# Temperature → blue channel (0–255)
+╭─ colorB : F64 → I64
+╰─ toInt ((1.0 - clamp ₀) × 255.0)
+
+# Build "rgb(R,0,B)" color string from temperature
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat ",0," (strConcat (toString (colorB ₀)) ")")))
+
+# Initial condition: hot 5×5 center block (rows 5–9, cols 5–9)
+# ₀ = flat index
+╭─ initCell : I64 → F64
+╰─ let row = ₀ / 15 in
+   let col = ₁ % 15 in
+   if row > 4 then
+     if row < 10 then
+       if col > 4 then
+         if col < 10 then 1.0 else 0.0
+       else 0.0
+     else 0.0
+   else 0.0
+
+# Boundary-aware grid access: returns 0.0 for out-of-bounds
+# ₂ = grid, ₁ = row, ₀ = col
+╭─ getVal : [n]F64 → I64 → I64 → F64
+╰─ if ₁ < 0 then 0.0
+   else if ₁ > 14 then 0.0
+   else if ₀ < 0 then 0.0
+   else if ₀ > 14 then 0.0
+   else ₂[₁ × 15 + ₀]
+
+# 5-point stencil at flat index k
+# ₁ = grid, ₀ = flat index k
+╭─ stencil2d : [n]F64 → I64 → F64
+╰─ let grid = ₁ in
+   let k = ₁ in
+   let row = k / 15 in
+   let col = k % 15 in
+   let center = grid[k] in
+   let north = getVal grid (row - 1) col in
+   let south = getVal grid (row + 1) col in
+   let west = getVal grid row (col - 1) in
+   let east = getVal grid row (col + 1) in
+   center + 0.2 × (north + south + east + west - 4.0 × center)
+
+# One timestep: map stencil over all grid cells
+╭─ stepGrid : [n]F64 → [n]F64
+╰─ let grid = ₀ in
+   ι 225 ↦ (λ→ stencil2d grid ₀)
+
+# Recursive time-stepping: evolve grid for t steps
+# ₁ = grid, ₀ = remaining steps
+╭─ evolve : [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₁
+   else evolve (stepGrid ₁) (₀ - 1)
+
+# SVG rectangle for one cell at flat index k
+# ₁ = flat index, ₀ = temperature value
+╭─ cellRect : I64 → F64 → String
+╰─ let k = ₁ in
+   let temp = ₁ in
+   let row = k / 15 in
+   let col = k % 15 in
+   strConcat "<rect x=\"" (strConcat (toString (col × 30)) (strConcat "\" y=\"" (strConcat (toString (row × 30)) (strConcat "\" width=\"30\" height=\"30\" fill=\"" (strConcat (toColorStr temp) "\"/>\n")))))
+
+# Recursively build SVG rect strings for cells [i..225)
+# ₂ = grid, ₁ = current index, ₀ = accumulator string
+╭─ buildRects : [n]F64 → I64 → String → String
+╰─ if ₁ = 225 then ₀
+   else buildRects ₂ (₁ + 1) (strConcat ₀ (cellRect ₁ ₂[₁]))
+
+# Build complete SVG from final grid
+╭─ buildSvg : [n]F64 → String
+╰─ let rects = buildRects ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"450\" height=\"450\">\n" (strConcat rects "</svg>\n")
+
+# Main: run simulation, write SVG file
+╭─ main : I64 → ()
+╰─ let grid0 = ι 225 ↦ (λ→ initCell ₀) in
+   let final = evolve grid0 30 in
+   buildSvg final ▷ "heat2d.svg"

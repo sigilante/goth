@@ -8,4 +8,4 @@
 ╰─ ₀ < 0
 
 ╭─ main : I64 → Bool
-╰─ any isNegative (range (0 - ₀) (₀ + 1))
+╰─ Σ (range (0 - ₀) (₀ + 1) ↦ (λ→ toInt (isNegative ₀))) > 0

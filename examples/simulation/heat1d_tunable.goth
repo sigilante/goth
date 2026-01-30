@@ -1,0 +1,70 @@
+# 1D Heat Diffusion with Tunable Parameters
+# Reads configuration from heat1d_config.goth via use import
+# Edit that file to change grid size, timesteps, diffusion rate, and IC
+# Output: heat1d.svg — row of colored rectangles (blue→red)
+
+use "heat1d_config.goth"
+
+# Clamp value to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Temperature → red channel (0–255)
+╭─ colorR : F64 → I64
+╰─ toInt (clamp ₀ × 255.0)
+
+# Temperature → blue channel (0–255)
+╭─ colorB : F64 → I64
+╰─ toInt ((1.0 - clamp ₀) × 255.0)
+
+# Build "rgb(R,0,B)" color string from temperature
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat ",0," (strConcat (toString (colorB ₀)) ")")))
+
+# Initial condition: hot region [icLo, icHi), cold elsewhere
+╭─ initCell : I64 → F64
+╰─ if ₀ < icLo then 0.0
+   else if ₀ < icHi then 1.0
+   else 0.0
+
+# Compute new value at index i using neighbors
+# ₁ = grid, ₀ = index i
+╭─ stencil : [n]F64 → I64 → F64
+╰─ if ₀ = 0 then 0.0
+   else if ₀ = (nx - 1) then 0.0
+   else ₁[₀] + r × (₁[₀ - 1] + ₁[₀ + 1] - 2.0 × ₁[₀])
+
+# One timestep: map stencil over all grid indices
+╭─ stepGrid : [n]F64 → [n]F64
+╰─ let grid = ₀ in
+   ι nx ↦ (λ→ stencil grid ₀)
+
+# Recursive time-stepping: evolve grid for t steps
+# ₁ = grid, ₀ = remaining steps
+╭─ evolve : [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₁
+   else evolve (stepGrid ₁) (₀ - 1)
+
+# SVG rectangle for one cell
+# ₁ = cell index, ₀ = temperature value
+╭─ cellRect : I64 → F64 → String
+╰─ strConcat "<rect x=\"" (strConcat (toString (₁ × 40)) (strConcat "\" y=\"0\" width=\"40\" height=\"40\" fill=\"" (strConcat (toColorStr ₀) "\"/>\n")))
+
+# Recursively build SVG rect strings for cells [i..nx)
+# ₂ = grid, ₁ = current index i, ₀ = accumulator string
+╭─ buildRects : [n]F64 → I64 → String → String
+╰─ if ₁ = nx then ₀
+   else buildRects ₂ (₁ + 1) (strConcat ₀ (cellRect ₁ ₂[₁]))
+
+# Build complete SVG from final grid
+╭─ buildSvg : [n]F64 → String
+╰─ let rects = buildRects ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" (strConcat (toString (nx × 40)) (strConcat "\" height=\"60\">\n" (strConcat rects "</svg>\n")))
+
+# Main: run simulation, write SVG file
+╭─ main : I64 → ()
+╰─ let grid0 = ι nx ↦ (λ→ initCell ₀) in
+   let final = evolve grid0 nt in
+   buildSvg final ▷ "heat1d.svg"

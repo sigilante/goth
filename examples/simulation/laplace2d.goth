@@ -1,0 +1,102 @@
+# 2D Laplace Equation Solver (Jacobi Iteration)
+# Solves ∇²u = 0 on a square domain with Dirichlet BCs
+# Jacobi: u_new[i,j] = (u[i-1,j] + u[i+1,j] + u[i,j-1] + u[i,j+1]) / 4
+# Grid: 15×15, 200 iterations
+# BCs: top edge = 1.0, other edges = 0.0
+# Output: laplace2d.svg — heatmap of steady-state solution
+
+# Grid side length
+let n = 15
+
+# Jacobi iterations
+let nIter = 200
+
+# Clamp to [0, 1]
+╭─ clamp : F64 → F64
+╰─ if ₀ < 0.0 then 0.0
+   else if ₀ > 1.0 then 1.0
+   else ₀
+
+# Temperature → red channel (0–255)
+╭─ colorR : F64 → I64
+╰─ toInt (clamp ₀ × 255.0)
+
+# Temperature → blue channel (0–255)
+╭─ colorB : F64 → I64
+╰─ toInt ((1.0 - clamp ₀) × 255.0)
+
+# Build "rgb(R,0,B)" color string
+╭─ toColorStr : F64 → String
+╰─ strConcat "rgb(" (strConcat (toString (colorR ₀)) (strConcat ",0," (strConcat (toString (colorB ₀)) ")")))
+
+# Initial/boundary condition: top edge (row 0) = 1.0, else 0.0
+# ₀ = flat index
+╭─ initCell : I64 → F64
+╰─ if ₀ / n = 0 then 1.0 else 0.0
+
+# Is this cell on a boundary?
+# ₀ = flat index
+╭─ isBoundary : I64 → I64
+╰─ let row = ₀ / n in
+   let col = ₁ % n in
+   if row = 0 then 1
+   else if row = (n - 1) then 1
+   else if col = 0 then 1
+   else if col = (n - 1) then 1
+   else 0
+
+# Boundary-aware grid access
+# ₂ = grid, ₁ = row, ₀ = col
+╭─ getVal : [n]F64 → I64 → I64 → F64
+╰─ if ₁ < 0 then 0.0
+   else if ₁ > (n - 1) then 0.0
+   else if ₀ < 0 then 0.0
+   else if ₀ > (n - 1) then 0.0
+   else ₂[₁ × n + ₀]
+
+# Jacobi stencil at flat index k
+# ₁ = grid, ₀ = flat index k
+╭─ jacobiStep : [n]F64 → I64 → F64
+╰─ if isBoundary ₀ = 1 then ₁[₀]
+   else let row = ₀ / n in
+        let col = ₁ % n in
+        (getVal ₃ (row - 1) col + getVal ₃ (row + 1) col + getVal ₃ row (col - 1) + getVal ₃ row (col + 1)) / 4.0
+
+# One full Jacobi sweep
+╭─ sweep : [n]F64 → [n]F64
+╰─ let grid = ₀ in
+   ι (n × n) ↦ (λ→ jacobiStep grid ₀)
+
+# Recursive iteration
+# ₁ = grid, ₀ = remaining iterations
+╭─ iterate : [n]F64 → I64 → [n]F64
+╰─ if ₀ = 0 then ₁
+   else iterate (sweep ₁) (₀ - 1)
+
+# SVG rectangle for one cell
+# ₁ = flat index, ₀ = temperature value
+╭─ cellRect : I64 → F64 → String
+╰─ strConcat "<rect x=\"" (strConcat (toString (₁ % n × 30)) (strConcat "\" y=\"" (strConcat (toString (₁ / n × 30)) (strConcat "\" width=\"30\" height=\"30\" fill=\"" (strConcat (toColorStr ₀) "\"/>\n")))))
+
+# Recursively build SVG rects
+# ₂ = grid, ₁ = index, ₀ = accumulator
+╭─ buildRects : [n]F64 → I64 → String → String
+╰─ if ₁ = (n × n) then ₀
+   else buildRects ₂ (₁ + 1) (strConcat ₀ (cellRect ₁ ₂[₁]))
+
+# Build full SVG
+╭─ buildSvg : [n]F64 → String
+╰─ let rects = buildRects ₀ 0 "" in
+   strConcat "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"450\" height=\"450\">\n" (strConcat rects "</svg>\n")
+
+# Build CSV: row,col,value
+╭─ buildCsv : [n]F64 → I64 → String → String
+╰─ if ₁ = (n × n) then ₀
+   else buildCsv ₂ (₁ + 1) (strConcat ₀ (strConcat (toString (₁ / n)) (strConcat "," (strConcat (toString (₁ % n)) (strConcat "," (strConcat (toString ₂[₁]) "\n"))))))
+
+# Main
+╭─ main : I64 → ()
+╰─ let grid0 = ι (n × n) ↦ (λ→ initCell ₀) in
+   let final = iterate grid0 nIter in
+   let _ = buildSvg final ▷ "laplace2d.svg" in
+   strConcat "row,col,value\n" (buildCsv final 0 "") ▷ "laplace2d.csv"

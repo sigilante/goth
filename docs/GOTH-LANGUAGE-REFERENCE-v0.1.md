@@ -496,6 +496,8 @@ let arr = [10, 20, 30, 40] in arr[2]
 # Result: 30 (0-indexed)
 ```
 
+**Note:** The `[` must be directly adjacent (no space) to be parsed as indexing. With a space, `f [1,2]` is function application, passing the array `[1,2]` as an argument to `f`.
+
 **Multi-dimensional indexing:**
 ```goth
 let matrix = [[1, 2, 3], [4, 5, 6]] in
@@ -856,6 +858,36 @@ F ± F                        # Float with uncertainty
 I ± I                        # Int with uncertainty
 ```
 
+**Creating uncertain values at runtime:**
+```goth
+10.5 ± 0.3                  # Value 10.5 with uncertainty 0.3
+```
+
+**Automatic uncertainty propagation:**
+
+When uncertain values flow through arithmetic operators and math functions, uncertainty propagates automatically using standard error propagation rules:
+
+| Operation | Propagation Rule |
+|-----------|-----------------|
+| `(a±δa) + (b±δb)` | δ = √(δa² + δb²) |
+| `(a±δa) - (b±δb)` | δ = √(δa² + δb²) |
+| `(a±δa) × (b±δb)` | δ = \|a×b\| × √((δa/a)² + (δb/b)²) |
+| `(a±δa) / (b±δb)` | δ = \|a/b\| × √((δa/a)² + (δb/b)²) |
+| `√(x±δx)` | δ = δx / (2√x) |
+| `sin(x±δx)` | δ = \|cos(x)\| × δx |
+| `cos(x±δx)` | δ = \|sin(x)\| × δx |
+| `exp(x±δx)` | δ = exp(x) × δx |
+| `ln(x±δx)` | δ = δx / \|x\| |
+
+**Supported functions:** `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log2`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `abs`, `floor`, `ceil`, `round`, `Γ`.
+
+**Example — chained propagation:**
+```goth
+╭─ main : F64 → F64 → F64 → F64 → (F64 ± F64)
+╰─ sin (√(₃ ± ₂) + (₁ ± ₀))
+# With inputs 4.0 0.2 1.0 0.1 → 0.1411±0.1107
+```
+
 ### Refinement Types
 
 **Constrained types:**
@@ -871,6 +903,8 @@ I ± I                        # Int with uncertainty
 ```
 
 ### Effect Types
+
+> **Aspirational:** Effect annotations are parsed and stored in the AST but not enforced by the type checker or evaluator. They currently serve as documentation. See `docs/EFFECT-SYSTEM-ROADMAP.md`.
 
 ```goth
 □                            # Pure (no effects)
