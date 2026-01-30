@@ -202,6 +202,7 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    -- Error: shape mismatch
 | `/` | `/` | Division |
 | `%` | `%` | Modulo |
 | `^` | `^` | Power |
+| `±` | `+-` | Uncertainty |
 
 ### Comparison
 
@@ -376,6 +377,25 @@ Each `.goth` file is a module. The module path corresponds to the file path:
 | `sin`, `cos`, `tan` | `F64 → F64` |
 | `floor`, `ceil`, `round` | `F64 → F64` |
 | `abs` | Numeric → Numeric |
+
+### Uncertainty Propagation
+
+Goth supports first-class uncertain values using the `±` operator. When uncertain values flow through arithmetic and math functions, uncertainty propagates automatically.
+
+**Creating uncertain values:**
+```goth
+10.5 ± 0.3              -- 10.5 with uncertainty 0.3
+```
+
+**Automatic propagation through operations:**
+```goth
+(10.0 ± 0.3) + (20.0 ± 0.4)    -- 30 ± 0.5  (additive: δ = √(δa² + δb²))
+(5.0 ± 0.1) × (3.0 ± 0.2)     -- 15 ± 1.04  (relative: quadrature sum)
+√(9.0 ± 0.3)                   -- 3 ± 0.05   (derivative: δ/(2√x))
+sin (1.0 ± 0.1)                -- 0.841 ± 0.054  (|cos x| × δx)
+```
+
+Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log2`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `abs`, `floor`, `ceil`, `round`, `Γ`.
 
 ### Type Conversions
 

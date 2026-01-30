@@ -12,6 +12,56 @@
         {"input": [0.0, 0.1], "expected": "0±0.1"},
         {"input": [3.14159, 0.00001], "expected": "3.14159±0.00001"}
       ]
+    },
+    {
+      "name": "add_uncertain",
+      "file": "examples/uncertainty/add_uncertain.goth",
+      "description": "Add two uncertain values with additive propagation: δ = √(δa² + δb²)",
+      "cases": [
+        {"input": [10.0, 0.3, 20.0, 0.4], "expected": "30±0.5"},
+        {"input": [100.0, 1.0, 200.0, 2.0], "expected": "300±2.23606797749979"},
+        {"input": [5.0, 0.5, -3.0, 0.5], "expected": "2±0.7071067811865476"}
+      ]
+    },
+    {
+      "name": "mul_uncertain",
+      "file": "examples/uncertainty/mul_uncertain.goth",
+      "description": "Multiply two uncertain values with relative error propagation",
+      "cases": [
+        {"input": [5.0, 0.1, 3.0, 0.2], "expected": "15±1.044030650891055"},
+        {"input": [10.0, 0.5, 4.0, 0.2], "expected": "40±2.8284271247461907"},
+        {"input": [2.0, 0.1, 8.0, 0.4], "expected": "16±1.1313708498984762"}
+      ]
+    },
+    {
+      "name": "sqrt_uncertain",
+      "file": "examples/uncertainty/sqrt_uncertain.goth",
+      "description": "Square root with derivative-based propagation: δ = δx / (2√x)",
+      "cases": [
+        {"input": [9.0, 0.3], "expected": "3±0.049999999999999996"},
+        {"input": [25.0, 1.0], "expected": "5±0.1"},
+        {"input": [4.0, 0.2], "expected": "2±0.05"}
+      ]
+    },
+    {
+      "name": "sin_uncertain",
+      "file": "examples/uncertainty/sin_uncertain.goth",
+      "description": "Sine with trig propagation: δ = |cos(x)| × δx",
+      "cases": [
+        {"input": [1.0, 0.1], "expected": "0.8414709848078965±0.05403023058681398"},
+        {"input": [0.0, 0.05], "expected": "0±0.05"},
+        {"input": [1.5708, 0.01], "expected": "0.9999999999932537±0.00000003673205103346574"}
+      ]
+    },
+    {
+      "name": "chained_uncertain",
+      "file": "examples/uncertainty/chained_uncertain.goth",
+      "description": "Multi-step propagation: sin(√(a ± δa) + (b ± δb))",
+      "cases": [
+        {"input": [4.0, 0.2, 1.0, 0.1], "expected": "0.1411200080598672±0.11068452598066628"},
+        {"input": [9.0, 0.5, 0.0, 0.1], "expected": "0.1411200080598672±0.1288681429287275"},
+        {"input": [1.0, 0.1, 0.5, 0.05], "expected": "0.9974949866040544±0.0050018754981393096"}
+      ]
     }
   ]
 }

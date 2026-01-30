@@ -50,7 +50,7 @@ I64 → I64           Function
 ## Common Operators
 
 ```
-Arithmetic:   +  -  ×  /  %  ^    (% also written as mod)
+Arithmetic:   +  -  ×  /  %  ^  ±  (% also written as mod, ± also +-)
 Comparison:   =  ≠  <  >  ≤  ≥
 Equality:     =  (value)  ≡/==  (structural)  ≣/===  (referential, reserved)
 Logical:      ∧  ∨  ¬            (or &&  ||  !)
@@ -159,6 +159,19 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    # Error: shape mismatch
 ╰─ let x ← ₀ in
    1 + 2 × x + 3 × x × x
 ```
+
+## Uncertainty Propagation
+
+Goth has first-class uncertain values. Create with `±`, and uncertainty propagates automatically through arithmetic and math functions.
+
+```goth
+# Create uncertain value
+╭─ main : F64 → F64 → (F64 ± F64)
+╰─ let a ← ₁ ± ₀ in        # a = value ± uncertainty
+   √₀ + (2.0 ± 0.1)        # propagates through √ and +
+```
+
+Propagation rules: additive (√(δa²+δb²)) for `+`/`-`, relative error for `×`/`/`, derivative-based for math functions (`√`, `sin`, `cos`, `exp`, `ln`, etc.).
 
 ## Common Mistakes
 

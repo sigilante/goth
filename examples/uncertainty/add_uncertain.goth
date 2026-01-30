@@ -1,0 +1,8 @@
+# Add two uncertain values with error propagation
+# Input: a da b db (value±uncertainty for each)
+# Output: (a+b) ± √(da²+db²)
+# De Bruijn: ₃ = a, ₂ = da, ₁ = b, ₀ = db
+# Postcondition: propagated uncertainty ≥ max(da, db)
+
+╭─ main : F64 → F64 → F64 → F64 → (F64 ± F64)
+╰─ (₃ ± ₂) + (₁ ± ₀)

@@ -53,6 +53,13 @@ else 0
 # Uncertain types (parse test with :ast)
 :ast let temp : F64 ± F64 = ⟨μ: 20.0, σ: 0.5⟩
 
+# Uncertainty propagation (runtime tests)
+10.5 ± 0.3                              # → 10.5±0.3
+(10.0 ± 0.3) + (20.0 ± 0.4)            # → 30±0.5
+(5.0 ± 0.1) × (3.0 ± 0.2)             # → 15±1.044...
+√(9.0 ± 0.3)                           # → 3±0.05
+sin (1.0 ± 0.1)                        # → 0.841...±0.054...
+
 # Refinement types (parse test)
 :ast let positive : {x : F64 | x > 0} = 5.0
 
