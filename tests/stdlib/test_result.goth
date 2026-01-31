@@ -1,0 +1,41 @@
+# Test suite for stdlib/result.goth
+
+use "../../stdlib/result.goth"
+
+╭─ main : () → ()
+╰─ # Constructors
+   let _ ← print (toString (okII 42)) in
+   let _ ← print (toString (errII 1)) in
+   let _ ← print (toString (okIS 10)) in
+   let _ ← print (toString (errIS "bad")) in
+
+   # Predicates
+   let _ ← print (toString (isOk (okII 42))) in
+   let _ ← print (toString (isOk (errII 1))) in
+   let _ ← print (toString (isErr (errII 1))) in
+   let _ ← print (toString (isErr (okII 42))) in
+
+   # Extractors
+   let _ ← print (toString (unwrapOrII 0 (okII 42))) in
+   let _ ← print (toString (unwrapOrII 0 (errII 1))) in
+   let _ ← print (toString (unwrapOrIS 0 (okIS 42))) in
+   let _ ← print (toString (unwrapOrIS 0 (errIS "bad"))) in
+
+   # Transformations
+   let _ ← print (toString (mapResII (λ→ ₀ × 2) (okII 5))) in
+   let _ ← print (toString (mapResII (λ→ ₀ × 2) (errII 1))) in
+
+   # Safe operations
+   let _ ← print (toString (safeDivResII 10 2)) in
+   let _ ← print (toString (safeDivResII 10 0)) in
+
+   # Boolean checks
+   let _ ← print (toString (containsResII 42 (okII 42))) in
+   let _ ← print (toString (containsResII 42 (okII 99))) in
+   let _ ← print (toString (containsResII 42 (errII 1))) in
+
+   # Show
+   let _ ← print (showResII (okII 42)) in
+   let _ ← print (showResII (errII 1)) in
+
+   ⟨⟩

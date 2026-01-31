@@ -1,0 +1,45 @@
+# Test suite for stdlib/option.goth
+
+use "../../stdlib/option.goth"
+
+╭─ main : () → ()
+╰─ # Constructors
+   let _ ← print (toString (someI 42)) in
+   let _ ← print (toString (someF 3.14)) in
+
+   # Predicates
+   let _ ← print (toString (isSome (someI 1))) in
+   let s ← someI 1 in
+   let _ ← print (toString (isNone s)) in
+
+   # Extractors
+   let _ ← print (toString (getOrElseI 0 (someI 42))) in
+   let _ ← print (toString (getOrElseF 0.0 (someF 3.14))) in
+
+   # Transformations
+   let _ ← print (toString (mapOptI (λ→ ₀ × 2) (someI 5))) in
+   let _ ← print (toString (mapOptI (λ→ ₀ × 2) (someI 0))) in
+
+   # Filter
+   let _ ← print (toString (filterOptI (λ→ ₀ > 3) (someI 5))) in
+   let _ ← print (toString (filterOptI (λ→ ₀ > 3) (someI 2))) in
+
+   # Combining
+   let a ← someI 1 in
+   let b ← someI 2 in
+   let _ ← print (toString (orElseOptI a b)) in
+
+   # Safe operations
+   let _ ← print (toString (safeDivI 10 2)) in
+   let _ ← print (toString (safeDivI 10 0)) in
+   let _ ← print (toString (safeDivF 10.0 0.0)) in
+
+   # Boolean checks
+   let _ ← print (toString (containsOptI 42 (someI 42))) in
+   let _ ← print (toString (containsOptI 42 (someI 99))) in
+
+   # Show
+   let _ ← print (showOptI (someI 42)) in
+   let _ ← print (showOptF (someF 3.14)) in
+
+   ⟨⟩
