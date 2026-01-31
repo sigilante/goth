@@ -114,10 +114,36 @@ pub fn apply_type(subst: &Subst, ty: &Type) -> Type {
                 predicate: predicate.clone(), // Predicates need separate handling
             }
         }
+        Type::Variant(arms) => {
+            Type::Variant(
+                arms.iter().map(|arm| goth_ast::types::VariantArm {
+                    name: arm.name.clone(),
+                    payload: arm.payload.as_ref().map(|t| apply_type(subst, t)),
+                }).collect()
+            )
+        }
+        Type::Exists(params, body) => {
+            // Don't substitute bound variables (same as Forall)
+            let mut inner_subst = subst.clone();
+            for p in params {
+                inner_subst.types.remove(p.name.as_ref());
+            }
+            Type::Exists(params.clone(), Box::new(apply_type(&inner_subst, body)))
+        }
+        Type::App(f, args) => {
+            Type::App(
+                Box::new(apply_type(subst, f)),
+                args.iter().map(|a| apply_type(subst, a)).collect(),
+            )
+        }
+        Type::Effectful(inner, effects) => {
+            Type::Effectful(Box::new(apply_type(subst, inner)), effects.clone())
+        }
+        Type::Interval(inner, intervals) => {
+            Type::Interval(Box::new(apply_type(subst, inner)), intervals.clone())
+        }
         // Primitives and holes don't change
         Type::Prim(_) | Type::Hole => ty.clone(),
-        // TODO: Handle remaining cases
-        _ => ty.clone(),
     }
 }
 
