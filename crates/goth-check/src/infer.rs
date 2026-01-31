@@ -68,13 +68,34 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
         }
         
         Expr::LetRec { bindings, body } => {
-            // For recursive bindings, we need type annotations
-            // For now, assume all are lambdas with holes
-            let placeholder_types: Vec<Type> = bindings.iter()
-                .map(|_| Type::Hole)
+            // Extract type annotations from Pattern::Typed or Expr::Annot
+            let binding_types: Vec<Type> = bindings.iter()
+                .map(|(pat, val)| {
+                    // Check pattern for type annotation
+                    if let Pattern::Typed(_, ty) = pat {
+                        return ty.clone();
+                    }
+                    // Check value for type annotation
+                    if let Expr::Annot(_, ty) = val {
+                        return ty.clone();
+                    }
+                    Type::Hole
+                })
                 .collect();
-            
-            ctx.with_bindings(&placeholder_types, |ctx| {
+
+            ctx.with_bindings(&binding_types, |ctx| {
+                // Type-check each binding body against its declared type
+                for (i, (_pat, val)) in bindings.iter().enumerate() {
+                    match &binding_types[i] {
+                        Type::Hole => {
+                            // No annotation — just infer to catch internal errors
+                            let _ = infer(ctx, val);
+                        }
+                        ann_ty => {
+                            let _ = check(ctx, val, ann_ty);
+                        }
+                    }
+                }
                 infer(ctx, body)
             })
         }
@@ -312,9 +333,12 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
             Ok(ty.clone())
         }
         
-        Expr::Cast { expr, target, .. } => {
-            let _ = infer(ctx, expr)?;
-            Ok(target.clone())
+        Expr::Cast { expr, target, kind } => {
+            let _source_ty = infer(ctx, expr)?;
+            match kind {
+                goth_ast::expr::CastKind::Try => Ok(Type::Option(Box::new(target.clone()))),
+                goth_ast::expr::CastKind::Static | goth_ast::expr::CastKind::Force => Ok(target.clone()),
+            }
         }
         
         // ============ Special ============
@@ -323,6 +347,138 @@ pub fn infer(ctx: &mut Context, expr: &Expr) -> TypeResult<Type> {
         
         Expr::Disabled(_) => Ok(Type::unit()),
         
+        Expr::Update { base, fields } => {
+            let base_ty = infer(ctx, base)?;
+            match &base_ty {
+                Type::Tuple(tuple_fields) => {
+                    for (name, val_expr) in fields {
+                        // Find the field in the record type
+                        let field_ty = tuple_fields.iter()
+                            .find(|f| f.label.as_deref() == Some(name.as_ref()))
+                            .map(|f| &f.ty)
+                            .ok_or_else(|| TypeError::FieldNotFound {
+                                field: name.to_string(),
+                                ty: base_ty.clone(),
+                            })?;
+                        check(ctx, val_expr, field_ty)?;
+                    }
+                    Ok(base_ty.clone())
+                }
+                _ => Err(TypeError::FieldNotFound {
+                    field: "update".to_string(),
+                    ty: base_ty,
+                })
+            }
+        }
+
+        Expr::Do { init, ops } => {
+            use goth_ast::expr::DoOp;
+            let mut current_ty = infer(ctx, init)?;
+
+            for op in ops {
+                current_ty = match op {
+                    DoOp::Map(f) => {
+                        match &current_ty {
+                            Type::Tensor(shape, elem_ty) => {
+                                // f: A → B, applied element-wise
+                                match f {
+                                    Expr::Lam(body) => {
+                                        let ret_ty = ctx.with_binding(*elem_ty.clone(), |ctx| {
+                                            infer(ctx, body)
+                                        })?;
+                                        Type::Tensor(shape.clone(), Box::new(ret_ty))
+                                    }
+                                    _ => {
+                                        let f_ty = infer(ctx, f)?;
+                                        match f_ty {
+                                            Type::Fn(_, ret) => Type::Tensor(shape.clone(), ret),
+                                            _ => Type::Hole,
+                                        }
+                                    }
+                                }
+                            }
+                            _ => Type::Hole,
+                        }
+                    }
+
+                    DoOp::Filter(pred) => {
+                        match &current_ty {
+                            Type::Tensor(_, elem_ty) => {
+                                // pred: A → Bool
+                                match pred {
+                                    Expr::Lam(body) => {
+                                        let pred_ty = ctx.with_binding(*elem_ty.clone(), |ctx| {
+                                            infer(ctx, body)
+                                        })?;
+                                        let _ = unify(&pred_ty, &Type::Prim(PrimType::Bool))?;
+                                    }
+                                    _ => {
+                                        let _ = infer(ctx, pred)?;
+                                    }
+                                }
+                                // Result has unknown length, same element type
+                                Type::Tensor(
+                                    goth_ast::shape::Shape(vec![goth_ast::shape::Dim::Var("?".into())]),
+                                    elem_ty.clone(),
+                                )
+                            }
+                            _ => Type::Hole,
+                        }
+                    }
+
+                    DoOp::Bind(f) => {
+                        match &current_ty {
+                            Type::Tensor(_, elem_ty) => {
+                                // f: A → [m]B (flatmap)
+                                match f {
+                                    Expr::Lam(body) => {
+                                        let ret_ty = ctx.with_binding(*elem_ty.clone(), |ctx| {
+                                            infer(ctx, body)
+                                        })?;
+                                        match ret_ty {
+                                            Type::Tensor(_, inner_elem) => Type::Tensor(
+                                                goth_ast::shape::Shape(vec![goth_ast::shape::Dim::Var("?".into())]),
+                                                inner_elem,
+                                            ),
+                                            _ => Type::Hole,
+                                        }
+                                    }
+                                    _ => {
+                                        let f_ty = infer(ctx, f)?;
+                                        match f_ty {
+                                            Type::Fn(_, ret) => match *ret {
+                                                Type::Tensor(_, inner_elem) => Type::Tensor(
+                                                    goth_ast::shape::Shape(vec![goth_ast::shape::Dim::Var("?".into())]),
+                                                    inner_elem,
+                                                ),
+                                                _ => Type::Hole,
+                                            },
+                                            _ => Type::Hole,
+                                        }
+                                    }
+                                }
+                            }
+                            _ => Type::Hole,
+                        }
+                    }
+
+                    DoOp::Op(binop, e) => {
+                        let right_ty = infer(ctx, e)?;
+                        binop_type(binop.clone(), &current_ty, &right_ty).unwrap_or(Type::Hole)
+                    }
+
+                    DoOp::Let(pat, e) => {
+                        let val_ty = infer(ctx, e)?;
+                        let bindings = pattern_types(pat, &val_ty)?;
+                        ctx.push_many(&bindings);
+                        val_ty
+                    }
+                };
+            }
+
+            Ok(current_ty)
+        }
+
         _ => {
             // Fallback for unhandled cases
             Ok(Type::Hole)
@@ -340,15 +496,14 @@ fn infer_app(ctx: &mut Context, func_ty: &Type, arg: &Expr) -> TypeResult<Type> 
         
         Type::Forall(params, body) => {
             // Instantiate with fresh type variables
-            // For now, just use holes
             let mut subst = Subst::new();
             for p in params {
                 match p.kind {
                     goth_ast::types::TypeParamKind::Type => {
-                        subst.types.insert(p.name.to_string(), Type::Hole);
+                        subst.types.insert(p.name.to_string(), ctx.fresh_type_var());
                     }
                     goth_ast::types::TypeParamKind::Shape => {
-                        subst.shapes.insert(p.name.to_string(), goth_ast::shape::Dim::Var("?".into()));
+                        subst.shapes.insert(p.name.to_string(), ctx.fresh_shape_var());
                     }
                     _ => {}
                 }

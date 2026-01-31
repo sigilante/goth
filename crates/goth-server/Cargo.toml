@@ -1,6 +1,6 @@
 [package]
 name = "goth-server"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "HTTP server for the Goth programming language - REST API and web interface"
 license = "MIT"
@@ -31,7 +31,7 @@ serde_json = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 
 # Utilities
-thiserror = "1.0"
+thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

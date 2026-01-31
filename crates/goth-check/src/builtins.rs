@@ -565,6 +565,13 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
             ))
         }
+        "fromChars" => {
+            // [n]Char → String (convert array of characters to string)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
         // Aggregation
         "sum" | "Σ" => {
             // ∀n α. [n]α → α (sum of numeric array)

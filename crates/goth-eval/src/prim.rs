@@ -6,7 +6,23 @@ use ordered_float::OrderedFloat;
 
 // Store original terminal settings for raw mode restoration
 #[cfg(unix)]
-static mut ORIGINAL_TERMIOS: Option<libc::termios> = None;
+static ORIGINAL_TERMIOS: std::sync::Mutex<Option<libc::termios>> = std::sync::Mutex::new(None);
+
+/// Restore terminal to its original settings if raw mode was entered.
+/// Safe to call multiple times — no-ops if terminal is already restored.
+#[cfg(unix)]
+pub fn restore_terminal() {
+    use std::os::unix::io::AsRawFd;
+    if let Ok(mut guard) = ORIGINAL_TERMIOS.lock() {
+        if let Some(termios) = guard.take() {
+            let fd = std::io::stdin().as_raw_fd();
+            unsafe { libc::tcsetattr(fd, libc::TCSANOW, &termios); }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn restore_terminal() {}
 
 // ============ Uncertainty propagation helpers ============
 
@@ -196,7 +212,9 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
                         return Err(EvalError::IoError("Failed to get terminal attributes".to_string()));
                     }
                     // Save original termios for restoration
-                    ORIGINAL_TERMIOS = Some(termios);
+                    if let Ok(mut guard) = ORIGINAL_TERMIOS.lock() {
+                        *guard = Some(termios);
+                    }
                     // Disable canonical mode and echo
                     termios.c_lflag &= !(libc::ICANON | libc::ECHO);
                     // Set minimum characters and timeout
@@ -216,16 +234,7 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::RawModeExit => {
             #[cfg(unix)]
             {
-                use std::os::unix::io::AsRawFd;
-                let fd = std::io::stdin().as_raw_fd();
-                unsafe {
-                    if let Some(termios) = ORIGINAL_TERMIOS {
-                        if libc::tcsetattr(fd, libc::TCSANOW, &termios) != 0 {
-                            return Err(EvalError::IoError("Failed to restore terminal attributes".to_string()));
-                        }
-                        ORIGINAL_TERMIOS = None;
-                    }
-                }
+                restore_terminal();
                 Ok(Value::Unit)
             }
             #[cfg(not(unix))]
@@ -307,6 +316,7 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::Range => binary_args(&args, range),
         PrimFn::ToString => unary_args(&args, to_string),
         PrimFn::Chars => unary_args(&args, chars),
+        PrimFn::FromChars => unary_args(&args, from_chars),
         PrimFn::StrConcat => binary_args(&args, str_concat),
         PrimFn::Take => binary_args(&args, take),
         PrimFn::Drop => binary_args(&args, drop_fn),
@@ -1025,6 +1035,28 @@ fn chars(value: Value) -> EvalResult<Value> {
             }
         }
         _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// fromChars: Convert an array of characters to a string
+fn from_chars(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            // If already a char tensor (string), return as-is
+            if t.to_string_value().is_some() {
+                return Ok(Value::Tensor(t));
+            }
+            // Otherwise try to collect Char values into a string
+            let mut s = String::with_capacity(t.len());
+            for v in t.iter() {
+                match v {
+                    Value::Char(c) => s.push(c),
+                    _ => return Err(EvalError::type_error("Char", &v)),
+                }
+            }
+            Ok(Value::string(&s))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
     }
 }
 

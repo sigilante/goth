@@ -83,19 +83,19 @@ Let bindings shift indices:
 
 | Type | Description |
 |------|-------------|
-| `ℤ` | Arbitrary-precision integer (currently i128) |
-| `ℕ` | Natural number (non-negative integer) |
+| `ℤ` | Integer (backed by i128 at runtime) |
+| `ℕ` | Natural number (non-negative integer, i128 at runtime) |
 | `F` | Generic float (resolves to F64) |
-| `I64` | 64-bit signed integer |
-| `I32` | 32-bit signed integer |
+| `I64` | 64-bit signed integer (i128 at runtime) |
+| `I32` | 32-bit signed integer (i128 at runtime) |
 | `F64` | 64-bit float |
 | `F32` | 32-bit float |
 | `Bool` | Boolean |
 | `Char` | Unicode character |
-| `String` | UTF-8 string |
+| `String` | UTF-8 string (tensor of Char) |
 | `()` | Unit type |
 
-The standard library primarily uses `ℤ`, `F`, and `Bool` for polymorphic signatures.
+All integer types (`ℤ`, `ℕ`, `I64`, `I32`, etc.) are stored as i128 at runtime. The type distinctions exist for documentation and type checking but are not enforced by the interpreter. The standard library primarily uses `ℤ`, `F`, and `Bool` for polymorphic signatures.
 
 ### Composite Types
 
@@ -246,15 +246,38 @@ let v : [5]F64 = [1.0, 2.0, 3.0] in v    # Error: shape mismatch
 
 All bitwise operations are curried functions on integer (`ℤ`) values.
 
+### Structural Equality
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `≡` | `===` | Structural equality | `[1,2] ≡ [1,2]` → `⊤` |
+
 ### Array Operations
 
 | Unicode | ASCII | Operation | Example |
 |---------|-------|-----------|---------|
 | `↦` | `-:` | Map | `arr ↦ (λ→ ₀ × 2)` |
 | `▸` | `\|>` | Filter | `arr ▸ (λ→ ₀ > 5)` |
+| `⤇` | `>>=` | Bind (flatmap) | `[1,2] ⤇ (λ→ [₀, ₀×2])` → `[1,2,2,4]` |
 | `⌿` | `fold` | Fold/reduce | `⌿ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `6` |
+| `⍀` | `scan` | Scan (prefix sums) | `⍀ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `[1,3,6]` |
 | `Σ` | `+/` | Sum | `Σ [1, 2, 3]` |
 | `Π` | `*/` | Product | `Π [1, 2, 3]` |
+| `⊕` | `++` | Concatenate | `[1,2] ⊕ [3,4]` → `[1,2,3,4]` |
+| `⊗` | `zip` | Zip (pair elements) | `[1,2] ⊗ [3,4]` → `[⟨1,3⟩, ⟨2,4⟩]` |
+
+### Function Operations
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `∘` | `.:` | Compose | `(f ∘ g) x` = `f (g x)` |
+
+### I/O Operations
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `▷` | `>>` | Write | `"hello" ▷ "file.txt"` |
+| `◁` | `<<` | Read | `◁ "file.txt"` |
 
 ### Indexing
 

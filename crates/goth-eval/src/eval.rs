@@ -66,7 +66,7 @@ impl Evaluator {
             ("toInt", PrimFn::ToInt), ("toFloat", PrimFn::ToFloat), ("toBool", PrimFn::ToBool), ("toChar", PrimFn::ToChar),
             ("parseInt", PrimFn::ParseInt), ("parseFloat", PrimFn::ParseFloat),
             ("toString", PrimFn::ToString), ("str", PrimFn::ToString),
-            ("chars", PrimFn::Chars),
+            ("chars", PrimFn::Chars), ("fromChars", PrimFn::FromChars),
             ("strConcat", PrimFn::StrConcat), ("⧺", PrimFn::StrConcat),  // double plus
             ("filter", PrimFn::Filter), ("map", PrimFn::Map), ("fold", PrimFn::Fold), ("⌿", PrimFn::Fold),
             // Bitwise operations
@@ -452,8 +452,26 @@ impl Evaluator {
 
     fn eval_filter(&mut self, arr: Value, pred: Value) -> EvalResult<Value> {
         match arr {
-            Value::Tensor(t) => { let results: Vec<Value> = t.iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(self.values_to_tensor_shaped(vec![results.len()], results)) }
-            Value::Tuple(vs) => { let results: Vec<Value> = vs.into_iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(Value::Tuple(results)) }
+            Value::Tensor(t) => {
+                let mut results = Vec::new();
+                for elem in t.iter() {
+                    let keep = self.apply(pred.clone(), elem.clone())?;
+                    if keep == Value::Bool(true) {
+                        results.push(elem);
+                    }
+                }
+                Ok(self.values_to_tensor_shaped(vec![results.len()], results))
+            }
+            Value::Tuple(vs) => {
+                let mut results = Vec::new();
+                for elem in vs {
+                    let keep = self.apply(pred.clone(), elem.clone())?;
+                    if keep == Value::Bool(true) {
+                        results.push(elem);
+                    }
+                }
+                Ok(Value::Tuple(results))
+            }
             _ => Err(EvalError::type_error("Tensor or Tuple", &arr)),
         }
     }

@@ -2,21 +2,25 @@
 
 use std::collections::{HashMap, HashSet};
 use goth_ast::types::Type;
+use goth_ast::shape::Dim;
 
 /// Type checking context
 #[derive(Debug, Clone)]
 pub struct Context {
     /// Type stack for de Bruijn indices (index 0 = last element)
     stack: Vec<Type>,
-    
+
     /// Global name → type bindings
     globals: HashMap<String, Type>,
-    
+
     /// Type variables in scope
     type_vars: HashSet<String>,
-    
+
     /// Shape variables in scope
     shape_vars: HashSet<String>,
+
+    /// Counter for generating fresh type/shape variable names
+    fresh_counter: u32,
 }
 
 impl Context {
@@ -26,6 +30,7 @@ impl Context {
             globals: HashMap::new(),
             type_vars: HashSet::new(),
             shape_vars: HashSet::new(),
+            fresh_counter: 0,
         }
     }
 
@@ -105,6 +110,20 @@ impl Context {
     /// Check if shape variable is in scope
     pub fn has_shape_var(&self, name: &str) -> bool {
         self.shape_vars.contains(name)
+    }
+
+    /// Generate a fresh type variable
+    pub fn fresh_type_var(&mut self) -> Type {
+        let name = format!("_t{}", self.fresh_counter);
+        self.fresh_counter += 1;
+        Type::Var(name.into())
+    }
+
+    /// Generate a fresh shape/dimension variable
+    pub fn fresh_shape_var(&mut self) -> Dim {
+        let name = format!("_d{}", self.fresh_counter);
+        self.fresh_counter += 1;
+        Dim::Var(name.into())
     }
 
     /// Execute with type variables in scope
