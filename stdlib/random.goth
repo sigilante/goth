@@ -1,0 +1,124 @@
+# Goth Standard Library - Random Number Generation
+# Provides seeded PRNG via xorshift64 with state-passing pattern.
+#
+# Usage pattern:
+#   let seed = bytesToSeed (⧏ 8 "/dev/urandom")
+#   let ⟨v1, s1⟩ = randFloat seed
+#   let ⟨v2, s2⟩ = randFloat s1
+#
+# All RNG functions return ⟨value, nextSeed⟩ tuples for explicit
+# state threading. Use randFloats/randInts for bulk generation.
+#
+# Built-in primitives used:
+#   ⧏ (readBytes), bitxor/⊻, shl, shr, bitand, bitor
+#   fold/⌿, toFloat, toInt
+
+# ============ Seed Management ============
+
+# Convert 8 entropy bytes to a 64-bit seed value.
+# Combines bytes via shift-and-or into a single I64.
+# Input: [8]I64 array of byte values (0-255)
+# Output: I64 seed (64-bit)
+╭─ bytesToSeed : [8]I64 → I64
+╰─ bitand (⌿ (λ→ λ→ bitor (shl ₁ 8) ₀) 0 ₀) mask64
+
+# Create a seed from system entropy.
+# Reads 8 bytes from /dev/urandom and packs them into I64.
+╭─ entropy : () → I64
+╰─ bytesToSeed (⧏ 8 "/dev/urandom")
+
+# ============ Core PRNG: xorshift64 ============
+
+# Mask to 64 bits. Goth integers are i128; xorshift64 assumes
+# 64-bit state, so we mask after each transition.
+let mask64 = 18446744073709551615
+
+# Xorshift64 state transition.
+# Marsaglia (2003) xorshift with shifts 13, 7, 17.
+# Input: current state (I64, 64-bit range)
+# Output: next state (I64, 64-bit range)
+╭─ xorshift64 : I64 → I64
+╰─ let a = bitand (⊻ ₀ (shl ₀ 13)) mask64
+   in let b = ⊻ a (shr a 7)
+   in bitand (⊻ b (shl b 17)) mask64
+
+# ============ Uniform Random Values ============
+
+# Generate a uniform random float in [0, 1).
+# Uses xorshift64 and scales to [0, 1) by dividing by 2^53.
+# Returns ⟨float, nextSeed⟩.
+╭─ randFloat : I64 → ⟨F64, I64⟩
+╰─ let s1 = xorshift64 ₀
+   in let bits = bitand (if s1 < 0 then 0 - s1 else s1) 9007199254740991
+   in ⟨toFloat bits / 9007199254740992.0, s1⟩
+
+# Generate a uniform random float in [lo, hi).
+# ₂ = lo, ₁ = hi, ₀ = seed
+# Returns ⟨float, nextSeed⟩.
+╭─ randFloatRange : F64 → F64 → I64 → ⟨F64, I64⟩
+╰─ let ⟨u, s1⟩ = randFloat ₀
+   in ⟨₄ + u × (₃ - ₄), s1⟩
+
+# Generate a uniform random integer in [lo, hi] (inclusive).
+# ₂ = lo, ₁ = hi, ₀ = seed
+# Returns ⟨int, nextSeed⟩.
+╭─ randInt : I64 → I64 → I64 → ⟨I64, I64⟩
+╰─ let s1 = xorshift64 ₀
+   in let range = ₂ - ₃ + 1
+   in let val = ₄ + (if s1 < 0 then 0 - s1 else s1) % range
+   in ⟨val, s1⟩
+
+# Generate a random boolean with probability p of being true.
+# ₁ = probability (0.0 to 1.0), ₀ = seed
+# Returns ⟨bool, nextSeed⟩.
+╭─ randBool : F64 → I64 → ⟨Bool, I64⟩
+╰─ let ⟨u, s1⟩ = randFloat ₀
+   in ⟨u < ₃, s1⟩
+
+# ============ Normal Distribution (Box-Muller) ============
+
+# Generate a standard normal random value (mean=0, stddev=1).
+# Uses Box-Muller transform: z = √(-2 ln u1) × cos(2π u2)
+# Returns ⟨float, nextSeed⟩.
+╭─ randNormal : I64 → ⟨F64, I64⟩
+╰─ let ⟨u1, s1⟩ = randFloat ₀
+   in let ⟨u2, s2⟩ = randFloat s1
+   in let u1safe = if u1 < 0.000001 then 0.000001 else u1
+   in let z = √(0.0 - 2.0 × ln u1safe) × cos (2.0 × 3.14159265358979323846 × u2)
+   in ⟨z, s2⟩
+
+# Generate a normal random value with given mean and stddev.
+# ₂ = mean, ₁ = stddev, ₀ = seed
+# Returns ⟨float, nextSeed⟩.
+╭─ randGaussian : F64 → F64 → I64 → ⟨F64, I64⟩
+╰─ let ⟨z, s1⟩ = randNormal ₀
+   in ⟨₄ + ₃ × z, s1⟩
+
+# ============ Bulk Generation ============
+
+# Generate n uniform random floats in [0, 1).
+# ₁ = count, ₀ = seed
+# Returns ⟨[n]F64, nextSeed⟩.
+╭─ randFloats : I64 → I64 → ⟨[n]F64, I64⟩
+╰─ ⌿ (λ→ λ→ let ⟨v, s⟩ = randFloat (₁.1)
+             in ⟨₃.0 ⊕ [v], s⟩)
+     ⟨[], ₀⟩
+     (ι ₁)
+
+# Generate n uniform random integers in [lo, hi].
+# ₃ = lo, ₂ = hi, ₁ = count, ₀ = seed
+# Returns ⟨[n]I64, nextSeed⟩.
+╭─ randInts : I64 → I64 → I64 → I64 → ⟨[n]I64, I64⟩
+╰─ ⌿ (λ→ λ→ let ⟨v, s⟩ = randInt ₅ ₄ (₁.1)
+             in ⟨₃.0 ⊕ [v], s⟩)
+     ⟨[], ₀⟩
+     (ι ₁)
+
+# Generate n standard normal random values.
+# ₁ = count, ₀ = seed
+# Returns ⟨[n]F64, nextSeed⟩.
+╭─ randNormals : I64 → I64 → ⟨[n]F64, I64⟩
+╰─ ⌿ (λ→ λ→ let ⟨v, s⟩ = randNormal (₁.1)
+             in ⟨₃.0 ⊕ [v], s⟩)
+     ⟨[], ₀⟩
+     (ι ₁)

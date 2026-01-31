@@ -54,10 +54,13 @@ Arithmetic:   +  -  ×  /  %  ^  ±  (% also written as mod, ± also +-)
 Comparison:   =  ≠  <  >  ≤  ≥
 Equality:     =  (value)  ≡/==  (structural)  ≣/===  (referential, reserved)
 Logical:      ∧  ∨  ¬            (or &&  ||  !)
+Bitwise:      bitand  bitor  ⊻/bitxor  shl  shr
 Map:          arr ↦ λ→ body      (or arr -: \-> body)
 Filter:       arr ▸ λ→ body      (or arr |> \-> body)
+Fold:         ⌿ (λ→ λ→ ₁+₀) 0 arr  (or fold f acc arr)
 Sum:          Σ arr              (or +/ arr)
 Product:      Π arr              (or */ arr)
+Byte I/O:     ⧏ n "path"  (readBytes)    ⧐ bytes "path"  (writeBytes)
 ```
 
 ## Common Patterns
@@ -243,6 +246,10 @@ Propagation rules: additive (√(δa²+δb²)) for `+`/`-`, relative error for `
 | `⍉` | `transpose` |
 | `·` | `dot` |
 | `±` | `+-` |
+| `⌿` | `fold` |
+| `⊻` | `bitxor` |
+| `⧏` | `readBytes` |
+| `⧐` | `writeBytes` |
 
 ## Enforcement Notes
 

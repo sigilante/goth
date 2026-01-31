@@ -73,15 +73,17 @@ Tree-walking interpreter for testing and REPL.
 - Full expression evaluation
 - Closure semantics
 - Pattern matching
-- **50+ primitive functions:**
+- **60+ primitive functions:**
   - Math: add, sub, mul, div, mod, neg, abs, exp, ln, sqrt, sin, cos, tan, pow, floor, ceil, round
   - Comparison: eq, neq, lt, gt, leq, geq
   - Logic: and, or, not
-  - Tensor: sum, prod, len, shape, reverse, concat, dot, norm, matmul, transpose, iota, range, take, drop, index
+  - Bitwise: bitand, bitor, bitxor/⊻, shl, shr
+  - Tensor: sum, prod, len, shape, reverse, concat, dot, norm, matmul, transpose, iota, range, take, drop, index, fold/⌿
   - String: toString, chars, strConcat, lines, words, bytes, strEq, startsWith, endsWith, contains
   - Type: toInt, toFloat, toBool, toChar, parseInt, parseFloat
-  - I/O: print, write, flush, readLine, readKey, sleep, readFile, writeFile
+  - I/O: print, write, flush, readLine, readKey, sleep, readFile, writeFile, readBytes/⧏, writeBytes/⧐
   - TUI: rawModeEnter, rawModeExit
+- **Standard library** (`stdlib/`): 10 modules including random number generation (xorshift64 PRNG)
 
 ### 5. **goth-mir** (3,291 lines, 50 tests) - WORKING
 

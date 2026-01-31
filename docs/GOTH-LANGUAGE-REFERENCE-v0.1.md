@@ -1184,6 +1184,18 @@ or(⊤, ⊥)               # ⊤
 not(⊤)                 # ⊥
 ```
 
+### Bitwise Operations
+
+```goth
+bitand 255 15          # 15
+bitor 240 15           # 255
+bitxor 255 170         # 85     (also: ⊻ 255 170)
+shl 1 8               # 256
+shr 256 4             # 16
+```
+
+All bitwise operations are curried: `I64 → I64 → I64`.
+
 ### Array/Tensor Operations
 
 ```goth
@@ -1193,6 +1205,7 @@ len([1, 2, 3, 4, 5])           # 5
 shape([[1, 2], [3, 4]])        # [2, 2]
 reverse([1, 2, 3])             # [3, 2, 1]
 concat([1, 2], [3, 4])         # [1, 2, 3, 4]
+⌿ (λ→ λ→ ₁ + ₀) 0 [1, 2, 3]  # 6  (fold/reduce)
 ```
 
 **Linear algebra:**
@@ -1247,6 +1260,18 @@ print("Hello, world!")
 
 **Unicode:** `▷`
 **ASCII:** `|>`
+
+**Read bytes from file:**
+```goth
+⧏ 8 "/dev/urandom"            # read 8 bytes → [8]I64
+readBytes 4 "/tmp/data.bin"    # ASCII fallback
+```
+
+**Write bytes to file:**
+```goth
+⧐ [72, 101, 108] "/tmp/out"   # write byte array to file
+writeBytes [0, 255] "/tmp/bin" # ASCII fallback
+```
 
 `stdout` and `stderr` are built-in stream constants. The `▷` operator dispatches on the right-hand side: a stream value writes to that stream (without a newline), a string value writes to that file path.
 

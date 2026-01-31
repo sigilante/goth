@@ -229,12 +229,25 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    -- Error: shape mismatch
 | `∨` | `\|\|` | Or |
 | `¬` | `!` | Not |
 
+### Bitwise
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| | `bitand` | Bitwise AND | `bitand 255 15` → `15` |
+| | `bitor` | Bitwise OR | `bitor 240 15` → `255` |
+| `⊻` | `bitxor` | Bitwise XOR | `⊻ 255 170` → `85` |
+| | `shl` | Shift left | `shl 1 8` → `256` |
+| | `shr` | Shift right | `shr 256 4` → `16` |
+
+All bitwise operations are curried functions on `I64` values.
+
 ### Array Operations
 
 | Unicode | ASCII | Operation | Example |
 |---------|-------|-----------|---------|
 | `↦` | `-:` | Map | `arr ↦ (λ→ ₀ × 2)` |
 | `▸` | `\|>` | Filter | `arr ▸ (λ→ ₀ > 5)` |
+| `⌿` | `fold` | Fold/reduce | `⌿ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `6` |
 | `Σ` | `+/` | Sum | `Σ [1, 2, 3]` |
 | `Π` | `*/` | Product | `Π [1, 2, 3]` |
 
@@ -360,6 +373,7 @@ Each `.goth` file is a module. The `use` declaration takes a string path (relati
 |------|-----------|-------------|
 | `↦` (map) | `[n]α → (α → β) → [n]β` | Apply to each |
 | `▸` (filter) | `[n]α → (α → Bool) → [m]α` | Keep matching |
+| `⌿`, `fold` | `(α → β → α) → α → [n]β → α` | Left fold with accumulator |
 | `reverse` | `[n]α → [n]α` | Reverse order |
 | `take` | `I64 → [n]α → [m]α` | Take first k elements |
 | `drop` | `I64 → [n]α → [m]α` | Drop first k elements |
@@ -415,6 +429,16 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 | `parseInt` | `String → I64` | Parse string as integer |
 | `parseFloat` | `String → F64` | Parse string as float |
 
+### Bitwise Operations
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `bitand` | `I64 → I64 → I64` | Bitwise AND |
+| `bitor` | `I64 → I64 → I64` | Bitwise OR |
+| `⊻`, `bitxor` | `I64 → I64 → I64` | Bitwise XOR |
+| `shl` | `I64 → I64 → I64` | Shift left |
+| `shr` | `I64 → I64 → I64` | Shift right |
+
 ### I/O
 
 | Name | Signature | Description |
@@ -423,6 +447,8 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 | `readLine` | `() → String` | Read line from stdin |
 | `readFile` | `String → String` | Read file contents |
 | `writeFile` | `String → String → ()` | Write content to file path |
+| `⧏`, `readBytes` | `I64 → String → [n]I64` | Read n bytes from file as byte array |
+| `⧐`, `writeBytes` | `[n]I64 → String → ()` | Write byte array to file |
 | `▷` | `String → String → ()` | Write operator: `"content" ▷ "path"` |
 | `toString` | `α → String` | Convert value to string |
 | `strConcat`, `⧺` | `String → String → String` | Concatenate strings |
@@ -476,6 +502,60 @@ enum Option α where Some α | None
      None → 0
    }
 ```
+
+---
+
+## Standard Library
+
+The `stdlib/` directory contains reusable modules imported via `use`:
+
+```goth
+use "stdlib/random.goth"
+use "stdlib/math.goth"
+```
+
+### Modules
+
+| Module | Description |
+|--------|-------------|
+| `prelude.goth` | Core combinators (`id`, `const`, `flip`, `compose`) |
+| `list.goth` | List/array operations |
+| `math.goth` | Math functions with uncertainty propagation |
+| `option.goth` | Option type (`Some`/`None`) operations |
+| `result.goth` | Result type (`Ok`/`Err`) operations |
+| `string.goth` | String manipulation |
+| `io.goth` | I/O utilities |
+| `canvas.goth` | Canvas/graphics operations |
+| `tui.goth` | Terminal UI operations |
+| `random.goth` | Seeded PRNG (xorshift64) with state-passing pattern |
+
+### Random Number Generation
+
+The `random.goth` module provides a seeded PRNG using xorshift64. All RNG functions return `⟨value, nextSeed⟩` tuples for explicit state threading:
+
+```goth
+use "stdlib/random.goth"
+
+╭─ main : I64 → [n]F64
+╰─ let seed = entropy ⟨⟩
+   in let ⟨vals, _⟩ = randFloats ₁ seed
+   in vals
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `entropy` | `() → I64` | Seed from `/dev/urandom` |
+| `bytesToSeed` | `[8]I64 → I64` | Pack 8 bytes into seed |
+| `xorshift64` | `I64 → I64` | Raw state transition |
+| `randFloat` | `I64 → ⟨F64, I64⟩` | Uniform float in [0, 1) |
+| `randFloatRange` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Uniform float in [lo, hi) |
+| `randInt` | `I64 → I64 → I64 → ⟨I64, I64⟩` | Uniform integer in [lo, hi] |
+| `randBool` | `F64 → I64 → ⟨Bool, I64⟩` | Boolean with probability p |
+| `randNormal` | `I64 → ⟨F64, I64⟩` | Standard normal (Box-Muller) |
+| `randGaussian` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Normal with mean and stddev |
+| `randFloats` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk uniform floats |
+| `randInts` | `I64 → I64 → I64 → I64 → ⟨[n]I64, I64⟩` | Bulk uniform integers |
+| `randNormals` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk normal values |
 
 ---
 
