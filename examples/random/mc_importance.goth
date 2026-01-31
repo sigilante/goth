@@ -1,0 +1,20 @@
+# Importance sampling: ∫₀¹ e⁻ˣ² dx with proposal q(x) = 2(1-x)
+# Reduces variance by sampling where the integrand is large.
+use "../../stdlib/random.goth"
+
+╭─ main : I64 → F64
+│ ⊢ ₀ > 0
+│ ⊨ ₀ > 0.5 ∧ ₀ < 1.0
+╰─ let n = ₀
+   in let seed = entropy ⟨⟩
+   in let ⟨total, _⟩ = ⌿ (λ→ λ→
+        let acc = ₁
+        in let ⟨u, s1⟩ = randFloat (acc.1)
+        in let x = 1.0 - √(1.0 - u)
+        in let qx = 2.0 × (1.0 - x)
+        in let fx = exp (0.0 - x × x)
+        in let weight = if qx < 0.0001 then 0.0 else fx / qx
+        in ⟨acc.0 + weight, s1⟩)
+      ⟨0.0, seed⟩
+      (ι n)
+   in total / toFloat n

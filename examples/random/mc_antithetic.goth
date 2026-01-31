@@ -1,0 +1,25 @@
+# Variance reduction: naive MC vs antithetic variates
+# for ∫₀¹ e⁻ˣ² dx ≈ 0.7468
+# Antithetic pairs (x, 1-x) reduce variance.
+use "../../stdlib/random.goth"
+
+╭─ main : I64 → ⟨F64, F64⟩
+│ ⊢ ₀ > 0
+╰─ let n = ₀
+   in let seed = entropy ⟨⟩
+   in let ⟨naive_total, s1⟩ = ⌿ (λ→ λ→
+        let acc = ₁
+        in let ⟨x, s⟩ = randFloat (acc.1)
+        in let fx = exp (0.0 - x × x)
+        in ⟨acc.0 + fx, s⟩)
+      ⟨0.0, seed⟩
+      (ι n)
+   in let ⟨anti_total, _⟩ = ⌿ (λ→ λ→
+        let acc = ₁
+        in let ⟨x, s⟩ = randFloat (acc.1)
+        in let fx = exp (0.0 - x × x)
+        in let fmx = exp (0.0 - (1.0 - x) × (1.0 - x))
+        in ⟨acc.0 + (fx + fmx) / 2.0, s⟩)
+      ⟨0.0, s1⟩
+      (ι n)
+   in ⟨naive_total / toFloat n, anti_total / toFloat n⟩
