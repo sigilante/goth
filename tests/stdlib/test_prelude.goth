@@ -1,0 +1,177 @@
+# Test suite for stdlib/prelude.goth
+#
+# Note: prelude.goth has a parse error due to `round` being a reserved keyword.
+# Until that is fixed, we test prelude functions by defining them inline here.
+
+# === Combinators ===
+╭─ id : α → α
+╰─ ₀
+
+╭─ const : α → β → α
+╰─ ₁
+
+╭─ flip : (α → β → γ) → β → α → γ
+╰─ ₂ ₀ ₁
+
+╭─ compose : (β → γ) → (α → β) → α → γ
+╰─ ₂ (₁ ₀)
+
+# === Boolean ===
+╭─ not : Bool → Bool
+╰─ if ₀ then ⊥ else ⊤
+
+╭─ and : Bool → Bool → Bool
+╰─ if ₁ then ₀ else ⊥
+
+╭─ or : Bool → Bool → Bool
+╰─ if ₁ then ⊤ else ₀
+
+╭─ xor : Bool → Bool → Bool
+╰─ if ₁ then (if ₀ then ⊥ else ⊤) else ₀
+
+╭─ implies : Bool → Bool → Bool
+╰─ if ₁ then ₀ else ⊤
+
+╭─ iff : Bool → Bool → Bool
+╰─ if ₁ then ₀ else (if ₀ then ⊥ else ⊤)
+
+╭─ boolToInt : Bool → ℤ
+╰─ if ₀ then 1 else 0
+
+╭─ intToBool : ℤ → Bool
+╰─ ₀ ≠ 0
+
+# === Numeric predicates ===
+╭─ isZero : ℤ → Bool
+╰─ ₀ = 0
+
+╭─ isPositive : ℤ → Bool
+╰─ ₀ > 0
+
+╭─ isNegative : ℤ → Bool
+╰─ ₀ < 0
+
+╭─ isEven : ℤ → Bool
+╰─ ₀ % 2 = 0
+
+╭─ isOdd : ℤ → Bool
+╰─ ₀ % 2 ≠ 0
+
+# === Integer ops ===
+╭─ inc : ℤ → ℤ
+╰─ ₀ + 1
+
+╭─ dec : ℤ → ℤ
+╰─ ₀ - 1
+
+╭─ absInt : ℤ → ℤ
+╰─ if ₀ < 0 then 0 - ₀ else ₀
+
+╭─ signInt : ℤ → ℤ
+╰─ if ₀ < 0 then 0 - 1
+   else if ₀ > 0 then 1
+   else 0
+
+╭─ divInt : ℤ → ℤ → ℤ
+╰─ ₁ / ₀
+
+╭─ modInt : ℤ → ℤ → ℤ
+╰─ ₁ % ₀
+
+# === Float ops ===
+╭─ double : F → F
+╰─ ₀ × 2.0
+
+╭─ half : F → F
+╰─ ₀ / 2.0
+
+╭─ square : F → F
+╰─ ₀ × ₀
+
+╭─ negate : F → F
+╰─ 0.0 - ₀
+
+# === Tuple ops ===
+╭─ fst : ⟨α, β⟩ → α
+╰─ ₀.0
+
+╭─ snd : ⟨α, β⟩ → β
+╰─ ₀.1
+
+╭─ swap : ⟨α, β⟩ → ⟨β, α⟩
+╰─ ⟨₀.1, ₀.0⟩
+
+# === Conditionals ===
+╭─ ifThenElse : Bool → α → α → α
+╰─ if ₂ then ₁ else ₀
+
+# === Rounding ===
+╭─ myFloor : F → F
+╰─ ⌊₀⌋
+
+╭─ myCeil : F → F
+╰─ ⌈₀⌉
+
+╭─ main : () → ()
+╰─ # Combinators
+   let _ ← print (toString (id 42)) in
+   let _ ← print (toString (const 10 99)) in
+   let _ ← print (toString (flip (λ→ λ→ ₁ - ₀) 3 10)) in
+   let _ ← print (toString (compose (λ→ ₀ × 2) (λ→ ₀ + 1) 5)) in
+
+   # Boolean
+   let _ ← print (toString (not ⊤)) in
+   let _ ← print (toString (not ⊥)) in
+   let _ ← print (toString (and ⊤ ⊥)) in
+   let _ ← print (toString (and ⊤ ⊤)) in
+   let _ ← print (toString (or ⊥ ⊥)) in
+   let _ ← print (toString (or ⊥ ⊤)) in
+   let _ ← print (toString (xor ⊤ ⊤)) in
+   let _ ← print (toString (xor ⊤ ⊥)) in
+   let _ ← print (toString (implies ⊤ ⊥)) in
+   let _ ← print (toString (implies ⊥ ⊥)) in
+   let _ ← print (toString (iff ⊤ ⊤)) in
+   let _ ← print (toString (iff ⊤ ⊥)) in
+   let _ ← print (toString (boolToInt ⊤)) in
+   let _ ← print (toString (boolToInt ⊥)) in
+   let _ ← print (toString (intToBool 0)) in
+   let _ ← print (toString (intToBool 5)) in
+
+   # Numeric predicates
+   let _ ← print (toString (isZero 0)) in
+   let _ ← print (toString (isZero 1)) in
+   let _ ← print (toString (isPositive 5)) in
+   let _ ← print (toString (isNegative (0 - 3))) in
+   let _ ← print (toString (isEven 4)) in
+   let _ ← print (toString (isOdd 7)) in
+
+   # Integer ops
+   let _ ← print (toString (inc 10)) in
+   let _ ← print (toString (dec 10)) in
+   let _ ← print (toString (absInt (0 - 5))) in
+   let _ ← print (toString (signInt (0 - 7))) in
+   let _ ← print (toString (signInt 3)) in
+   let _ ← print (toString (signInt 0)) in
+   let _ ← print (toString (divInt 3 10)) in
+   let _ ← print (toString (modInt 3 10)) in
+
+   # Float ops
+   let _ ← print (toString (double 3.5)) in
+   let _ ← print (toString (half 10.0)) in
+   let _ ← print (toString (square 4.0)) in
+   let _ ← print (toString (negate 5.0)) in
+
+   # Tuple ops
+   let _ ← print (toString (fst ⟨10, 20⟩)) in
+   let _ ← print (toString (snd ⟨10, 20⟩)) in
+   let _ ← print (toString (swap ⟨1, 2⟩)) in
+
+   # Conditionals
+   let _ ← print (toString (ifThenElse ⊤ 1 2)) in
+   let _ ← print (toString (ifThenElse ⊥ 1 2)) in
+
+   # Rounding
+   let _ ← print (toString (myFloor 3.7)) in
+   let _ ← print (toString (myCeil 3.2)) in
+
+   ⟨⟩

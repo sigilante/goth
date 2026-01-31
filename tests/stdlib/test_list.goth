@@ -1,0 +1,45 @@
+# Test suite for stdlib/list.goth
+
+use "../../stdlib/list.goth"
+
+╭─ main : () → ()
+╰─ let xs ← [10, 20, 30] in
+   # Access operations
+   let _ ← print (toString (head xs)) in
+   let _ ← print (toString (last xs)) in
+   let _ ← print (toString (tail xs)) in
+   let _ ← print (toString (init xs)) in
+   let _ ← print (toString (getOr xs 1 99)) in
+   let _ ← print (toString (getOr xs 5 99)) in
+
+   # Construction
+   let _ ← print (toString (cons 0 xs)) in
+   let _ ← print (toString (snoc xs 40)) in
+   let a ← [1, 2] in
+   let b ← [3, 4] in
+   let _ ← print (toString (append a b)) in
+   let _ ← print (toString (replicate 3 7)) in
+   let _ ← print (toString (rangeTo 1 5)) in
+
+   # Transformation
+   let ns ← [1, 2, 3] in
+   let _ ← print (toString (map ns (λ→ ₀ × 10))) in
+   let big ← [1, 2, 3, 4, 5] in
+   let _ ← print (toString (filter big (λ→ ₀ > 3))) in
+   let _ ← print (toString (rev ns)) in
+
+   # Reduction
+   let fs ← [1.0, 2.0, 3.0] in
+   let _ ← print (toString (sum fs)) in
+   let gs ← [2.0, 3.0, 4.0] in
+   let _ ← print (toString (product gs)) in
+   let _ ← print (toString (all big (λ→ ₀ > 0))) in
+   let _ ← print (toString (all big (λ→ ₀ > 3))) in
+   let _ ← print (toString (any big (λ→ ₀ > 4))) in
+   let _ ← print (toString (count big (λ→ ₀ > 3))) in
+
+   # Predicates
+   let _ ← print (toString (null ns)) in
+   let _ ← print (toString (size ns)) in
+
+   ⟨⟩
