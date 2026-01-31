@@ -1,6 +1,6 @@
 [package]
 name = "goth-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Command-line interface and REPL for the Goth programming language"
 license = "MIT"
@@ -29,3 +29,6 @@ clap = { version = "4.4", features = ["derive"] }
 colored = "2.1"
 dirs = "5.0"
 serde_json = "1.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

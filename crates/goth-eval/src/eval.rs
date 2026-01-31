@@ -59,14 +59,20 @@ impl Evaluator {
             ("readLine", PrimFn::ReadLine), ("read_line", PrimFn::ReadLine),
             ("readKey", PrimFn::ReadKey), ("read_key", PrimFn::ReadKey),  // Read single key
             ("readFile", PrimFn::ReadFile), ("writeFile", PrimFn::WriteFile),
+            ("readBytes", PrimFn::ReadBytes), ("⧏", PrimFn::ReadBytes),
+            ("writeBytes", PrimFn::WriteBytes), ("⧐", PrimFn::WriteBytes),
             ("rawModeEnter", PrimFn::RawModeEnter), ("rawModeExit", PrimFn::RawModeExit),  // Terminal raw mode
             ("sleep", PrimFn::Sleep),  // Sleep for milliseconds
             ("toInt", PrimFn::ToInt), ("toFloat", PrimFn::ToFloat), ("toBool", PrimFn::ToBool), ("toChar", PrimFn::ToChar),
             ("parseInt", PrimFn::ParseInt), ("parseFloat", PrimFn::ParseFloat),
             ("toString", PrimFn::ToString), ("str", PrimFn::ToString),
-            ("chars", PrimFn::Chars),
+            ("chars", PrimFn::Chars), ("fromChars", PrimFn::FromChars),
             ("strConcat", PrimFn::StrConcat), ("⧺", PrimFn::StrConcat),  // double plus
-            ("filter", PrimFn::Filter), ("map", PrimFn::Map), ("fold", PrimFn::Fold),
+            ("filter", PrimFn::Filter), ("map", PrimFn::Map), ("fold", PrimFn::Fold), ("⌿", PrimFn::Fold),
+            // Bitwise operations
+            ("bitand", PrimFn::BitAnd), ("bitor", PrimFn::BitOr),
+            ("bitxor", PrimFn::BitXor), ("⊻", PrimFn::BitXor),
+            ("shl", PrimFn::Shl), ("shr", PrimFn::Shr),
             ("index", PrimFn::Index),
             ("take", PrimFn::Take), ("↑", PrimFn::Take),  // APL take
             ("drop", PrimFn::Drop), ("↓", PrimFn::Drop),  // APL drop
@@ -235,7 +241,16 @@ impl Evaluator {
                                 Ok(TcoResult::Done(result))
                             }
                         }
-                        Value::Primitive(prim) => Ok(TcoResult::Done(prim::apply_prim(prim, args)?)),
+                        Value::Primitive(prim) => {
+                            if prim == PrimFn::Fold && args.len() == 3 {
+                                let func = args.remove(0);
+                                let acc = args.remove(0);
+                                let arr = args.remove(0);
+                                Ok(TcoResult::Done(self.eval_fold(func, acc, arr)?))
+                            } else {
+                                Ok(TcoResult::Done(prim::apply_prim(prim, args)?))
+                            }
+                        }
                         _ => Err(EvalError::type_error("function", &func)),
                     }
                 } else {
@@ -437,8 +452,48 @@ impl Evaluator {
 
     fn eval_filter(&mut self, arr: Value, pred: Value) -> EvalResult<Value> {
         match arr {
-            Value::Tensor(t) => { let results: Vec<Value> = t.iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(self.values_to_tensor_shaped(vec![results.len()], results)) }
-            Value::Tuple(vs) => { let results: Vec<Value> = vs.into_iter().filter_map(|elem| { let keep = self.apply(pred.clone(), elem.clone()).ok()?; match keep { Value::Bool(true) => Some(elem), _ => None } }).collect(); Ok(Value::Tuple(results)) }
+            Value::Tensor(t) => {
+                let mut results = Vec::new();
+                for elem in t.iter() {
+                    let keep = self.apply(pred.clone(), elem.clone())?;
+                    if keep == Value::Bool(true) {
+                        results.push(elem);
+                    }
+                }
+                Ok(self.values_to_tensor_shaped(vec![results.len()], results))
+            }
+            Value::Tuple(vs) => {
+                let mut results = Vec::new();
+                for elem in vs {
+                    let keep = self.apply(pred.clone(), elem.clone())?;
+                    if keep == Value::Bool(true) {
+                        results.push(elem);
+                    }
+                }
+                Ok(Value::Tuple(results))
+            }
+            _ => Err(EvalError::type_error("Tensor or Tuple", &arr)),
+        }
+    }
+
+    fn eval_fold(&mut self, func: Value, init: Value, arr: Value) -> EvalResult<Value> {
+        match arr {
+            Value::Tensor(t) => {
+                let mut acc = init;
+                for elem in t.iter() {
+                    let partial = self.apply(func.clone(), acc)?;
+                    acc = self.apply(partial, elem)?;
+                }
+                Ok(acc)
+            }
+            Value::Tuple(vs) => {
+                let mut acc = init;
+                for elem in vs {
+                    let partial = self.apply(func.clone(), acc)?;
+                    acc = self.apply(partial, elem)?;
+                }
+                Ok(acc)
+            }
             _ => Err(EvalError::type_error("Tensor or Tuple", &arr)),
         }
     }
@@ -548,7 +603,8 @@ fn prim_arity(prim: PrimFn) -> usize {
         PrimFn::Print | PrimFn::Write | PrimFn::ReadLine | PrimFn::ReadKey | PrimFn::ReadFile | PrimFn::Sleep => 1,
         PrimFn::Flush | PrimFn::RawModeEnter | PrimFn::RawModeExit => 1,  // Terminal control (take unit)
         PrimFn::Lines | PrimFn::Words | PrimFn::Bytes => 1,  // String splitting (unary)
-        PrimFn::WriteFile => 2,  // WriteFile takes path and content
+        PrimFn::WriteFile | PrimFn::ReadBytes | PrimFn::WriteBytes => 2,  // Binary I/O takes 2 args
+        PrimFn::Fold => 3,  // fold f acc arr
         PrimFn::StrEq | PrimFn::StartsWith | PrimFn::EndsWith | PrimFn::Contains => 2,  // String comparison (binary)
         _ => 2,  // Range, StrConcat, Take, Drop, Index etc take 2 args
     }

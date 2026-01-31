@@ -22,8 +22,8 @@
 
 | Type | Example | Notes |
 |------|---------|-------|
-| Integer | `42`, `-7` | 64-bit signed |
-| Float | `3.14`, `2.718` | 64-bit |
+| Integer | `42`, `-7` | Arbitrary precision (`ℤ`), backed by i128 |
+| Float | `3.14`, `2.718` | 64-bit (`F64`) |
 | Boolean | `true`, `false` or `⊤`, `⊥` | |
 | Char | `'a'`, `'\n'` | Unicode |
 | String | `"hello"` | UTF-8 |
@@ -57,21 +57,21 @@ Goth uses de Bruijn indices instead of named variables. This eliminates shadowin
 
 In multi-arg function declarations, `₀` = **last** argument (most recently bound):
 ```goth
-╭─ sub : I64 → I64 → I64
+╭─ sub : ℤ → ℤ → ℤ
 ╰─ ₁ - ₀            # ₁ = first arg, ₀ = second arg (sub 10 3 = 7)
 ```
 
 For single-arg functions, `₀` is the sole argument:
 ```goth
-╭─ square : I64 → I64
+╭─ square : ℤ → ℤ
 ╰─ ₀ × ₀            # ₀ = the argument
 ```
 
 Let bindings shift indices:
 ```goth
-╭─ example : I64 → I64
-╰─ let x ← ₀ × 2 in    # ₀ = argument
-   let y ← ₀ + 1 in    # ₀ = x, ₁ = argument
+╭─ example : ℤ → ℤ
+╰─ let x = ₀ × 2 in    # ₀ = argument
+   let y = ₀ + 1 in    # ₀ = x, ₁ = argument
    ₀ + ₁               # ₀ = y, ₁ = x, ₂ = argument
 ```
 
@@ -83,31 +83,37 @@ Let bindings shift indices:
 
 | Type | Description |
 |------|-------------|
-| `I64` | 64-bit signed integer |
-| `I32` | 32-bit signed integer |
+| `ℤ` | Integer (backed by i128 at runtime) |
+| `ℕ` | Natural number (non-negative integer, i128 at runtime) |
+| `F` | Generic float (resolves to F64) |
+| `I64` | 64-bit signed integer (i128 at runtime) |
+| `I32` | 32-bit signed integer (i128 at runtime) |
 | `F64` | 64-bit float |
 | `F32` | 32-bit float |
 | `Bool` | Boolean |
 | `Char` | Unicode character |
+| `String` | UTF-8 string (tensor of Char) |
 | `()` | Unit type |
+
+All integer types (`ℤ`, `ℕ`, `I64`, `I32`, etc.) are stored as i128 at runtime. The type distinctions exist for documentation and type checking but are not enforced by the interpreter. The standard library primarily uses `ℤ`, `F`, and `Bool` for polymorphic signatures.
 
 ### Composite Types
 
 ```goth
-I64 → I64                -- Function type
-I64 → I64 → I64          -- Curried function
-[n]I64                   -- Vector of n integers
-[m n]F64                 -- m×n matrix of floats
-⟨I64, Bool⟩              -- Tuple (product)
-⟨x: I64, y: I64⟩         -- Record
+ℤ → ℤ                    # Function type
+ℤ → ℤ → ℤ               # Curried function
+[n]ℤ                     # Vector of n integers
+[m n]F64                 # m×n matrix of floats
+⟨ℤ, Bool⟩               # Tuple (product)
+⟨x: ℤ, y: ℤ⟩            # Record
 ```
 
 ### Type Variables
 
 Lowercase names are type variables:
 ```goth
-α → α                    -- Polymorphic identity
-[n]α → [n]α              -- Shape-preserving map
+α → α                    # Polymorphic identity
+[n]α → [n]α              # Shape-preserving map
 ```
 
 ---
@@ -117,23 +123,23 @@ Lowercase names are type variables:
 Shapes are part of the type system and checked at compile time.
 
 ```goth
-[3]I64                   -- Exactly 3 integers
-[2 3]F64                 -- 2×3 matrix
-[n]I64                   -- Vector of unknown length n
-[m n]F64                 -- m×n matrix (shape variables)
+[3]ℤ                     # Exactly 3 integers
+[2 3]F64                 # 2×3 matrix
+[n]ℤ                     # Vector of unknown length n
+[m n]F64                 # m×n matrix (shape variables)
 ```
 
 Shape checking catches dimension mismatches:
 ```goth
--- Error: Dimension mismatch at position 0: expected 5, found 3
-╭─ bad : [3]I64 → [5]I64
+# Error: Dimension mismatch at position 0: expected 5, found 3
+╭─ bad : [3]ℤ → [5]ℤ
 ╰─ ₀
 ```
 
 Shape variables unify:
 ```goth
--- OK: input and output have same shape
-╭─ double : [n]I64 → [n]I64
+# OK: input and output have same shape
+╭─ double : [n]ℤ → [n]ℤ
 ╰─ ₀ ↦ (λ→ ₀ × 2)
 ```
 
@@ -153,13 +159,13 @@ ASCII alternative: `/-` for `╭─`, `\-` for `╰─`
 ### Examples
 
 ```goth
-╭─ square : I64 → I64
+╭─ square : ℤ → ℤ
 ╰─ ₀ × ₀
 
-╭─ add : I64 → I64 → I64
+╭─ add : ℤ → ℤ → ℤ
 ╰─ ₀ + ₁
 
-╭─ sumSquares : [n]I64 → I64
+╭─ sumSquares : [n]ℤ → ℤ
 ╰─ Σ (₀ ↦ (λ→ ₀ × ₀))
 ```
 
@@ -176,22 +182,21 @@ ASCII: `\->` for `λ→`
 
 Functions can call themselves by name:
 ```goth
-╭─ factorial : I64 → I64
+╭─ factorial : ℤ → ℤ
 ╰─ if ₀ ≤ 1 then 1 else ₀ × factorial (₀ - 1)
 ```
 
 ### Let Bindings
 
 ```goth
-let x ← expr in body         -- Bind x, use in body
-let x : Type ← expr in body  -- With type annotation
-let x ← a; y ← b in c        -- Sequential bindings
+let x = expr in body          # Bind x, use in body (= or ← accepted)
+let x : Type = expr in body   # With type annotation
 ```
 
 Type annotations enable compile-time shape checking:
 ```goth
-let v : [3]F64 ← [1.0, 2.0, 3.0] in v    -- OK
-let v : [5]F64 ← [1.0, 2.0, 3.0] in v    -- Error: shape mismatch
+let v : [3]F64 = [1.0, 2.0, 3.0] in v    # OK
+let v : [5]F64 = [1.0, 2.0, 3.0] in v    # Error: shape mismatch
 ```
 
 ---
@@ -229,14 +234,50 @@ let v : [5]F64 ← [1.0, 2.0, 3.0] in v    -- Error: shape mismatch
 | `∨` | `\|\|` | Or |
 | `¬` | `!` | Not |
 
+### Bitwise
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| | `bitand` | Bitwise AND | `bitand 255 15` → `15` |
+| | `bitor` | Bitwise OR | `bitor 240 15` → `255` |
+| `⊻` | `bitxor` | Bitwise XOR | `⊻ 255 170` → `85` |
+| | `shl` | Shift left | `shl 1 8` → `256` |
+| | `shr` | Shift right | `shr 256 4` → `16` |
+
+All bitwise operations are curried functions on integer (`ℤ`) values.
+
+### Structural Equality
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `≡` | `===` | Structural equality | `[1,2] ≡ [1,2]` → `⊤` |
+
 ### Array Operations
 
 | Unicode | ASCII | Operation | Example |
 |---------|-------|-----------|---------|
 | `↦` | `-:` | Map | `arr ↦ (λ→ ₀ × 2)` |
 | `▸` | `\|>` | Filter | `arr ▸ (λ→ ₀ > 5)` |
+| `⤇` | `>>=` | Bind (flatmap) | `[1,2] ⤇ (λ→ [₀, ₀×2])` → `[1,2,2,4]` |
+| `⌿` | `fold` | Fold/reduce | `⌿ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `6` |
+| `⍀` | `scan` | Scan (prefix sums) | `⍀ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `[1,3,6]` |
 | `Σ` | `+/` | Sum | `Σ [1, 2, 3]` |
 | `Π` | `*/` | Product | `Π [1, 2, 3]` |
+| `⊕` | `++` | Concatenate | `[1,2] ⊕ [3,4]` → `[1,2,3,4]` |
+| `⊗` | `zip` | Zip (pair elements) | `[1,2] ⊗ [3,4]` → `[⟨1,3⟩, ⟨2,4⟩]` |
+
+### Function Operations
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `∘` | `.:` | Compose | `(f ∘ g) x` = `f (g x)` |
+
+### I/O Operations
+
+| Unicode | ASCII | Operation | Example |
+|---------|-------|-----------|---------|
+| `▷` | `>>` | Write | `"hello" ▷ "file.txt"` |
+| `◁` | `<<` | Read | `◁ "file.txt"` |
 
 ### Indexing
 
@@ -291,7 +332,7 @@ Patterns:
 ```goth
 enum Option α where Some α | None
 
-╭─ getOrDefault : I64 → I64
+╭─ getOrDefault : ℤ → ℤ
 ╰─ match (Some ₀) {
      Some x → x
      None → 0
@@ -343,8 +384,8 @@ Each `.goth` file is a module. The `use` declaration takes a string path (relati
 
 | Name | Signature | Description |
 |------|-----------|-------------|
-| `ι`, `iota` | `I64 → [n]I64` | `[0, 1, ..., n-1]` |
-| `range` | `I64 → I64 → [m]I64` | `[start, ..., end-1]` |
+| `ι`, `iota` | `ℤ → [n]ℤ` | `[0, 1, ..., n-1]` |
+| `range` | `ℤ → ℤ → [m]ℤ` | `[start, ..., end-1]` |
 
 ### Reductions
 
@@ -352,7 +393,7 @@ Each `.goth` file is a module. The `use` declaration takes a string path (relati
 |------|-----------|-------------|
 | `Σ`, `sum` | `[n]α → α` | Sum elements |
 | `Π`, `prod` | `[n]α → α` | Product elements |
-| `len` | `[n]α → I64` | Array length |
+| `len` | `[n]α → ℤ` | Array length |
 
 ### Transformations
 
@@ -360,9 +401,10 @@ Each `.goth` file is a module. The `use` declaration takes a string path (relati
 |------|-----------|-------------|
 | `↦` (map) | `[n]α → (α → β) → [n]β` | Apply to each |
 | `▸` (filter) | `[n]α → (α → Bool) → [m]α` | Keep matching |
+| `⌿`, `fold` | `(α → β → α) → α → [n]β → α` | Left fold with accumulator |
 | `reverse` | `[n]α → [n]α` | Reverse order |
-| `take` | `I64 → [n]α → [m]α` | Take first k elements |
-| `drop` | `I64 → [n]α → [m]α` | Drop first k elements |
+| `take` | `ℤ → [n]α → [m]α` | Take first k elements |
+| `drop` | `ℤ → [n]α → [m]α` | Drop first k elements |
 | `⧺` | `String → String → String` | Concatenate strings |
 | `⊕` | `[n]α → [m]α → [p]α` | Concatenate arrays |
 
@@ -409,11 +451,21 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 
 | Name | Signature | Description |
 |------|-----------|-------------|
-| `toInt` | `α → I64` | Convert to integer |
+| `toInt` | `α → ℤ` | Convert to integer |
 | `toFloat` | `α → F64` | Convert to float |
-| `toChar` | `I64 → Char` | Integer to character |
-| `parseInt` | `String → I64` | Parse string as integer |
+| `toChar` | `ℤ → Char` | Integer to character |
+| `parseInt` | `String → ℤ` | Parse string as integer |
 | `parseFloat` | `String → F64` | Parse string as float |
+
+### Bitwise Operations
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `bitand` | `ℤ → ℤ → ℤ` | Bitwise AND |
+| `bitor` | `ℤ → ℤ → ℤ` | Bitwise OR |
+| `⊻`, `bitxor` | `ℤ → ℤ → ℤ` | Bitwise XOR |
+| `shl` | `ℤ → ℤ → ℤ` | Shift left (0..127) |
+| `shr` | `ℤ → ℤ → ℤ` | Shift right (0..127) |
 
 ### I/O
 
@@ -423,6 +475,8 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 | `readLine` | `() → String` | Read line from stdin |
 | `readFile` | `String → String` | Read file contents |
 | `writeFile` | `String → String → ()` | Write content to file path |
+| `⧏`, `readBytes` | `ℤ → String → [n]ℤ` | Read n bytes from file as byte array |
+| `⧐`, `writeBytes` | `[n]ℤ → String → ()` | Write byte array to file |
 | `▷` | `String → String → ()` | Write operator: `"content" ▷ "path"` |
 | `toString` | `α → String` | Convert value to string |
 | `strConcat`, `⧺` | `String → String → String` | Concatenate strings |
@@ -434,34 +488,34 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 ### Factorial
 
 ```goth
-╭─ factorial : I64 → I64
+╭─ factorial : ℤ → ℤ
 ╰─ if ₀ ≤ 1 then 1 else ₀ × factorial (₀ - 1)
 
-╭─ main : () → I64
+╭─ main : () → ℤ
 ╰─ factorial 10
 ```
 
 ### Sum of Squares
 
 ```goth
-╭─ main : () → I64
+╭─ main : () → ℤ
 ╰─ Σ ((ι 10) ↦ λ→ ₀ × ₀)
 ```
 
 ### Filter Even Numbers
 
 ```goth
-╭─ main : () → I64
+╭─ main : () → ℤ
 ╰─ Σ ((ι 20) ▸ λ→ (₀ % 2) = 0)
 ```
 
 ### Cross-Function Calls
 
 ```goth
-╭─ square : I64 → I64
+╭─ square : ℤ → ℤ
 ╰─ ₀ × ₀
 
-╭─ main : () → I64
+╭─ main : () → ℤ
 ╰─ square 9
 ```
 
@@ -470,12 +524,66 @@ Supported functions: `+`, `-`, `×`, `/`, `^`, `√`, `exp`, `ln`, `log10`, `log
 ```goth
 enum Option α where Some α | None
 
-╭─ main : () → I64
+╭─ main : () → ℤ
 ╰─ match (Some 42) {
      Some x → x × 2
      None → 0
    }
 ```
+
+---
+
+## Standard Library
+
+The `stdlib/` directory contains reusable modules imported via `use`:
+
+```goth
+use "stdlib/random.goth"
+use "stdlib/math.goth"
+```
+
+### Modules
+
+| Module | Description |
+|--------|-------------|
+| `prelude.goth` | Core combinators (`id`, `const`, `flip`, `compose`) |
+| `list.goth` | List/array operations |
+| `math.goth` | Math functions with uncertainty propagation |
+| `option.goth` | Generic Option type (`some`/`none`, `mapOpt`, `flatMapOpt`, ...) |
+| `result.goth` | Generic Result type (`ok`/`err`, `mapRes`, `flatMapRes`, ...) |
+| `string.goth` | String manipulation |
+| `io.goth` | I/O utilities |
+| `canvas.goth` | Canvas/graphics operations |
+| `tui.goth` | Terminal UI operations |
+| `random.goth` | Seeded PRNG (xorshift64) with state-passing pattern |
+
+### Random Number Generation
+
+The `random.goth` module provides a seeded PRNG using xorshift64. All RNG functions return `⟨value, nextSeed⟩` tuples for explicit state threading:
+
+```goth
+use "stdlib/random.goth"
+
+╭─ main : ℤ → [n]F64
+╰─ let seed = entropy ⟨⟩
+   in let ⟨vals, _⟩ = randFloats ₁ seed
+   in vals
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `entropy` | `() → I64` | Seed from `/dev/urandom` |
+| `bytesToSeed` | `[8]I64 → I64` | Pack 8 bytes into seed |
+| `xorshift64` | `I64 → I64` | Raw state transition |
+| `randFloat` | `I64 → ⟨F64, I64⟩` | Uniform float in [0, 1) |
+| `randFloatRange` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Uniform float in [lo, hi) |
+| `randInt` | `I64 → I64 → I64 → ⟨I64, I64⟩` | Uniform integer in [lo, hi] |
+| `randBool` | `F64 → I64 → ⟨Bool, I64⟩` | Boolean with probability p |
+| `randNormal` | `I64 → ⟨F64, I64⟩` | Standard normal (Box-Muller) |
+| `randGaussian` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Normal with mean and stddev |
+| `randFloats` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk uniform floats |
+| `randInts` | `I64 → I64 → I64 → I64 → ⟨[n]I64, I64⟩` | Bulk uniform integers |
+| `randNormals` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk normal values |
 
 ---
 

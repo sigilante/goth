@@ -95,6 +95,26 @@ struct Args {
 }
 
 fn main() {
+    // Register atexit handler to restore terminal if raw mode was entered
+    #[cfg(unix)]
+    unsafe {
+        extern "C" fn cleanup() { goth_eval::prim::restore_terminal(); }
+        libc::atexit(cleanup);
+    }
+
+    // Wrap execution in catch_unwind so panics restore terminal state
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_main();
+    }));
+
+    if result.is_err() {
+        goth_eval::prim::restore_terminal();
+        eprintln!("goth: internal error (panic). Terminal restored.");
+        std::process::exit(1);
+    }
+}
+
+fn run_main() {
     let args = Args::parse();
 
     // ============ AST-First LLM Workflow ============
@@ -610,7 +630,10 @@ fn handle_command(cmd: &str, evaluator: &mut Evaluator, type_checker: &mut TypeC
 
     match command {
         ":help" | ":h" | ":?" => print_help(),
-        ":quit" | ":q" => std::process::exit(0),
+        ":quit" | ":q" => {
+            goth_eval::prim::restore_terminal();
+            std::process::exit(0);
+        }
         ":ast" => {
             if let Some(expr_str) = arg {
                 match parse_expr(expr_str) {
@@ -974,7 +997,7 @@ fn run_to_json_expr(source: &str, compact: bool) {
 fn print_banner() {
     println!("{}", r#"
    ╔═══════════════════════════════════════╗
-   ║             𝖌𝖔𝖙𝖍  v0.1.0              ║
+   ║             𝖌𝖔𝖙𝖍  v0.2.0              ║
    ║   Functional • Tensors • Refinements  ║
    ╚═══════════════════════════════════════╝
 "#.cyan());

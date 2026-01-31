@@ -565,6 +565,13 @@ pub fn primitive_type(name: &str) -> Option<Type> {
                 Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
             ))
         }
+        "fromChars" => {
+            // [n]Char → String (convert array of characters to string)
+            Some(Type::func(
+                Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
         // Aggregation
         "sum" | "Σ" => {
             // ∀n α. [n]α → α (sum of numeric array)
@@ -678,6 +685,50 @@ pub fn primitive_type(name: &str) -> Option<Type> {
             Some(Type::func(
                 Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
                 Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+            ))
+        }
+        "readBytes" | "⧏" => {
+            // I64 → String → [?]I64 (read N bytes from file path)
+            Some(Type::func_n(
+                [
+                    Type::Prim(PrimType::I64),
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::I64))),
+            ))
+        }
+        "writeBytes" | "⧐" => {
+            // [?]I64 → String → () (write bytes to file path)
+            Some(Type::func_n(
+                [
+                    Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Prim(PrimType::I64))),
+                    Type::Tensor(Shape(vec![Dim::Var("m".into())]), Box::new(Type::Prim(PrimType::Char))),
+                ],
+                Type::unit(),
+            ))
+        }
+        "fold" | "⌿" => {
+            // (α → β → α) → α → [?]β → α
+            Some(Type::Forall(
+                vec![
+                    TypeParam { name: "α".into(), kind: TypeParamKind::Type },
+                    TypeParam { name: "β".into(), kind: TypeParamKind::Type },
+                ],
+                Box::new(Type::func_n(
+                    [
+                        Type::func(Type::Var("α".into()), Type::func(Type::Var("β".into()), Type::Var("α".into()))),
+                        Type::Var("α".into()),
+                        Type::Tensor(Shape(vec![Dim::Var("n".into())]), Box::new(Type::Var("β".into()))),
+                    ],
+                    Type::Var("α".into()),
+                )),
+            ))
+        }
+        "bitand" | "bitor" | "bitxor" | "⊻" | "shl" | "shr" => {
+            // I64 → I64 → I64
+            Some(Type::func_n(
+                [Type::Prim(PrimType::I64), Type::Prim(PrimType::I64)],
+                Type::Prim(PrimType::I64),
             ))
         }
         "writeFile" => {

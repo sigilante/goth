@@ -31,7 +31,7 @@ The interpreted version of the language is the canonical language.
 ./target/release/goth
 
 # Run a file
-./target/release/goth ../examples/factorial.goth
+./target/release/goth ../examples/recursion/factorial.goth
 
 # Evaluate expression
 ./target/release/goth -e "Σ [1, 2, 3, 4, 5]"
@@ -39,14 +39,22 @@ The interpreted version of the language is the canonical language.
 
 #### Examples
 
-[`add_main.goth`](./examples/add_main.goth)
-[`factorial.goth`](./examples/factorial.goth)
-[`fibonacci.goth`](./examples/fibonacci.goth)
-[`math_comprehensive.goth`](./examples/math_comprehensive.goth)
-[`matmul.goth`](./examples/matmul.goth)
-[`primes.goth`](./examples/primes.goth)
-[`test_iota.goth`](./examples/test_iota.goth)
-[`use_math.goth`](./examples/use_math.goth)
+See [`examples/README.md`](./examples/README.md) for a full listing organized by category.
+
+| Category | Examples |
+|----------|---------|
+| [`basic/`](./examples/basic/) | identity, double, square, abs, sign, is_even, max, min |
+| [`recursion/`](./examples/recursion/) | factorial, fibonacci, gcd, ackermann, collatz, hyperop |
+| [`higher-order/`](./examples/higher-order/) | map, filter, fold, compose, pipeline, zip |
+| [`numeric/`](./examples/numeric/) | harmonic, pi, exp, sqrt, gamma |
+| [`algorithms/`](./examples/algorithms/) | isPrime, count_primes, nth_prime, binary_search, modpow |
+| [`contracts/`](./examples/contracts/) | abs_post, div_safe, factorial_contract, sqrt_safe |
+| [`tco/`](./examples/tco/) | naive vs tail-call-optimized pairs |
+| [`io/`](./examples/io/) | stdout, stderr, file write |
+| [`uncertainty/`](./examples/uncertainty/) | measurement, error propagation through arithmetic |
+| [`simulation/`](./examples/simulation/) | heat diffusion, wave equation, Laplace, power iteration |
+| [`random/`](./examples/random/) | PRNG, Buffon's needle, Monte Carlo integration |
+| [`crypto/`](./examples/crypto/) | SHA-256, MD5, BLAKE3, Base64, file hashing |
 
 ### Compiler
 
@@ -118,13 +126,10 @@ The language is not particularly efficient to execute, but it is designed to be 
 ### Planned
 
 - Refinement type solving (needs Z3)
-- Effect type checking
+- Effect type enforcement (currently parsed but not enforced)
 - Dependent shape inference
 - Polymorphism (let-generalization)
-- Native code compilation (MLIR → LLVM)
-- Comment syntax
-- Module system
-- Standard library
+- Bigint backing for ℕ/ℤ types
 - Package manager
 - Language server protocol (LSP)
 - Debugger
@@ -135,9 +140,9 @@ The language is not particularly efficient to execute, but it is designed to be 
 
 - All syntax is parsed but not all features are type-checked.
 - Contracts are runtime-only (no static proving yet).
-- Shape variables are tracked but not unified.
 - Effect annotations are parsed but not enforced.
 - Refinement types are parsed but predicates not solved.
+- Comment syntax (`#`), module system (`use`), and standard library (11 modules) are implemented.
 
 ## Design
 

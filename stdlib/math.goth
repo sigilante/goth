@@ -219,14 +219,7 @@ let lnTen = ln 10.0
 ╰─ 0.5 × ln ((1.0 + ₀) / (1.0 - ₀))
 
 # ============ Number Theory (Integer) ============
-
-# Check if even
-╭─ isEven : ℤ → Bool
-╰─ ₀ % 2 = 0
-
-# Check if odd
-╭─ isOdd : ℤ → Bool
-╰─ ₀ % 2 ≠ 0
+# Note: isEven, isOdd, isDivisibleBy are in prelude.goth
 
 # Check if divisible
 ╭─ divides : ℤ → ℤ → Bool
@@ -354,9 +347,7 @@ let lnTen = ln 10.0
 ╭─ maxI : ℤ → ℤ → ℤ
 ╰─ if ₁ > ₀ then ₁ else ₀
 
-# Clamp value to range [lo, hi]
-╭─ clamp : F → F → F → F
-╰─ if ₀ < ₂ then ₂ else if ₀ > ₁ then ₁ else ₀
+# Note: clamp (float) is in prelude.goth
 
 # Clamp integer to range
 ╭─ clampI : ℤ → ℤ → ℤ → ℤ

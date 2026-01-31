@@ -89,7 +89,7 @@ impl Pretty {
             Decl::Class(c) => self.print_class(c),
             Decl::Impl(i) => self.print_impl(i),
             Decl::Let(l) => self.print_let_decl(l),
-            Decl::Op(_) => todo!("op decl pretty printing"),
+            Decl::Op(o) => self.print_op_decl(o),
             Decl::Use(u) => {
                 self.write("use \"");
                 self.write(&u.path);
@@ -216,6 +216,21 @@ impl Pretty {
         }
         self.write(if self.config.unicode { " ← " } else { " <- " });
         self.print_expr(&l.value);
+        self.newline();
+    }
+
+    fn print_op_decl(&mut self, o: &crate::decl::OpDecl) {
+        self.write("op ");
+        self.write(&o.name);
+        self.write(" ");
+        self.write(&o.glyph);
+        self.write(" (");
+        self.write(&o.ascii);
+        self.write(") : ");
+        self.print_type(&o.signature);
+        self.write(&format!(" [prec={}, assoc={:?}]", o.precedence, o.assoc));
+        self.write(if self.config.unicode { " ← " } else { " <- " });
+        self.print_expr(&o.body);
         self.newline();
     }
 
@@ -648,18 +663,9 @@ pub fn print_type(ty: &Type) -> String {
 // ============ Operator Helpers ============
 
 /// Get operator precedence (higher = tighter binding)
+/// Must match BinOp::precedence() in op.rs
 fn binop_prec(op: &crate::op::BinOp) -> u8 {
-    use crate::op::BinOp;
-    match op {
-        BinOp::Or => 2,
-        BinOp::And => 3,
-        BinOp::Eq | BinOp::Neq => 4,
-        BinOp::Lt | BinOp::Gt | BinOp::Leq | BinOp::Geq => 5,
-        BinOp::Add | BinOp::Sub | BinOp::PlusMinus => 6,
-        BinOp::Mul | BinOp::Div | BinOp::Mod => 7,
-        BinOp::Pow => 8,
-        _ => 5,
-    }
+    op.precedence()
 }
 
 /// Get operator string representation

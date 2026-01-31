@@ -103,10 +103,10 @@
 ╰─ Σ ₀ / len ₀
 
 ╭─ minimum : [n]F → F
-╰─ min/ ₀
+╰─ ⌿ (λ→ λ→ if ₀ < ₁ then ₀ else ₁) (₀[0]) ₀
 
 ╭─ maximum : [n]F → F
-╰─ max/ ₀
+╰─ ⌿ (λ→ λ→ if ₀ > ₁ then ₀ else ₁) (₀[0]) ₀
 
 # Variance (population variance)
 ╭─ variance : [n]F → F
@@ -280,24 +280,9 @@
 ╭─ unsnoc : [n]α → ⟨[m]α, α⟩
 ╰─ ⟨take (len ₀ - 1) ₀, ₀[len ₀ - 1]⟩
 
-# ============ Singleton & Pair Operations ============
+# ============ Singleton Operations ============
+# Note: pair, fst, snd, bimap (mapPair) are in prelude.goth
 
 # Create singleton list
 ╭─ singleton : α → [1]α
 ╰─ [₀]
-
-# Create pair from two elements
-╭─ pair : α → β → ⟨α, β⟩
-╰─ ⟨₁, ₀⟩
-
-# Get first element of pair
-╭─ fst : ⟨α, β⟩ → α
-╰─ ₀.0
-
-# Get second element of pair
-╭─ snd : ⟨α, β⟩ → β
-╰─ ₀.1
-
-# Map over both elements of pair
-╭─ mapPair : (α → γ) → (β → δ) → ⟨α, β⟩ → ⟨γ, δ⟩
-╰─ ⟨₂ ₀.0, ₁ ₀.1⟩

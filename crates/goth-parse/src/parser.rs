@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
                     if l_bp >= min_bp {
                         self.next(); // consume operator
                         let rhs = self.parse_expr_bp(r_bp)?;
-                        lhs = self.make_binop(op, lhs, rhs);
+                        lhs = self.make_binop(op, lhs, rhs)?;
                         continue; // Check for more operators/applications
                     }
                 }
@@ -736,7 +736,7 @@ impl<'a> Parser<'a> {
                     DoOp::Let(pat, e)
                 }
                 Some(t) if t.is_binop() => {
-                    let op = self.token_to_binop(&t);
+                    let op = self.token_to_binop(&t)?;
                     self.next();
                     DoOp::Op(op, self.parse_expr()?)
                 }
@@ -750,40 +750,43 @@ impl<'a> Parser<'a> {
     }
 
     /// Convert token to BinOp
-    fn token_to_binop(&self, token: &Token) -> BinOp {
+    fn token_to_binop(&self, token: &Token) -> ParseResult<BinOp> {
         match token {
-            Token::Plus => BinOp::Add,
-            Token::Minus => BinOp::Sub,
-            Token::Star => BinOp::Mul,
-            Token::Slash => BinOp::Div,
-            Token::Caret => BinOp::Pow,
-            Token::Percent => BinOp::Mod,
-            Token::PlusMinus => BinOp::PlusMinus,
-            Token::Eq => BinOp::Eq,
-            Token::StructEq => BinOp::StructEq,
-            Token::Neq => BinOp::Neq,
-            Token::Lt => BinOp::Lt,
-            Token::Gt => BinOp::Gt,
-            Token::Leq => BinOp::Leq,
-            Token::Geq => BinOp::Geq,
-            Token::And => BinOp::And,
-            Token::Or => BinOp::Or,
-            Token::Map => BinOp::Map,
-            Token::Filter => BinOp::Filter,
-            Token::Bind => BinOp::Bind,
-            Token::Compose => BinOp::Compose,
-            Token::ZipWith => BinOp::ZipWith,
-            Token::Concat => BinOp::Concat,
-            Token::Write => BinOp::Write,
-            Token::Read => BinOp::Read,
-            _ => BinOp::Add, // fallback
+            Token::Plus => Ok(BinOp::Add),
+            Token::Minus => Ok(BinOp::Sub),
+            Token::Star => Ok(BinOp::Mul),
+            Token::Slash => Ok(BinOp::Div),
+            Token::Caret => Ok(BinOp::Pow),
+            Token::Percent => Ok(BinOp::Mod),
+            Token::PlusMinus => Ok(BinOp::PlusMinus),
+            Token::Eq => Ok(BinOp::Eq),
+            Token::StructEq => Ok(BinOp::StructEq),
+            Token::Neq => Ok(BinOp::Neq),
+            Token::Lt => Ok(BinOp::Lt),
+            Token::Gt => Ok(BinOp::Gt),
+            Token::Leq => Ok(BinOp::Leq),
+            Token::Geq => Ok(BinOp::Geq),
+            Token::And => Ok(BinOp::And),
+            Token::Or => Ok(BinOp::Or),
+            Token::Map => Ok(BinOp::Map),
+            Token::Filter => Ok(BinOp::Filter),
+            Token::Bind => Ok(BinOp::Bind),
+            Token::Compose => Ok(BinOp::Compose),
+            Token::ZipWith => Ok(BinOp::ZipWith),
+            Token::Concat => Ok(BinOp::Concat),
+            Token::Write => Ok(BinOp::Write),
+            Token::Read => Ok(BinOp::Read),
+            _ => Err(ParseError::Unexpected {
+                found: Some(token.clone()),
+                expected: "binary operator".into(),
+            }),
         }
     }
 
     /// Create binary operation expression
-    fn make_binop(&self, token: Token, lhs: Expr, rhs: Expr) -> Expr {
-        let op = self.token_to_binop(&token);
-        Expr::BinOp(op, Box::new(lhs), Box::new(rhs))
+    fn make_binop(&self, token: Token, lhs: Expr, rhs: Expr) -> ParseResult<Expr> {
+        let op = self.token_to_binop(&token)?;
+        Ok(Expr::BinOp(op, Box::new(lhs), Box::new(rhs)))
     }
 
     // ============ Pattern Parsing ============

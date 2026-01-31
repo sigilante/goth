@@ -417,11 +417,14 @@ Built-in operators (not standalone functions):
 |-----------|---------|-------|---------|
 | Map | `↦` | `-:` | `[1,2,3] ↦ (λ→ ₀ × 2)` → `[2 4 6]` |
 | Filter | `▸` | `\|>_` | `[1,2,3,4,5] ▸ (λ→ ₀ > 2)` → `[3 4 5]` |
+| Fold | `⌿` | `fold` | `⌿ (λ→ λ→ ₁ + ₀) 0 [1,2,3]` → `6` |
 | Sum | `Σ` | `+/` | `Σ [1,2,3,4,5]` → `15` |
 | Product | `Π` | `*/` | `Π [1,2,3,4,5]` → `120` |
 | Compose | `∘` | `.:` | `f ∘ g` (f after g) |
 | Bind | `⤇` | `=>>` | Monadic bind |
 | Write | `▷` | `\|>` | `"hello" ▷ stdout` or `"data" ▷ "/tmp/out.txt"` |
+
+**Fold** is a 3-argument curried function: `fold f acc arr`. The function `f` takes `(accumulator, element)` and returns the new accumulator. Inside the fold lambda, `₁` = accumulator, `₀` = current element.
 
 **In JSON AST:**
 ```json
@@ -443,6 +446,18 @@ print("Hello, world!")
 "hello" ▷ stdout      # write to stdout (no newline)
 "error" ▷ stderr      # write to stderr
 "data"  ▷ "/tmp/f.txt" # write to file
+```
+
+**`⧏` (readBytes)** — reads n bytes from a file path, returns `[n]I64` array of byte values (0-255):
+```goth
+⧏ 8 "/dev/urandom"    # read 8 bytes of entropy
+readBytes 4 "/tmp/f"   # ASCII fallback
+```
+
+**`⧐` (writeBytes)** — writes a byte array to a file path:
+```goth
+⧐ [72, 101, 108] "/tmp/out"   # write bytes
+writeBytes [0, 255] "/tmp/bin" # ASCII fallback
 ```
 
 `stdout` and `stderr` are built-in stream constants. When the RHS of `▷` is a stream, the content is written to that stream. When it is a string, it is treated as a file path.
@@ -519,9 +534,11 @@ print("Hello, world!")
 
 **Math functions:** `√` (sqrt), `Γ` (gamma), `ln`, `exp`, `sin`, `cos`, `tan`, `abs`, `⌊` (floor), `⌈` (ceil), `log₁₀`, `log₂`
 
-**Array operations:** `len`, `Σ` (sum), `Π` (product), `↦` (map), `▸` (filter), `iota`, `range`
+**Array operations:** `len`, `Σ` (sum), `Π` (product), `↦` (map), `▸` (filter), `⌿` (fold), `iota`, `range`, `⊕` (concat)
 
-**No bitwise ops** currently. Use arithmetic equivalents if needed.
+**Bitwise operations:** `bitand`, `bitor`, `⊻`/`bitxor`, `shl`, `shr` — all curried `I64 → I64 → I64`
+
+**Byte I/O:** `⧏`/`readBytes` (`I64 → String → [n]I64`), `⧐`/`writeBytes` (`[n]I64 → String → ()`)
 
 ### 8. Execution Environment
 
@@ -537,12 +554,94 @@ print("Hello, world!")
 ### 9. Extending Benchmarks
 
 **Current gaps to consider:**
-- String manipulation (limited support currently)
 - Data structures (trees, graphs - would need ADTs)
-- More numeric algorithms (integration, differentiation)
+- More numeric algorithms (differentiation)
 - Property-based contract testing
 
 **Stick to:** Pure functional algorithms that fit the current type system.
+
+## Standard Library: Random Numbers
+
+The `stdlib/random.goth` module provides seeded PRNG using xorshift64. Import with `use "stdlib/random.goth"`.
+
+**Key design pattern:** All RNG functions return `⟨value, nextSeed⟩` tuples. Thread the seed through sequential calls:
+
+```goth
+use "stdlib/random.goth"
+
+╭─ main : () → ⟨F64, F64, F64⟩
+╰─ let seed = entropy ⟨⟩
+   in let ⟨v1, s1⟩ = randFloat seed
+   in let ⟨v2, s2⟩ = randFloat s1
+   in let ⟨v3, s3⟩ = randFloat s2
+   in ⟨v1, v2, v3⟩
+```
+
+**Available functions:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `entropy` | `() → I64` | Seed from `/dev/urandom` |
+| `bytesToSeed` | `[8]I64 → I64` | Pack 8 bytes into seed |
+| `xorshift64` | `I64 → I64` | Raw state transition |
+| `randFloat` | `I64 → ⟨F64, I64⟩` | Uniform [0, 1) |
+| `randFloatRange` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Uniform [lo, hi) |
+| `randInt` | `I64 → I64 → I64 → ⟨I64, I64⟩` | Uniform [lo, hi] |
+| `randBool` | `F64 → I64 → ⟨Bool, I64⟩` | Boolean with probability p |
+| `randNormal` | `I64 → ⟨F64, I64⟩` | Standard normal (Box-Muller) |
+| `randGaussian` | `F64 → F64 → I64 → ⟨F64, I64⟩` | Normal(mean, stddev) |
+| `randFloats` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk uniform floats |
+| `randInts` | `I64 → I64 → I64 → I64 → ⟨[n]I64, I64⟩` | Bulk uniform integers |
+| `randNormals` | `I64 → I64 → ⟨[n]F64, I64⟩` | Bulk normal values |
+
+**De Bruijn index note:** When using `let ⟨v, s⟩ = randFloat seed in ...`, the destructuring introduces 2 bindings, so raw De Bruijn indices in the body shift by 2. Named variables (`v`, `s`, `seed`) are unaffected — prefer named references when possible.
+
+## Standard Library: Cryptography
+
+The `stdlib/crypto.goth` module provides pure-Goth implementations of cryptographic hash functions and encoding. All algorithms are implemented entirely in Goth using bitwise primitives — no FFI or Rust crate dependencies. Import with `use "stdlib/crypto.goth"`.
+
+**Key design pattern:** All hash functions take a `String` and return a hex-encoded `String`. Internally, strings are converted to byte arrays via `bytes`, processed through block-oriented compression functions using `fold`, and rendered back to hex strings.
+
+```goth
+use "stdlib/crypto.goth"
+
+╭─ main : String → String
+╰─ let contents = readFile ₀
+   in let _ = print ("SHA-256: " ⧺ sha256 ₀)
+   in let _ = print ("MD5:    " ⧺ md5 ₁)
+   in "BLAKE3: " ⧺ blake3 ₂
+```
+
+**Public functions:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `sha256` | `String → String` | SHA-256 hash (NIST FIPS 180-4), arbitrary-length input |
+| `sha256Bytes` | `[n]I64 → String` | SHA-256 from raw byte array |
+| `md5` | `String → String` | MD5 digest (RFC 1321), arbitrary-length input |
+| `blake3` | `String → String` | BLAKE3 hash (single chunk, ≤ 64 bytes) |
+| `base64EncodeStr` | `String → String` | Base64 encode a string (RFC 4648) |
+| `base64Encode` | `[n]I64 → String` | Base64 encode a byte array |
+| `base64Decode` | `String → [n]I64` | Base64 decode to byte array |
+| `hexEncode` | `[n]I64 → String` | Hex-encode a byte array |
+
+**Internal helpers** (also exported, useful for custom hash constructions):
+
+| Function | Description |
+|----------|-------------|
+| `add32`, `not32`, `rotr32`, `rotl32` | 32-bit masked arithmetic and rotation |
+| `byteToHex`, `wordsToHex`, `wordsToHexLE` | Hex encoding (big-endian and little-endian) |
+| `blockToWords`, `blockToWordsLE` | Byte-to-word packing (BE and LE) |
+| `sha256Pad`, `md5Pad` | Message padding with length encoding |
+| `sha256Compress`, `md5Compress`, `blake3Compress` | Single-block compression functions |
+| `aset` | Functional array element update: `aset arr idx val` |
+
+**Implementation notes for LLMs:**
+- Goth integers are i128 internally; all 32-bit hash operations must mask with `bitand X 4294967295` after every addition, rotation, or shift
+- SHA-256 uses big-endian word packing; MD5 and BLAKE3 use little-endian
+- BLAKE3 is limited to single-chunk messages (≤ 64 bytes); SHA-256 and MD5 handle arbitrary length via multi-block processing
+- De Bruijn index tracking is critical in hash compression loops — annotate every `let` with a comment showing the current index state (e.g., `# ₀=ki ₁=roundIdx ₂=st ₃=schedule`)
+- Use `fold` over `iota N` for round-based processing; inside the fold lambda, `₁` = accumulator, `₀` = round index
 
 ## Goth Syntax ↔ JSON
 

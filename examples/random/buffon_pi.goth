@@ -1,0 +1,20 @@
+# Estimate π via Buffon's needle experiment.
+# Drop n needles (length 1) on parallel lines (spacing 1).
+# P(cross) = 2/π → π = 2n/crossings.
+use "../../stdlib/random.goth"
+
+╭─ main : I64 → F64
+│ ⊢ ₀ > 0
+│ ⊨ ₀ > 2.0 ∧ ₀ < 4.0
+╰─ let n = ₀
+   in let seed = entropy ⟨⟩
+   in let ⟨crossings, _⟩ = ⌿ (λ→ λ→
+        let acc = ₁
+        in let ⟨y, s1⟩ = randFloatRange 0.0 0.5 (acc.1)
+        in let ⟨theta, s2⟩ = randFloatRange 0.0 1.5707963267948966 s1
+        in let crossed = if y < 0.5 × sin theta then 1 else 0
+        in ⟨acc.0 + crossed, s2⟩)
+      ⟨0, seed⟩
+      (ι n)
+   in if crossings < 1 then 0.0
+      else 2.0 × toFloat n / toFloat crossings

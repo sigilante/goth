@@ -1,0 +1,9 @@
+# Generate n uniform random floats in [0, 1)
+# Postcondition: sum of values < n (since each is in [0,1))
+use "../../stdlib/random.goth"
+
+╭─ main : I64 → [n]F64
+│ ⊨ Σ ₀ < toFloat ₁
+╰─ let seed = entropy ⟨⟩
+   in let ⟨vals, _⟩ = randFloats ₁ seed
+   in vals

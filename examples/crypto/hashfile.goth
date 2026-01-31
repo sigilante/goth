@@ -1,0 +1,13 @@
+# Hash a file — prints SHA-256, MD5, and BLAKE3 digests
+# Usage: goth hashfile.goth <filepath>
+# Note: BLAKE3 is limited to files ≤ 64 bytes (single-chunk impl).
+use "../../stdlib/crypto.goth"
+
+╭─ main : String → String
+╰─ let contents = readFile ₀
+   # ₀=contents
+   in let _ = print ("SHA-256: " ⧺ sha256 ₀)
+   # ₀=_ ₁=contents
+   in let _ = print ("MD5:    " ⧺ md5 ₁)
+   # ₀=_ ₁=_ ₂=contents
+   in "BLAKE3: " ⧺ blake3 ₂

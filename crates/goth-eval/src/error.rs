@@ -35,6 +35,8 @@ pub enum EvalError {
     EffectNotAllowed(String),
     #[error("IO error: {0}")]
     IoError(String),
+    #[error("Arithmetic overflow: {0}")]
+    Overflow(String),
     #[error("Not implemented: {0}")]
     NotImplemented(String),
     #[error("Internal error: {0}")]

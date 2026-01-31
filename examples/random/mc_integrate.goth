@@ -1,0 +1,17 @@
+# Monte Carlo integration: ∫₀¹ e⁻ˣ² dx ≈ 0.7468
+# Estimator: (1/n) Σ f(xᵢ), xᵢ ~ Uniform(0,1)
+use "../../stdlib/random.goth"
+
+╭─ main : I64 → F64
+│ ⊢ ₀ > 0
+│ ⊨ ₀ > 0.5 ∧ ₀ < 1.0
+╰─ let n = ₀
+   in let seed = entropy ⟨⟩
+   in let ⟨total, _⟩ = ⌿ (λ→ λ→
+        let acc = ₁
+        in let ⟨x, s1⟩ = randFloat (acc.1)
+        in let fx = exp (0.0 - x × x)
+        in ⟨acc.0 + fx, s1⟩)
+      ⟨0.0, seed⟩
+      (ι n)
+   in total / toFloat n

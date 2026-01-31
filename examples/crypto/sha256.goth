@@ -1,0 +1,9 @@
+# SHA-256 cryptographic hash — pure Goth implementation
+# All test vectors verified against NIST FIPS 180-4.
+use "../../stdlib/crypto.goth"
+
+╭─ main : () → String
+╰─ let _ = print (sha256 "")
+   in let _ = print (sha256 "abc")
+   in let _ = print (sha256 "hello")
+   in sha256 "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"

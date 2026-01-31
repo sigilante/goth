@@ -68,13 +68,14 @@ pub enum PrimFn {
     Index, Slice, Take, Drop,
     Iota, Range,  // Sequence generation
     MatMul, Dot, Outer, Inner, Norm,
-    Chars, ToString, StrConcat,
-    Print, Write, Flush, ReadLine, ReadKey, ReadFile, WriteFile,
+    Chars, FromChars, ToString, StrConcat,
+    Print, Write, Flush, ReadLine, ReadKey, ReadFile, WriteFile, ReadBytes, WriteBytes,
     RawModeEnter, RawModeExit, Sleep,
     ToInt, ToFloat, ToBool, ToChar,
     ParseInt, ParseFloat,  // String parsing
     Lines, Words, Bytes,  // String splitting for wc
     StrEq, StartsWith, EndsWith, Contains,  // String comparison
+    BitAnd, BitOr, BitXor, Shl, Shr,  // Bitwise operations
 }
 
 #[derive(Debug, Clone)]
@@ -284,7 +285,13 @@ impl Env {
     pub fn extend(&self, other: &Env) -> Self { let mut values = self.values.clone(); values.extend(other.values.iter().cloned()); Env { values, globals: Rc::clone(&self.globals) } }
 }
 
-impl PartialEq for Closure { fn eq(&self, other: &Self) -> bool { self.arity == other.arity && self.body == other.body } }
+impl PartialEq for Closure {
+    fn eq(&self, other: &Self) -> bool {
+        self.arity == other.arity
+            && self.body == other.body
+            && self.env.values == other.env.values
+    }
+}
 impl PartialEq for Thunk { fn eq(&self, other: &Self) -> bool { self.expr == other.expr } }
 
 impl std::fmt::Display for Value {

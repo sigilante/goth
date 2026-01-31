@@ -6,7 +6,23 @@ use ordered_float::OrderedFloat;
 
 // Store original terminal settings for raw mode restoration
 #[cfg(unix)]
-static mut ORIGINAL_TERMIOS: Option<libc::termios> = None;
+static ORIGINAL_TERMIOS: std::sync::Mutex<Option<libc::termios>> = std::sync::Mutex::new(None);
+
+/// Restore terminal to its original settings if raw mode was entered.
+/// Safe to call multiple times — no-ops if terminal is already restored.
+#[cfg(unix)]
+pub fn restore_terminal() {
+    use std::os::unix::io::AsRawFd;
+    if let Ok(mut guard) = ORIGINAL_TERMIOS.lock() {
+        if let Some(termios) = guard.take() {
+            let fd = std::io::stdin().as_raw_fd();
+            unsafe { libc::tcsetattr(fd, libc::TCSANOW, &termios); }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn restore_terminal() {}
 
 // ============ Uncertainty propagation helpers ============
 
@@ -196,7 +212,9 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
                         return Err(EvalError::IoError("Failed to get terminal attributes".to_string()));
                     }
                     // Save original termios for restoration
-                    ORIGINAL_TERMIOS = Some(termios);
+                    if let Ok(mut guard) = ORIGINAL_TERMIOS.lock() {
+                        *guard = Some(termios);
+                    }
                     // Disable canonical mode and echo
                     termios.c_lflag &= !(libc::ICANON | libc::ECHO);
                     // Set minimum characters and timeout
@@ -216,16 +234,7 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::RawModeExit => {
             #[cfg(unix)]
             {
-                use std::os::unix::io::AsRawFd;
-                let fd = std::io::stdin().as_raw_fd();
-                unsafe {
-                    if let Some(termios) = ORIGINAL_TERMIOS {
-                        if libc::tcsetattr(fd, libc::TCSANOW, &termios) != 0 {
-                            return Err(EvalError::IoError("Failed to restore terminal attributes".to_string()));
-                        }
-                        ORIGINAL_TERMIOS = None;
-                    }
-                }
+                restore_terminal();
                 Ok(Value::Unit)
             }
             #[cfg(not(unix))]
@@ -267,10 +276,47 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
             fs::write(&path, &contents).map_err(|e| EvalError::IoError(format!("Failed to write '{}': {}", path, e)))?;
             Ok(Value::Unit)
         }
+        PrimFn::ReadBytes => {
+            if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
+            let count = match &args[0] {
+                Value::Int(n) => *n as usize,
+                _ => return Err(EvalError::type_error("Int", &args[0])),
+            };
+            let path = match &args[1] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[1]))?,
+                _ => return Err(EvalError::type_error("String", &args[1])),
+            };
+            use std::io::Read;
+            let mut file = std::fs::File::open(&path)
+                .map_err(|e| EvalError::IoError(format!("Failed to open '{}': {}", path, e)))?;
+            let mut buf = vec![0u8; count];
+            file.read_exact(&mut buf)
+                .map_err(|e| EvalError::IoError(format!("Failed to read {} bytes from '{}': {}", count, path, e)))?;
+            let byte_vals: Vec<i128> = buf.iter().map(|&b| b as i128).collect();
+            Ok(Value::Tensor(Tensor::from_ints(byte_vals)))
+        }
+        PrimFn::WriteBytes => {
+            if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
+            let bytes: Vec<u8> = match &args[0] {
+                Value::Tensor(t) => t.to_vec().iter().map(|v| match v {
+                    Value::Int(n) => Ok(*n as u8),
+                    _ => Err(EvalError::type_error("Int", v)),
+                }).collect::<Result<Vec<u8>, _>>()?,
+                _ => return Err(EvalError::type_error("Tensor", &args[0])),
+            };
+            let path = match &args[1] {
+                Value::Tensor(t) => t.to_string_value().ok_or_else(|| EvalError::type_error("String", &args[1]))?,
+                _ => return Err(EvalError::type_error("String", &args[1])),
+            };
+            std::fs::write(&path, &bytes)
+                .map_err(|e| EvalError::IoError(format!("Failed to write '{}': {}", path, e)))?;
+            Ok(Value::Unit)
+        }
         PrimFn::Iota => unary_args(&args, iota),
         PrimFn::Range => binary_args(&args, range),
         PrimFn::ToString => unary_args(&args, to_string),
         PrimFn::Chars => unary_args(&args, chars),
+        PrimFn::FromChars => unary_args(&args, from_chars),
         PrimFn::StrConcat => binary_args(&args, str_concat),
         PrimFn::Take => binary_args(&args, take),
         PrimFn::Drop => binary_args(&args, drop_fn),
@@ -282,6 +328,11 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::StartsWith => binary_args(&args, starts_with),
         PrimFn::EndsWith => binary_args(&args, ends_with),
         PrimFn::Contains => binary_args(&args, str_contains),
+        PrimFn::BitAnd => binary_args(&args, bitand),
+        PrimFn::BitOr => binary_args(&args, bitor),
+        PrimFn::BitXor => binary_args(&args, bitxor),
+        PrimFn::Shl => binary_args(&args, shl),
+        PrimFn::Shr => binary_args(&args, shr),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -315,7 +366,7 @@ fn add(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a + b, db))
         }
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+        (Value::Int(a), Value::Int(b)) => a.checked_add(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} + {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 + b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 + b.0))),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(OrderedFloat(a.0 + *b as f64))),
@@ -347,7 +398,7 @@ fn sub(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a - b, db))
         }
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
+        (Value::Int(a), Value::Int(b)) => a.checked_sub(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} - {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 - b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 - b.0))),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(OrderedFloat(a.0 - *b as f64))),
@@ -377,7 +428,7 @@ fn mul(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a * b, (a * db).abs()))
         }
-        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+        (Value::Int(a), Value::Int(b)) => a.checked_mul(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} × {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 * b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 * b.0))),
         (Value::Float(a), Value::Int(b)) => Ok(Value::Float(OrderedFloat(a.0 * *b as f64))),
@@ -433,6 +484,53 @@ fn modulo(left: Value, right: Value) -> EvalResult<Value> {
     }
 }
 
+fn bitand(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a & b)),
+        _ => Err(EvalError::type_error_msg(format!("Cannot bitand {} and {}", left.type_name(), right.type_name())))
+    }
+}
+
+fn bitor(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a | b)),
+        _ => Err(EvalError::type_error_msg(format!("Cannot bitor {} and {}", left.type_name(), right.type_name())))
+    }
+}
+
+fn bitxor(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a ^ b)),
+        _ => Err(EvalError::type_error_msg(format!("Cannot bitxor {} and {}", left.type_name(), right.type_name())))
+    }
+}
+
+fn shl(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Int(a), Value::Int(b)) => {
+            if *b < 0 || *b > 127 {
+                Err(EvalError::Overflow(format!("shift left by {} out of range 0..127", b)))
+            } else {
+                Ok(Value::Int(a << (*b as u32)))
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!("Cannot shl {} and {}", left.type_name(), right.type_name())))
+    }
+}
+
+fn shr(left: Value, right: Value) -> EvalResult<Value> {
+    match (&left, &right) {
+        (Value::Int(a), Value::Int(b)) => {
+            if *b < 0 || *b > 127 {
+                Err(EvalError::Overflow(format!("shift right by {} out of range 0..127", b)))
+            } else {
+                Ok(Value::Int(a >> (*b as u32)))
+            }
+        }
+        _ => Err(EvalError::type_error_msg(format!("Cannot shr {} and {}", left.type_name(), right.type_name())))
+    }
+}
+
 fn pow(left: Value, right: Value) -> EvalResult<Value> {
     match (&left, &right) {
         // (a ± δa) ^ (b ± δb): full general case
@@ -460,9 +558,25 @@ fn pow(left: Value, right: Value) -> EvalResult<Value> {
             let unc = if a > 0.0 { (result * a.ln() * db).abs() } else { 0.0 };
             Ok(make_uncertain(result, unc))
         }
-        (Value::Int(a), Value::Int(b)) => if *b >= 0 { Ok(Value::Int(a.pow(*b as u32))) } else { Ok(Value::Float(OrderedFloat((*a as f64).powi(*b as i32)))) },
+        (Value::Int(a), Value::Int(b)) => {
+            if *b < 0 {
+                Ok(Value::Float(OrderedFloat((*a as f64).powi(*b as i32))))
+            } else if *b > u32::MAX as i128 {
+                Err(EvalError::Overflow(format!("exponent {} too large", b)))
+            } else {
+                a.checked_pow(*b as u32)
+                    .map(|r| Value::Int(r))
+                    .ok_or_else(|| EvalError::Overflow(format!("{} ^ {} overflows i128", a, b)))
+            }
+        }
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0.powf(b.0)))),
-        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(OrderedFloat(a.0.powi(*b as i32)))),
+        (Value::Float(a), Value::Int(b)) => {
+            if *b > i32::MAX as i128 || *b < i32::MIN as i128 {
+                Ok(Value::Float(OrderedFloat(a.0.powf(*b as f64))))
+            } else {
+                Ok(Value::Float(OrderedFloat(a.0.powi(*b as i32))))
+            }
+        }
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat((*a as f64).powf(b.0)))),
         _ => Err(EvalError::type_error_msg(format!("Cannot raise {} to power {}", left.type_name(), right.type_name()))),
     }
@@ -474,7 +588,7 @@ fn negate(value: Value) -> EvalResult<Value> {
             let (a, da) = uncertain_parts(&value).unwrap();
             Ok(make_uncertain(-a, da))
         }
-        Value::Int(n) => Ok(Value::Int(-n)),
+        Value::Int(n) => n.checked_neg().map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("negation of {} overflows", n))),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(-f.0))),
         Value::Tensor(t) => Ok(Value::Tensor(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into()))))),
         _ => Err(EvalError::type_error("numeric", &value)),
@@ -921,6 +1035,28 @@ fn chars(value: Value) -> EvalResult<Value> {
             }
         }
         _ => Err(EvalError::type_error("String", &value)),
+    }
+}
+
+/// fromChars: Convert an array of characters to a string
+fn from_chars(value: Value) -> EvalResult<Value> {
+    match value {
+        Value::Tensor(t) => {
+            // If already a char tensor (string), return as-is
+            if t.to_string_value().is_some() {
+                return Ok(Value::Tensor(t));
+            }
+            // Otherwise try to collect Char values into a string
+            let mut s = String::with_capacity(t.len());
+            for v in t.iter() {
+                match v {
+                    Value::Char(c) => s.push(c),
+                    _ => return Err(EvalError::type_error("Char", &v)),
+                }
+            }
+            Ok(Value::string(&s))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
     }
 }
 
