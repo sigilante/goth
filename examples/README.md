@@ -237,6 +237,46 @@ open heat2d.svg
 
 ---
 
+## random/
+
+Monte Carlo methods and randomness using the `random.goth` standard library. All examples use `entropy ⟨⟩` for OS-seeded PRNG and thread state through folds via tuples.
+
+| File | Description | Example |
+|------|-------------|---------|
+| `rand_floats.goth` | Generate n uniform random floats in [0, 1) | `5 → [0.23 0.87 ...]` |
+| `buffon_pi.goth` | Estimate π via Buffon's needle experiment | `10000 → 3.14...` |
+| `mc_integrate.goth` | Monte Carlo integration of ∫₀¹ e⁻ˣ² dx | `10000 → 0.746...` |
+| `mc_importance.goth` | Importance sampling with proposal q(x) = 2(1−x) | `10000 → 0.746...` |
+| `mc_antithetic.goth` | Antithetic variates vs naive MC (returns both estimates) | `10000 → ⟨0.74..., 0.74...⟩` |
+
+**Demonstrates:** `entropy`, `randFloat`, `randFloats`, `randFloatRange`, fold-threaded PRNG state, tuple destructuring (`⟨val, seed⟩`), contracts on stochastic results, `use` imports.
+
+---
+
+## crypto/
+
+Cryptographic hash functions and encoding — pure Goth implementations using bitwise primitives. All algorithms are implemented entirely in Goth via the `crypto.goth` standard library.
+
+| File | Description | Example |
+|------|-------------|---------|
+| `sha256.goth` | SHA-256 hash (NIST FIPS 180-4) | `sha256 "hello" → 2cf24d...` |
+| `md5.goth` | MD5 message digest (RFC 1321) | `md5 "hello" → 5d4140...` |
+| `blake3.goth` | BLAKE3 hash (single chunk, ≤ 64 bytes) | `blake3 "hello" → ea8f16...` |
+| `base64.goth` | Base64 encode/decode (RFC 4648) | `base64EncodeStr "hello" → "aGVsbG8="` |
+| `hashfile.goth` | Hash a file with SHA-256, MD5, and BLAKE3 | `hashfile.goth <path>` |
+
+```sh
+# Hash a text file
+cargo run --quiet --package goth-cli -- ../examples/crypto/hashfile.goth /tmp/test.txt
+# SHA-256: 2cf24dba...
+# MD5:    5d41402a...
+# BLAKE3: ea8f163d...
+```
+
+**Demonstrates:** `bitand`, `bitor`, `bitxor`, `shl`, `shr`, 32-bit masking on i128, fold-based block processing, `bytes`, `index`, `readFile`, `strConcat`/`⧺`, `use` imports.
+
+---
+
 ## Language Features Covered
 
 | Feature | Examples |
@@ -251,10 +291,13 @@ open heat2d.svg
 | Sum/Product (`Σ`/`Π`) | numeric, higher-order, simulation |
 | Iota (`ι`) | numeric, simulation |
 | Array concat (`⊕`) | higher-order |
-| String concat (`⧺`) | simulation |
+| String concat (`⧺`) | simulation, crypto |
 | Conditionals (`if/then/else`) | basic, recursion, algorithms |
-| Contracts (`⊢`/`⊨`) | contracts |
+| Contracts (`⊢`/`⊨`) | contracts, random |
 | Uncertainty (`±`) | uncertainty |
-| File I/O (`▷`, `writeFile`) | io, simulation |
-| Module imports (`use`) | simulation (tunable variants) |
+| File I/O (`▷`, `writeFile`, `readFile`) | io, simulation, crypto |
+| Module imports (`use`) | simulation, random, crypto |
 | Tail-call optimization | tco |
+| Bitwise ops (`bitand`, `bitor`, `bitxor`, `shl`, `shr`) | crypto |
+| Tuple destructuring (`⟨a, b⟩`) | random |
+| PRNG / entropy | random |
