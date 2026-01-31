@@ -1,0 +1,647 @@
+# Goth Standard Library - Cryptographic Hash Functions
+# Pure Goth implementation of SHA-256 (FIPS 180-4).
+#
+# Usage:
+#   use "stdlib/crypto.goth"
+#   sha256 "hello"    # → "2cf24dba5fb0a30e26e83b2ac5b9e29e..."
+#
+# All operations use 32-bit masked integers via Goth's i128 arithmetic
+# with bitwise primitives: bitand, bitor, bitxor (⊻), shl, shr.
+
+# ============ 32-bit Arithmetic Helpers ============
+
+let mask32 = 4294967295
+
+# ₁ + ₀ mod 2^32
+╭─ add32 : I64 → I64 → I64
+╰─ bitand (₁ + ₀) mask32
+
+# NOT ₀ (32-bit)
+╭─ not32 : I64 → I64
+╰─ ⊻ ₀ mask32
+
+# Rotate right: ₁=shift, ₀=value
+╭─ rotr32 : I64 → I64 → I64
+╰─ bitand (bitor (shr ₀ ₁) (shl ₀ (32 - ₁))) mask32
+
+# ============ SHA-256 Logical Functions ============
+
+# Ch(₂,₁,₀) = (₂ AND ₁) XOR (NOT ₂ AND ₀)
+╭─ sha256Ch : I64 → I64 → I64 → I64
+╰─ ⊻ (bitand ₂ ₁) (bitand (not32 ₂) ₀)
+
+# Maj(₂,₁,₀) = (₂ AND ₁) XOR (₂ AND ₀) XOR (₁ AND ₀)
+╭─ sha256Maj : I64 → I64 → I64 → I64
+╰─ ⊻ (⊻ (bitand ₂ ₁) (bitand ₂ ₀)) (bitand ₁ ₀)
+
+# Σ0(₀) = rotr2 XOR rotr13 XOR rotr22
+╭─ sha256Sigma0 : I64 → I64
+╰─ ⊻ (⊻ (rotr32 2 ₀) (rotr32 13 ₀)) (rotr32 22 ₀)
+
+# Σ1(₀) = rotr6 XOR rotr11 XOR rotr25
+╭─ sha256Sigma1 : I64 → I64
+╰─ ⊻ (⊻ (rotr32 6 ₀) (rotr32 11 ₀)) (rotr32 25 ₀)
+
+# σ0(₀) = rotr7 XOR rotr18 XOR shr3
+╭─ sha256sigma0 : I64 → I64
+╰─ ⊻ (⊻ (rotr32 7 ₀) (rotr32 18 ₀)) (shr ₀ 3)
+
+# σ1(₀) = rotr17 XOR rotr19 XOR shr10
+╭─ sha256sigma1 : I64 → I64
+╰─ ⊻ (⊻ (rotr32 17 ₀) (rotr32 19 ₀)) (shr ₀ 10)
+
+# ============ SHA-256 Constants ============
+
+let sha256K = [
+  1116352408, 1899447441, 3049323471, 3921009573,
+  961987163, 1508970993, 2453635748, 2870763221,
+  3624381080, 310598401, 607225278, 1426881987,
+  1925078388, 2162078206, 2614888103, 3248222580,
+  3835390401, 4022224774, 264347078, 604807628,
+  770255983, 1249150122, 1555081692, 1996064986,
+  2554220882, 2821834349, 2952996808, 3210313671,
+  3336571891, 3584528711, 113926993, 338241895,
+  666307205, 773529912, 1294757372, 1396182291,
+  1695183700, 1986661051, 2177026350, 2456956037,
+  2730485921, 2820302411, 3259730800, 3345764771,
+  3516065817, 3600352804, 4094571909, 275423344,
+  430227734, 506948616, 659060556, 883997877,
+  958139571, 1322822218, 1537002063, 1747873779,
+  1955562222, 2024104815, 2227730452, 2361852424,
+  2428436474, 2756734187, 3204031479, 3329325298
+]
+
+let sha256H0 = [
+  1779033703, 3144134277, 1013904242, 2773480762,
+  1359893119, 2600822924, 528734635, 1541459225
+]
+
+# ============ Hex Encoding ============
+
+let hexChars = "0123456789abcdef"
+
+# Byte (0-255) → 2-char hex string
+╭─ byteToHex : I64 → String
+╰─ let hi = index hexChars (shr ₀ 4)
+   # ₀=hi ₁=byte
+   in let lo = index hexChars (bitand ₁ 15)
+   # ₀=lo ₁=hi
+   in toString ₁ ⧺ toString ₀
+
+# 32-bit words → hex string (8 hex chars per word, big-endian)
+╭─ wordsToHex : [n]I64 → String
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=word
+     let b0 = byteToHex (bitand (shr ₀ 24) 255)
+     # ₀=b0 ₁=word ₂=acc
+     in let b1 = byteToHex (bitand (shr ₁ 16) 255)
+     # ₀=b1 ₁=b0 ₂=word ₃=acc
+     in let b2 = byteToHex (bitand (shr ₂ 8) 255)
+     # ₀=b2 ₁=b1 ₂=b0 ₃=word ₄=acc
+     in let b3 = byteToHex (bitand ₃ 255)
+     # ₀=b3 ₁=b2 ₂=b1 ₃=b0 ₄=word ₅=acc
+     in ₅ ⧺ ₃ ⧺ ₂ ⧺ ₁ ⧺ ₀
+   ) "" ₀
+
+# Byte array → hex string
+╭─ hexEncode : [n]I64 → String
+╰─ ⌿ (λ→ λ→ ₁ ⧺ byteToHex ₀) "" ₀
+
+# ============ Message Padding ============
+
+# Pad byte array per SHA-256: append 0x80, pad zeros to ≡56 mod 64,
+# append 64-bit big-endian bit length.
+╭─ sha256Pad : [n]I64 → [m]I64
+╰─ let msgLen = len ₀
+   # ₀=msgLen ₁=msg
+   in let bitLen = ₀ × 8
+   # ₀=bitLen ₁=msgLen ₂=msg
+   in let padded = ₂ ⊕ [128]
+   # ₀=padded ₁=bitLen ₂=msgLen
+   in let rem = (₂ + 1) % 64
+   # ₀=rem ₁=padded ₂=bitLen ₃=msgLen
+   in let zerosNeeded = if ₀ ≤ 56 then 56 - ₀ else 120 - ₀
+   # ₀=zerosNeeded ₁=rem ₂=padded ₃=bitLen
+   in let withZeros = ⌿ (λ→ λ→ ₁ ⊕ [0]) ₂ (ι ₀)
+   # ₀=withZeros ₁=zerosNeeded ₂=rem ₃=padded ₄=bitLen
+   in ₀ ⊕ [
+        bitand (shr ₄ 56) 255,
+        bitand (shr ₄ 48) 255,
+        bitand (shr ₄ 40) 255,
+        bitand (shr ₄ 32) 255,
+        bitand (shr ₄ 24) 255,
+        bitand (shr ₄ 16) 255,
+        bitand (shr ₄ 8) 255,
+        bitand ₄ 255
+      ]
+
+# ============ Block Processing ============
+
+# Extract 16 big-endian 32-bit words from block at offset.
+# ₁=data ₀=offset
+╭─ blockToWords : [n]I64 → I64 → [16]I64
+╰─ ⌿ (λ→ λ→
+     # In fold body: ₁=acc ₀=wordIdx ₂=offset ₃=data
+     let i = ₀ × 4 + ₂
+     # ₀=i ₁=wordIdx ₂=acc ₃=offset ₄=data
+     in let w = add32 (add32 (add32
+           (shl (index ₄ ₀) 24)
+           (shl (index ₄ (₀ + 1)) 16))
+           (shl (index ₄ (₀ + 2)) 8))
+           (index ₄ (₀ + 3))
+     # ₀=w ₁=i ₂=wordIdx ₃=acc
+     in ₃ ⊕ [₀]
+   ) [] (ι 16)
+
+# Expand 16 words → 64-word schedule.
+# W[i] = σ1(W[i-2]) + W[i-7] + σ0(W[i-15]) + W[i-16]
+╭─ expandSchedule : [16]I64 → [64]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=W(growing) ₀=iter(ignored)
+     let wLen = len ₁
+     # ₀=wLen ₁=iter ₂=W
+     in let w2  = index ₂ (₀ - 2)
+     # ₀=w2 ₁=wLen ₂=iter ₃=W
+     in let w7  = index ₃ (₁ - 7)
+     # ₀=w7 ₁=w2 ₂=wLen ₃=iter ₄=W
+     in let w15 = index ₄ (₂ - 15)
+     # ₀=w15 ₁=w7 ₂=w2 ₃=wLen ₄=iter ₅=W
+     in let w16 = index ₅ (₃ - 16)
+     # ₀=w16 ₁=w15 ₂=w7 ₃=w2
+     in let wNew = add32 (add32 (add32 (sha256sigma1 ₃) ₂) (sha256sigma0 ₁)) ₀
+     # ₀=wNew ₁=w16 ₂=w15 ₃=w7 ₄=w2 ₅=wLen ₆=iter ₇=W
+     in ₇ ⊕ [₀]
+   ) ₀ (ι 48)
+
+# SHA-256 compression: 64 rounds on state [a,b,c,d,e,f,g,h].
+# Access state elements by index to avoid deep let nesting.
+# ₁=W(schedule) ₀=state
+╭─ sha256Compress : [64]I64 → [8]I64 → [8]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=st ₀=roundIdx ₂=state(init) ₃=W
+     let ki = index sha256K ₀
+     # ₀=ki ₁=roundIdx ₂=st ₃=state(init) ₄=W
+     in let wi = index ₄ ₁
+     # ₀=wi ₁=ki ₂=roundIdx ₃=st
+     in let t1 = add32 (add32 (add32 (add32
+           (index ₃ 7)
+           (sha256Sigma1 (index ₃ 4)))
+           (sha256Ch (index ₃ 4) (index ₃ 5) (index ₃ 6)))
+           ₁) ₀
+     # ₀=t1 ₁=wi ₂=ki ₃=roundIdx ₄=st
+     in let t2 = add32 (sha256Sigma0 (index ₄ 0)) (sha256Maj (index ₄ 0) (index ₄ 1) (index ₄ 2))
+     # ₀=t2 ₁=t1 ₂=wi ₃=ki ₄=roundIdx ₅=st
+     in [add32 ₁ ₀,
+         index ₅ 0,
+         index ₅ 1,
+         index ₅ 2,
+         add32 (index ₅ 3) ₁,
+         index ₅ 4,
+         index ₅ 5,
+         index ₅ 6]
+   ) ₀ (ι 64)
+
+# Element-wise add32 of two 8-word arrays.
+# ₁=hash ₀=compressed
+╭─ hashAdd : [8]I64 → [8]I64 → [8]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=idx ₂=compressed ₃=hash
+     ₁ ⊕ [add32 (index ₃ ₀) (index ₂ ₀)]
+   ) [] (ι 8)
+
+# Process one 64-byte block.
+# ₂=data ₁=blockOffset ₀=currentHash
+╭─ processBlock : [n]I64 → I64 → [8]I64 → [8]I64
+╰─ let w16 = blockToWords ₂ ₁
+   # ₀=w16 ₁=hash ₂=offset ₃=data
+   in let w64 = expandSchedule ₀
+   # ₀=w64 ₁=w16 ₂=hash
+   in let compressed = sha256Compress ₀ ₂
+   # ₀=compressed ₁=w64 ₂=w16 ₃=hash
+   in hashAdd ₃ ₀
+
+# ============ SHA-256 Entry Points ============
+
+# SHA-256(string) → 64-char hex digest
+╭─ sha256 : String → String
+╰─ let padded = sha256Pad (bytes ₀)
+   # ₀=padded ₁=string
+   in let numBlocks = len ₀ / 64
+   # ₀=numBlocks ₁=padded
+   in let finalHash = ⌿ (λ→ λ→
+     # ₁=hash ₀=blockIdx ₂=numBlocks ₃=padded
+     processBlock ₃ (₀ × 64) ₁
+   ) sha256H0 (ι ₀)
+   # ₀=finalHash
+   in wordsToHex ₀
+
+# SHA-256(bytes) → 64-char hex digest
+╭─ sha256Bytes : [n]I64 → String
+╰─ let padded = sha256Pad ₀
+   # ₀=padded ₁=inputBytes
+   in let numBlocks = len ₀ / 64
+   # ₀=numBlocks ₁=padded
+   in let finalHash = ⌿ (λ→ λ→
+     processBlock ₃ (₀ × 64) ₁
+   ) sha256H0 (ι ₀)
+   in wordsToHex ₀
+
+# ================================================================
+# MD5 (RFC 1321)
+# ================================================================
+
+# Left rotation (MD5 uses left, SHA-256 uses right)
+# ₁=shift ₀=value
+╭─ rotl32 : I64 → I64 → I64
+╰─ bitand (bitor (shl ₀ ₁) (shr ₀ (32 - ₁))) mask32
+
+# 32-bit words → hex string, LITTLE-ENDIAN byte order
+# (MD5 output is LE, unlike SHA-256 which is BE)
+╭─ wordsToHexLE : [n]I64 → String
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=word
+     let b0 = byteToHex (bitand ₀ 255)
+     # ₀=b0 ₁=word ₂=acc
+     in let b1 = byteToHex (bitand (shr ₁ 8) 255)
+     # ₀=b1 ₁=b0 ₂=word ₃=acc
+     in let b2 = byteToHex (bitand (shr ₂ 16) 255)
+     # ₀=b2 ₁=b1 ₂=b0 ₃=word ₄=acc
+     in let b3 = byteToHex (bitand (shr ₃ 24) 255)
+     # ₀=b3 ₁=b2 ₂=b1 ₃=b0 ₄=word ₅=acc
+     in ₅ ⧺ ₃ ⧺ ₂ ⧺ ₁ ⧺ ₀
+   ) "" ₀
+
+# Extract 16 LITTLE-ENDIAN 32-bit words from a 64-byte block at offset.
+# ₁=data ₀=offset
+╭─ blockToWordsLE : [n]I64 → I64 → [16]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=wordIdx ₂=offset ₃=data
+     let i = ₀ × 4 + ₂
+     # ₀=i ₁=wordIdx ₂=acc ₃=offset ₄=data
+     in let w = add32 (add32 (add32
+           (index ₄ ₀)
+           (shl (index ₄ (₀ + 1)) 8))
+           (shl (index ₄ (₀ + 2)) 16))
+           (shl (index ₄ (₀ + 3)) 24)
+     # ₀=w ₁=i ₂=wordIdx ₃=acc
+     in ₃ ⊕ [₀]
+   ) [] (ι 16)
+
+# MD5 padding: same structure as SHA-256 but length is LITTLE-ENDIAN
+╭─ md5Pad : [n]I64 → [m]I64
+╰─ let msgLen = len ₀
+   # ₀=msgLen ₁=msg
+   in let bitLen = ₀ × 8
+   # ₀=bitLen ₁=msgLen ₂=msg
+   in let padded = ₂ ⊕ [128]
+   # ₀=padded ₁=bitLen ₂=msgLen
+   in let rem = (₂ + 1) % 64
+   # ₀=rem ₁=padded ₂=bitLen
+   in let zerosNeeded = if ₀ ≤ 56 then 56 - ₀ else 120 - ₀
+   # ₀=zerosNeeded ₁=rem ₂=padded ₃=bitLen
+   in let withZeros = ⌿ (λ→ λ→ ₁ ⊕ [0]) ₂ (ι ₀)
+   # ₀=withZeros ₁=zerosNeeded ₂=rem ₃=padded ₄=bitLen
+   in ₀ ⊕ [
+        bitand ₄ 255,
+        bitand (shr ₄ 8) 255,
+        bitand (shr ₄ 16) 255,
+        bitand (shr ₄ 24) 255,
+        bitand (shr ₄ 32) 255,
+        bitand (shr ₄ 40) 255,
+        bitand (shr ₄ 48) 255,
+        bitand (shr ₄ 56) 255
+      ]
+
+# MD5 T constants: floor(2^32 × |sin(i+1)|) for i = 0..63
+let md5T = [
+  3614090360, 3905402710, 606105819, 3250441966, 4118548399, 1200080426, 2821735955, 4249261313,
+  1770035416, 2336552879, 4294925233, 2304563134, 1804603682, 4254626195, 2792965006, 1236535329,
+  4129170786, 3225465664, 643717713, 3921069994, 3593408605, 38016083, 3634488961, 3889429448,
+  568446438, 3275163606, 4107603335, 1163531501, 2850285829, 4243563512, 1735328473, 2368359562,
+  4294588738, 2272392833, 1839030562, 4259657740, 2763975236, 1272893353, 4139469664, 3200236656,
+  681279174, 3936430074, 3572445317, 76029189, 3654602809, 3873151461, 530742520, 3299628645,
+  4096336452, 1126891415, 2878612391, 4237533241, 1700485571, 2399980690, 4293915773, 2240044497,
+  1873313359, 4264355552, 2734768916, 1309151649, 4149444226, 3174756917, 718787259, 3951481745
+]
+
+# Per-round left-rotation amounts
+let md5S = [
+  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+  5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+  4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+  6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+]
+
+# Per-round message word index
+let md5G = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  1, 6, 11, 0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12,
+  5, 8, 11, 14, 1, 4, 7, 10, 13, 0, 3, 6, 9, 12, 15, 2,
+  0, 7, 14, 5, 12, 3, 10, 1, 8, 15, 6, 13, 4, 11, 2, 9
+]
+
+# MD5 initial hash: A=0x67452301 B=0xefcdab89 C=0x98badcfe D=0x10325476
+let md5H0 = [1732584193, 4023233417, 2562383102, 271733878]
+
+# MD5 compression: 64 rounds on state [a,b,c,d].
+# Each round: new_b = b + rotl(a + F(b,c,d) + M[g[i]] + T[i], s[i])
+# Then rotate: a←d, b←new_b, c←b, d←c
+# ₁=M(16 words) ₀=state([a,b,c,d])
+╭─ md5Compress : [16]I64 → [4]I64 → [4]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=st ₀=i ₂=state(init) ₃=M
+     let a = index ₁ 0
+     # ₀=a ₁=i ₂=st ₃=init ₄=M
+     in let b = index ₂ 1
+     # ₀=b ₁=a ₂=i ₃=st ₄=init ₅=M
+     in let c = index ₃ 2
+     # ₀=c ₁=b ₂=a ₃=i ₄=st ₅=init ₆=M
+     in let d = index ₄ 3
+     # ₀=d ₁=c ₂=b ₃=a ₄=i ₅=st ₆=init ₇=M
+     in let f = if ₄ < 16
+                then bitor (bitand ₂ ₁) (bitand (not32 ₂) ₀)
+                else if ₄ < 32
+                then bitor (bitand ₀ ₂) (bitand (not32 ₀) ₁)
+                else if ₄ < 48
+                then ⊻ (⊻ ₂ ₁) ₀
+                else ⊻ ₁ (bitor ₂ (not32 ₀))
+     # ₀=f ₁=d ₂=c ₃=b ₄=a ₅=i ₆=st ₇=init ₈=M
+     in let mk = index ₈ (index md5G ₅)
+     # ₀=mk ₁=f ₂=d ₃=c ₄=b ₅=a ₆=i ₇=st ₈=init ₉=M
+     in let ti = index md5T ₆
+     # ₀=ti ₁=mk ₂=f ₃=d ₄=c ₅=b ₆=a ₇=i ₈=st ₉=init
+     in let si = index md5S ₇
+     # ₀=si ₁=ti ₂=mk ₃=f ₄=d ₅=c ₆=b ₇=a ₈=i ₉=st
+     in let newB = add32 ₆ (rotl32 ₀ (add32 (add32 (add32 ₇ ₃) ₂) ₁))
+     # ₀=newB ₁=si ₂=ti ₃=mk ₄=f ₅=d ₆=c ₇=b ₈=a ₉=i
+     in [₅, ₀, ₇, ₆]
+   ) ₀ (ι 64)
+
+# Element-wise add32 of two 4-word arrays.
+╭─ hashAdd4 : [4]I64 → [4]I64 → [4]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=idx ₂=compressed ₃=hash
+     ₁ ⊕ [add32 (index ₃ ₀) (index ₂ ₀)]
+   ) [] (ι 4)
+
+# Process one 64-byte block for MD5.
+# ₂=data ₁=blockOffset ₀=currentHash
+╭─ md5ProcessBlock : [n]I64 → I64 → [4]I64 → [4]I64
+╰─ let words = blockToWordsLE ₂ ₁
+   # ₀=words ₁=hash ₂=offset ₃=data
+   in let compressed = md5Compress ₀ ₁
+   # ₀=compressed ₁=words ₂=hash
+   in hashAdd4 ₂ ₀
+
+# MD5(string) → 32-char hex digest (little-endian output)
+╭─ md5 : String → String
+╰─ let padded = md5Pad (bytes ₀)
+   # ₀=padded ₁=string
+   in let numBlocks = len ₀ / 64
+   # ₀=numBlocks ₁=padded
+   in let finalHash = ⌿ (λ→ λ→
+     # ₁=hash ₀=blockIdx ₂=numBlocks ₃=padded
+     md5ProcessBlock ₃ (₀ × 64) ₁
+   ) md5H0 (ι ₀)
+   # ₀=finalHash
+   in wordsToHexLE ₀
+
+# ================================================================
+# BLAKE3
+# ================================================================
+
+# Functional array set: return new array with arr[idx] = val.
+# ₂=arr ₁=idx ₀=val
+╭─ aset : [n]I64 → I64 → I64 → [n]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=i ₂=val ₃=idx ₄=arr
+     ₁ ⊕ [if ₀ = ₃ then ₂ else index ₄ ₀]
+   ) [] (ι (len ₂))
+
+# BLAKE3 G mixing function.
+# ₅=a ₄=b ₃=c ₂=d ₁=mx ₀=my → ⟨a', b', c', d'⟩
+╭─ blake3G : I64 → I64 → I64 → I64 → I64 → I64 → ⟨I64, I64, I64, I64⟩
+╰─ let a1 = add32 (add32 ₅ ₄) ₁
+   # ₀=a1 ₁=my ₂=mx ₃=d ₄=c ₅=b
+   in let d1 = rotr32 16 (⊻ ₃ ₀)
+   # ₀=d1 ₁=a1 ₂=my ₃=mx ₄=d ₅=c ₆=b
+   in let c1 = add32 ₅ ₀
+   # ₀=c1 ₁=d1 ₂=a1 ₃=my
+   in let b1 = rotr32 12 (⊻ ₇ ₀)
+   # ₀=b1 ₁=c1 ₂=d1 ₃=a1 ₄=my
+   in let a2 = add32 (add32 ₃ ₀) ₄
+   # ₀=a2 ₁=b1 ₂=c1 ₃=d1
+   in let d2 = rotr32 8 (⊻ ₃ ₀)
+   # ₀=d2 ₁=a2 ₂=b1 ₃=c1
+   in let c2 = add32 ₃ ₀
+   # ₀=c2 ₁=d2 ₂=a2 ₃=b1
+   in let b2 = rotr32 7 (⊻ ₃ ₀)
+   # ₀=b2 ₁=c2 ₂=d2 ₃=a2
+   in ⟨₃, ₀, ₁, ₂⟩
+
+# Diagonal position tables for BLAKE3
+let b3DiagB = [5, 6, 7, 4]
+let b3DiagC = [10, 11, 8, 9]
+let b3DiagD = [15, 12, 13, 14]
+
+# BLAKE3 column round: G on columns (d, d+4, d+8, d+12) for d=0..3
+# Message pairs: (m[d*2], m[d*2+1])
+# ₁=state ₀=message
+╭─ blake3ColRound : [16]I64 → [16]I64 → [16]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=st(acc) ₀=d ₂=msg ₃=st_orig
+     let ⟨a, b, c, d2⟩ = blake3G (index ₁ ₀) (index ₁ (₀ + 4)) (index ₁ (₀ + 8)) (index ₁ (₀ + 12)) (index ₂ (₀ × 2)) (index ₂ (₀ × 2 + 1))
+     # ₀=d2 ₁=c ₂=b ₃=a ₄=d(col) ₅=st ₆=msg
+     in aset (aset (aset (aset ₅ ₄ ₃) (₄ + 4) ₂) (₄ + 8) ₁) (₄ + 12) ₀
+   ) ₁ (ι 4)
+
+# BLAKE3 diagonal round: G on diagonals
+# Diag d: positions (d, diagB[d], diagC[d], diagD[d])
+# Message pairs: (m[8+d*2], m[8+d*2+1])
+# ₁=state ₀=message
+╭─ blake3DiagRound : [16]I64 → [16]I64 → [16]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=st(acc) ₀=d ₂=msg
+     let bi = index b3DiagB ₀
+     # ₀=bi ₁=d ₂=st ₃=msg
+     in let ci = index b3DiagC ₁
+     # ₀=ci ₁=bi ₂=d ₃=st ₄=msg
+     in let di = index b3DiagD ₂
+     # ₀=di ₁=ci ₂=bi ₃=d ₄=st ₅=msg
+     in let ⟨a, b, c, d2⟩ = blake3G (index ₄ ₃) (index ₄ ₂) (index ₄ ₁) (index ₄ ₀) (index ₅ (₃ × 2 + 8)) (index ₅ (₃ × 2 + 9))
+     # ₀=d2 ₁=c ₂=b ₃=a ₄=di ₅=ci ₆=bi ₇=d ₈=st ₉=msg
+     in aset (aset (aset (aset ₈ ₇ ₃) ₆ ₂) ₅ ₁) ₄ ₀
+   ) ₁ (ι 4)
+
+# BLAKE3 message word permutation
+let b3Perm = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8]
+
+╭─ blake3Permute : [16]I64 → [16]I64
+╰─ ⌿ (λ→ λ→
+     # ₁=acc ₀=i ₂=msg
+     ₁ ⊕ [index ₂ (index b3Perm ₀)]
+   ) [] (ι 16)
+
+# One BLAKE3 round: column round then diagonal round.
+# ₁=state ₀=message
+╭─ blake3Round : [16]I64 → [16]I64 → [16]I64
+╰─ let st1 = blake3ColRound ₁ ₀
+   # ₀=st1 ₁=msg ₂=st
+   in blake3DiagRound ₀ ₁
+
+# BLAKE3 compression: 7 rounds with message permutation between rounds.
+# ₁=state(16 words) ₀=message(16 words) → final state(16 words)
+╭─ blake3Compress : [16]I64 → [16]I64 → [16]I64
+╰─ let result = ⌿ (λ→ λ→
+     # ₁=⟨st,m⟩ ₀=roundIdx
+     let newSt = blake3Round (₁.0) (₁.1)
+     # ₀=newSt ₁=roundIdx ₂=⟨st,m⟩
+     in let newM = if ₁ < 6 then blake3Permute (₂.1) else ₂.1
+     # ₀=newM ₁=newSt
+     in ⟨₁, ₀⟩
+   ) ⟨₁, ₀⟩ (ι 7)
+   # ₀=result=⟨finalSt,finalM⟩
+   in ₀.0
+
+# Pad message bytes to 64 bytes with trailing zeros (for BLAKE3 block).
+╭─ blake3PadBlock : [n]I64 → [64]I64
+╰─ let padLen = 64 - len ₀
+   # ₀=padLen ₁=msg
+   in ⌿ (λ→ λ→ ₁ ⊕ [0]) ₁ (ι ₀)
+
+# BLAKE3 hash for messages ≤ 64 bytes (single chunk, single block).
+# Initializes 16-word state, compresses, XOR-folds to 8 words.
+╭─ blake3 : String → String
+╰─ let msgBytes = bytes ₀
+   # ₀=msgBytes ₁=str
+   in let msgLen = len ₀
+   # ₀=msgLen ₁=msgBytes
+   in let padded = blake3PadBlock ₁
+   # ₀=padded ₁=msgLen ₂=msgBytes
+   in let m = blockToWordsLE ₀ 0
+   # ₀=m ₁=padded ₂=msgLen ₃=msgBytes
+   # State init: [IV[0..7], IV[0..3], 0, 0, blockLen, flags=11]
+   in let state = [
+        index sha256H0 0, index sha256H0 1, index sha256H0 2, index sha256H0 3,
+        index sha256H0 4, index sha256H0 5, index sha256H0 6, index sha256H0 7,
+        index sha256H0 0, index sha256H0 1, index sha256H0 2, index sha256H0 3,
+        0, 0, ₂, 11
+      ]
+   # ₀=state ₁=m ₂=padded ₃=msgLen
+   in let final = blake3Compress ₀ ₁
+   # ₀=final ₁=state ₂=m
+   # XOR first 8 words with second 8 words
+   in let output = ⌿ (λ→ λ→
+     # ₁=acc ₀=i ₂=final
+     ₁ ⊕ [⊻ (index ₂ ₀) (index ₂ (₀ + 8))]
+   ) [] (ι 8)
+   # ₀=output
+   in wordsToHexLE ₀
+
+# ================================================================
+# Base64 (RFC 4648)
+# ================================================================
+
+let b64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+# Encode 3 bytes → 4 base64 characters as a string.
+# ₂=b0 ₁=b1 ₀=b2
+╭─ b64EncodeTriple : I64 → I64 → I64 → String
+╰─ let n = bitor (bitor (shl ₂ 16) (shl ₁ 8)) ₀
+   # ₀=n ₁=b2 ₂=b1 ₃=b0
+   in let c0 = index b64Alphabet (bitand (shr ₀ 18) 63)
+   # ₀=c0 ₁=n
+   in let c1 = index b64Alphabet (bitand (shr ₁ 12) 63)
+   # ₀=c1 ₁=c0 ₂=n
+   in let c2 = index b64Alphabet (bitand (shr ₂ 6) 63)
+   # ₀=c2 ₁=c1 ₂=c0 ₃=n
+   in let c3 = index b64Alphabet (bitand ₃ 63)
+   # ₀=c3 ₁=c2 ₂=c1 ₃=c0
+   in toString ₃ ⧺ toString ₂ ⧺ toString ₁ ⧺ toString ₀
+
+# Base64-encode a byte array.
+╭─ base64Encode : [n]I64 → String
+╰─ let blen = len ₀
+   # ₀=blen ₁=data
+   in let fullTriples = ₀ / 3
+   # ₀=fullTriples ₁=blen ₂=data
+   in let remainder = ₁ % 3
+   # ₀=remainder ₁=fullTriples ₂=blen ₃=data
+   # Encode full 3-byte groups
+   in let bulk = ⌿ (λ→ λ→
+     # ₁=acc ₀=i ₂=remainder ₃=fullTriples ₄=blen ₅=data
+     let off = ₀ × 3
+     # ₀=off ₁=i ₂=acc ₃=remainder ₄=fullTriples ₅=blen ₆=data
+     in ₂ ⧺ b64EncodeTriple (index ₆ ₀) (index ₆ (₀ + 1)) (index ₆ (₀ + 2))
+   ) "" (ι ₁)
+   # ₀=bulk ₁=remainder ₂=fullTriples ₃=blen ₄=data
+   # Handle remainder
+   in if ₁ = 1
+      then let b0 = index ₄ (₃ - 1)
+           # ₀=b0 ₁=bulk ₂=remainder ₃=fullTriples ₄=blen ₅=data
+           in let n = shl ₀ 16
+           # ₀=n ₁=b0
+           in ₂ ⧺ toString (index b64Alphabet (bitand (shr ₀ 18) 63))
+              ⧺ toString (index b64Alphabet (bitand (shr ₀ 12) 63))
+              ⧺ "=="
+      else if ₁ = 2
+      then let b0 = index ₄ (₃ - 2)
+           # ₀=b0 ₁=bulk ₂=remainder ₃=fullTriples ₄=blen ₅=data
+           in let b1 = index ₅ (₄ - 1)
+           # ₀=b1 ₁=b0 ₂=bulk
+           in let n = bitor (shl ₁ 16) (shl ₀ 8)
+           # ₀=n ₁=b1 ₂=b0 ₃=bulk
+           in ₃ ⧺ toString (index b64Alphabet (bitand (shr ₀ 18) 63))
+              ⧺ toString (index b64Alphabet (bitand (shr ₀ 12) 63))
+              ⧺ toString (index b64Alphabet (bitand (shr ₀ 6) 63))
+              ⧺ "="
+      else ₀
+
+# Base64-encode a string (encodes its UTF-8 bytes).
+╭─ base64EncodeStr : String → String
+╰─ base64Encode (bytes ₀)
+
+# Base64 decode: maps ASCII byte → 6-bit value.
+╭─ b64DecodeVal : I64 → I64
+╰─ if ₀ ≥ 65 then if ₀ ≤ 90 then ₀ - 65 else
+     if ₀ ≥ 97 then if ₀ ≤ 122 then ₀ - 71 else 0 - 1 else 0 - 1
+   else if ₀ ≥ 48 then if ₀ ≤ 57 then ₀ + 4 else
+     if ₀ = 43 then 62 else if ₀ = 47 then 63 else 0 - 1
+   else 0 - 1
+
+# Base64-decode a string → byte array.
+╭─ base64Decode : String → [n]I64
+╰─ let raw = bytes ₀
+   # ₀=raw ₁=str
+   # Filter out '=' (61) and collect 6-bit values
+   in let vals = ⌿ (λ→ λ→
+     # ₁=acc ₀=byte ₂=raw
+     if ₀ = 61 then ₁ else ₁ ⊕ [b64DecodeVal ₀]
+   ) [] ₀
+   # ₀=vals ₁=raw
+   in let vlen = len ₀
+   # ₀=vlen ₁=vals
+   in let fullQuads = ₀ / 4
+   # ₀=fullQuads ₁=vlen ₂=vals
+   in let remainder = ₁ % 4
+   # ₀=remainder ₁=fullQuads ₂=vlen ₃=vals
+   # Decode full 4-value groups → 3 bytes each
+   in let bulk = ⌿ (λ→ λ→
+     # ₁=acc ₀=i ₂=remainder ₃=fullQuads ₄=vlen ₅=vals
+     let off = ₀ × 4
+     # ₀=off ₁=i ₂=acc ₃=remainder ₄=fullQuads ₅=vlen ₆=vals
+     in let n = bitor (bitor (bitor (shl (index ₆ ₀) 18) (shl (index ₆ (₀ + 1)) 12)) (shl (index ₆ (₀ + 2)) 6)) (index ₆ (₀ + 3))
+     # ₀=n ₁=off ₂=i ₃=acc
+     in ₃ ⊕ [bitand (shr ₀ 16) 255, bitand (shr ₀ 8) 255, bitand ₀ 255]
+   ) [] (ι ₁)
+   # ₀=bulk ₁=remainder ₂=fullQuads ₃=vlen ₄=vals
+   # Handle remainder (2 values → 1 byte, 3 values → 2 bytes)
+   in if ₁ = 2
+      then let n = bitor (shl (index ₄ (₃ - 2)) 18) (shl (index ₄ (₃ - 1)) 12)
+           # ₀=n ₁=bulk
+           in ₁ ⊕ [bitand (shr ₀ 16) 255]
+      else if ₁ = 3
+      then let n = bitor (bitor (shl (index ₄ (₃ - 3)) 18) (shl (index ₄ (₃ - 2)) 12)) (shl (index ₄ (₃ - 1)) 6)
+           # ₀=n ₁=bulk
+           in ₁ ⊕ [bitand (shr ₀ 16) 255, bitand (shr ₀ 8) 255]
+      else ₀

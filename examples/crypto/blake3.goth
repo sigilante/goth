@@ -1,0 +1,8 @@
+# BLAKE3 cryptographic hash — pure Goth implementation
+# For messages ≤ 64 bytes (single chunk, single block).
+use "../../stdlib/crypto.goth"
+
+╭─ main : () → String
+╰─ let _ = print (blake3 "")
+   in let _ = print (blake3 "abc")
+   in blake3 "hello"

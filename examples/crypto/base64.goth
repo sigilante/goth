@@ -1,0 +1,11 @@
+# Base64 encode/decode — pure Goth implementation (RFC 4648)
+use "../../stdlib/crypto.goth"
+
+╭─ main : () → String
+╰─ let _ = print (base64EncodeStr "hello")
+   in let _ = print (base64EncodeStr "foo")
+   in let _ = print (base64EncodeStr "f")
+   # Round-trip: decode(encode("hello")) → byte values of "hello"
+   in let rt = base64Decode (base64EncodeStr "hello")
+   in let _ = print ₀
+   in base64EncodeStr "Hello, World"
