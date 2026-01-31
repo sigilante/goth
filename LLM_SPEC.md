@@ -176,6 +176,40 @@ Goth has first-class uncertain values. Create with `±`, and uncertainty propaga
 
 Propagation rules: additive (√(δa²+δb²)) for `+`/`-`, relative error for `×`/`/`, derivative-based for math functions (`√`, `sin`, `cos`, `exp`, `ln`, etc.).
 
+## Standard Libraries
+
+### Random Numbers (`stdlib/random.goth`)
+
+Seeded PRNG using xorshift64. All RNG functions return `⟨value, nextSeed⟩` tuples — thread the seed through sequential calls.
+
+```goth
+use "stdlib/random.goth"
+╭─ main : I64 → F64
+╰─ let seed = entropy ⟨⟩
+   in let ⟨x, s1⟩ = randFloat seed
+   in x
+```
+
+Key functions: `entropy` (OS seed), `randFloat` (uniform [0,1)), `randFloatRange` (uniform [lo,hi)), `randInt` (uniform [lo,hi]), `randNormal` (standard normal), `randFloats`/`randInts`/`randNormals` (bulk generation).
+
+### Cryptography (`stdlib/crypto.goth`)
+
+Pure-Goth cryptographic hashes and encoding using bitwise primitives. No FFI.
+
+```goth
+use "stdlib/crypto.goth"
+╭─ main : () → String
+╰─ sha256 "hello"
+# → "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+```
+
+Key functions: `sha256` (FIPS 180-4), `md5` (RFC 1321), `blake3` (≤ 64 bytes), `base64EncodeStr`/`base64Decode` (RFC 4648), `hexEncode`.
+
+Implementation notes:
+- All 32-bit operations must mask with `bitand X 4294967295` (Goth uses i128)
+- SHA-256 = big-endian word packing; MD5, BLAKE3 = little-endian
+- Use `fold` over `iota N` for round-based block processing
+
 ## Common Mistakes
 
 1. **Wrong index after let**: Each `let` shifts indices by 1
