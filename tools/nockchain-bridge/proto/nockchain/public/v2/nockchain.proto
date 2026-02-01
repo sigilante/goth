@@ -1,0 +1,270 @@
+syntax = "proto3";
+
+package nockchain.public.v2;
+
+import "nockchain/common/v1/blockchain.proto";
+import "nockchain/common/v1/pagination.proto";
+import "nockchain/common/v1/primitives.proto";
+import "nockchain/common/v2/blockchain.proto";
+
+service NockchainService {
+  rpc WalletGetBalance(WalletGetBalanceRequest)
+      returns (WalletGetBalanceResponse);
+  rpc WalletSendTransaction(WalletSendTransactionRequest)
+      returns (WalletSendTransactionResponse);
+  rpc TransactionAccepted(TransactionAcceptedRequest)
+      returns (TransactionAcceptedResponse);
+}
+
+message WalletGetBalanceRequest {
+  oneof selector {
+    common.v1.Base58Pubkey address = 1;
+    common.v1.Base58Hash first_name = 2;
+  }
+  common.v1.PageRequest page = 3;
+}
+
+message WalletGetBalanceResponse {
+  oneof result {
+    common.v2.Balance balance = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+message WalletSendTransactionRequest {
+  common.v1.Hash tx_id = 1;
+  common.v2.RawTransaction raw_tx = 2;
+}
+
+message WalletSendTransactionResponse {
+  oneof result {
+    common.v1.Acknowledged ack = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+message TransactionAcceptedRequest {
+  common.v1.Base58Hash tx_id = 1;
+}
+
+message TransactionAcceptedResponse {
+  oneof result {
+    bool accepted = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+service NockchainBlockService {
+  rpc GetBlocks(GetBlocksRequest)
+    returns (GetBlocksResponse);
+  rpc GetBlockDetails(GetBlockDetailsRequest)
+    returns (GetBlockDetailsResponse);
+  rpc GetTransactionBlock(GetTransactionBlockRequest)
+    returns (GetTransactionBlockResponse);
+  rpc GetTransactionDetails(GetTransactionDetailsRequest)
+    returns (GetTransactionDetailsResponse);
+}
+
+service NockchainMetricsService {
+  rpc GetExplorerMetrics(GetExplorerMetricsRequest)
+    returns (GetExplorerMetricsResponse);
+}
+
+message GetBlocksRequest {
+  common.v1.PageRequest page = 1;
+}
+
+message GetBlocksResponse {
+  oneof result {
+    BlocksData blocks = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+message BlocksData {
+  repeated BlockEntry blocks = 1;
+  uint64 current_height = 2;
+  common.v1.PageResponse page = 3;
+}
+
+message BlockEntry {
+  common.v1.Hash block_id = 1;
+  uint64 height = 2;
+  common.v1.Hash parent = 3;
+  uint64 timestamp = 4;
+  repeated common.v1.Base58Hash tx_ids = 5;
+}
+
+message GetTransactionBlockRequest {
+  common.v1.Base58Hash tx_id = 1;
+}
+
+message GetTransactionBlockResponse {
+  oneof result {
+    TransactionBlockData block = 1;
+    TransactionPending pending = 2;
+    common.v1.ErrorStatus error = 3;
+  }
+}
+
+message TransactionBlockData {
+  common.v1.Hash block_id = 1;
+  uint64 height = 2;
+  common.v1.Hash parent = 3;
+  uint64 timestamp = 4;
+}
+
+message TransactionPending {}
+
+message GetTransactionDetailsRequest {
+  common.v1.Base58Hash tx_id = 1;
+}
+
+message GetTransactionDetailsResponse {
+  oneof result {
+    TransactionDetails details = 1;
+    TransactionPending pending = 2;
+    common.v1.ErrorStatus error = 3;
+  }
+}
+
+message TransactionDetails {
+  string tx_id = 1;
+  common.v1.Hash block_id = 2;
+  uint64 height = 3;
+  uint64 timestamp = 4;
+  uint64 version = 5;
+  uint64 size_bytes = 6;
+  common.v1.Nicks total_input = 7;
+  oneof total_output_required {
+    common.v1.Nicks total_output = 8;
+  }
+  oneof fee_required {
+    common.v1.Nicks fee = 9;
+  }
+  repeated TransactionInput inputs = 10;
+  repeated TransactionOutput outputs = 11;
+  common.v1.Hash parent = 12;
+}
+
+message TransactionInput {
+  string note_name_b58 = 1;
+  common.v1.Nicks amount = 2;
+  string source_tx_id = 3;
+  bool coinbase = 4;
+}
+
+message TransactionOutput {
+  string note_name_b58 = 1;
+  oneof amount_required {
+    common.v1.Nicks amount = 2;
+  }
+  string lock_summary = 3;
+}
+
+message GetBlockDetailsRequest {
+  oneof selector {
+    uint64 height = 1;
+    common.v1.Base58Hash block_id = 2;
+  }
+}
+
+message GetBlockDetailsResponse {
+  oneof result {
+    BlockDetails details = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+message GetExplorerMetricsRequest {}
+
+message GetExplorerMetricsResponse {
+  oneof result {
+    ExplorerMetrics metrics = 1;
+    common.v1.ErrorStatus error = 2;
+  }
+}
+
+message ExplorerMetrics {
+  uint64 cache_height = 1;
+  uint64 heaviest_height = 2;
+  uint64 cache_lowest_height = 3;
+  uint64 cache_span = 4;
+  double cache_coverage_ratio = 5;
+  double refresh_age_seconds = 6;
+  double backfill_age_seconds = 7;
+  bool seed_ready = 8;
+  double seed_time_seconds = 9;
+  int64 backfill_resume_height = 10;
+  double cache_age_seconds = 11;
+  uint64 refresh_success_count = 12;
+  uint64 refresh_error_count = 13;
+  uint64 backfill_success_count = 14;
+  uint64 backfill_error_count = 15;
+  double get_blocks_p50_ms = 16;
+  double get_blocks_p90_ms = 17;
+  double get_blocks_p99_ms = 18;
+  double get_block_details_p50_ms = 19;
+  double get_block_details_p90_ms = 20;
+  double get_block_details_p99_ms = 21;
+}
+
+message BlockDetails {
+  common.v1.Hash block_id = 1;
+  uint64 height = 2;
+  common.v1.Hash parent = 3;
+  ProofOfWork pow = 4;
+  uint64 timestamp = 5;
+  uint64 epoch_counter = 6;
+  BigNum target = 7;
+  BigNum accumulated_work = 8;
+  repeated common.v1.Base58Hash tx_ids = 9;
+  CoinbaseSplit coinbase = 10;
+  PageMsg msg = 11;
+  uint32 tx_count = 12;
+  bool has_pow = 13;
+  uint32 version = 14;
+}
+
+message ProofOfWork {
+  bool present = 1;
+  optional bytes raw_proof = 2;
+}
+
+message BigNum {
+  string display = 1;
+  bytes raw_bytes = 2;
+  string hex = 3;
+}
+
+message CoinbaseSplit {
+  oneof version {
+    CoinbaseSplitV0 v0 = 1;
+    CoinbaseSplitV1 v1 = 2;
+  }
+}
+
+message CoinbaseSplitV0 {
+  repeated CoinbaseSplitV0Entry entries = 1;
+  uint32 entry_count = 2;
+  string note = 3;
+}
+
+message CoinbaseSplitV0Entry {
+  common.v1.Base58Pubkey pubkey = 1;
+  common.v1.Nicks amount = 2;
+}
+
+message CoinbaseSplitV1 {
+  repeated CoinbaseSplitV1Entry entries = 1;
+}
+
+message CoinbaseSplitV1Entry {
+  common.v1.Base58Hash lock_hash = 1;
+  common.v1.Nicks amount = 2;
+}
+
+message PageMsg {
+  bytes raw = 1;
+  string decoded = 2;
+}

@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package nockchain.common.v1;
+
+import "nockchain/common/v1/primitives.proto";
+import "nockchain/common/v1/pagination.proto";
+
+message WalletBalanceData {
+  repeated BalanceEntry notes = 1;
+  BlockHeight height = 2;
+  optional Hash block_id = 3;
+  PageResponse page = 4;
+}
+
+message BalanceEntry {
+  Name name = 1;
+  Note note = 2;
+}
+
+message RawTransaction {
+  repeated NamedInput named_inputs = 1;
+  TimeLockRangeAbsolute timelock_range = 2;
+  Nicks total_fees = 3;
+  Hash id = 4;
+}
+
+message NamedInput {
+  Name name = 1;
+  Input input = 2;
+}
+
+message Input {
+  Note note = 1;
+  Spend spend = 2;
+}
+
+message Spend {
+  Signature signature = 1;
+  repeated Seed seeds = 2;
+  Nicks miner_fee_nicks = 3;
+}
+
+message Seed {
+  optional OutputSource output_source = 1;
+  Lock recipient = 2;
+  optional TimeLockIntent timelock_intent = 3;
+  Nicks gift = 4;
+  Hash parent_hash = 5;
+}
+
+message OutputSource { optional Source source = 1; }
+
+message Source {
+  Hash hash = 1;
+  bool coinbase = 2;
+}
+
+message TimeLockIntent {
+  oneof value {
+    TimeLockRangeAbsolute absolute = 1;
+    TimeLockRangeRelative relative = 2;
+    TimeLockRangeAbsoluteAndRelative absolute_and_relative = 3;
+    TimeLockRangeNeither neither = 4;
+  }
+}
+
+message TimeLockRangeNeither {}
+
+message TimeLockRangeAbsoluteAndRelative {
+  optional TimeLockRangeAbsolute absolute = 1;
+  optional TimeLockRangeRelative relative = 2;
+}
+
+message TimeLockRangeAbsolute {
+  optional BlockHeight min = 1;
+  optional BlockHeight max = 2;
+}
+
+message TimeLockRangeRelative {
+  optional BlockHeightDelta min = 1;
+  optional BlockHeightDelta max = 2;
+}
+
+message Lock {
+  uint32 keys_required = 1;
+  repeated SchnorrPubkey schnorr_pubkeys = 2;
+}
+
+message Name {
+  Hash first = 1;
+  Hash last = 2;
+}
+
+message Note {
+  BlockHeight origin_page = 1;
+  optional TimeLockIntent timelock = 2;
+  Name name = 3;
+  Lock lock = 4;
+  Source source = 5;
+  Nicks assets = 6;
+  NoteVersion version = 7;
+}
+
+message Signature { repeated SignatureEntry entries = 1; }
+
+message SignatureEntry {
+  SchnorrPubkey schnorr_pubkey = 1;
+  SchnorrSignature signature = 2;
+}
+
+message SchnorrSignature {
+  EightBelt chal = 1;
+  EightBelt sig = 2;
+}
