@@ -25,6 +25,15 @@ pub enum Literal {
 
     /// Unit value (empty tuple)
     Unit,
+
+    /// Imaginary-i literal (coefficient stored as f64)
+    ImagI(f64),
+
+    /// Imaginary-j literal (quaternion j component)
+    ImagJ(f64),
+
+    /// Imaginary-k literal (quaternion k component)
+    ImagK(f64),
 }
 
 impl Literal {
@@ -39,6 +48,10 @@ impl Literal {
     pub fn string(s: impl Into<Box<str>>) -> Self {
         Literal::String(s.into())
     }
+
+    pub fn imag_i(f: f64) -> Self { Literal::ImagI(f) }
+    pub fn imag_j(f: f64) -> Self { Literal::ImagJ(f) }
+    pub fn imag_k(f: f64) -> Self { Literal::ImagK(f) }
 
     pub fn bool(b: bool) -> Self {
         if b { Literal::True } else { Literal::False }
@@ -60,7 +73,7 @@ impl Literal {
 
     /// Check if this is a numeric literal
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Literal::Int(_) | Literal::Float(_))
+        matches!(self, Literal::Int(_) | Literal::Float(_) | Literal::ImagI(_) | Literal::ImagJ(_) | Literal::ImagK(_))
     }
 }
 

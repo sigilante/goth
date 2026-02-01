@@ -1,0 +1,5 @@
+# Hamilton's identity: 𝕚 × 𝕛 × 𝕜 = -1
+# Demonstrates quaternion multiplication
+
+╭─ main : I64 → ℍ
+╰─ 𝕚 * 𝕛 * 𝕜

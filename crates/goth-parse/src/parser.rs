@@ -312,6 +312,12 @@ impl<'a> Parser<'a> {
             Some(Token::False) => { self.next(); Expr::Lit(Literal::False) }
             Some(Token::Pi) => { self.next(); Expr::Lit(Literal::Float(std::f64::consts::PI)) }
             Some(Token::Euler) => { self.next(); Expr::Lit(Literal::Float(std::f64::consts::E)) }
+            Some(Token::ImagLitI(f)) => { self.next(); Expr::Lit(Literal::ImagI(f)) }
+            Some(Token::ImagLitJ(f)) => { self.next(); Expr::Lit(Literal::ImagJ(f)) }
+            Some(Token::ImagLitK(f)) => { self.next(); Expr::Lit(Literal::ImagK(f)) }
+            Some(Token::ImagI) => { self.next(); Expr::Lit(Literal::ImagI(1.0)) }
+            Some(Token::ImagJ) => { self.next(); Expr::Lit(Literal::ImagJ(1.0)) }
+            Some(Token::ImagK) => { self.next(); Expr::Lit(Literal::ImagK(1.0)) }
 
             // De Bruijn index
             Some(Token::Index(i)) => { self.next(); Expr::Idx(i) }
@@ -940,6 +946,8 @@ impl<'a> Parser<'a> {
             Some(Token::TyNat) => { self.next(); Ok(Type::Prim(PrimType::Nat)) }
             Some(Token::TyInt) => { self.next(); Ok(Type::Prim(PrimType::Int)) }
             Some(Token::TyUnit) => { self.next(); Ok(Type::Tuple(vec![])) }
+            Some(Token::TyComplex) => { self.next(); Ok(Type::Prim(PrimType::Complex)) }
+            Some(Token::TyQuaternion) => { self.next(); Ok(Type::Prim(PrimType::Quaternion)) }
 
             // Type variable
             Some(Token::TyVar(v)) => { self.next(); Ok(Type::Var(v.into())) }

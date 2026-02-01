@@ -364,6 +364,9 @@ impl Pretty {
                     self.write("'");
                 }
                 Literal::Unit => self.write("()"),
+                Literal::ImagI(x) => { self.write(&x.to_string()); self.write("𝕚"); }
+                Literal::ImagJ(x) => { self.write(&x.to_string()); self.write("𝕛"); }
+                Literal::ImagK(x) => { self.write(&x.to_string()); self.write("𝕜"); }
             }
             
             Expr::Name(name) => self.write(name),
@@ -541,6 +544,9 @@ impl Pretty {
                         self.write("'");
                     }
                     Literal::Unit => self.write("()"),
+                    Literal::ImagI(x) => { self.write(&x.to_string()); self.write("𝕚"); }
+                    Literal::ImagJ(x) => { self.write(&x.to_string()); self.write("𝕛"); }
+                    Literal::ImagK(x) => { self.write(&x.to_string()); self.write("𝕜"); }
                 }
             }
             Pattern::Tuple(pats) => {

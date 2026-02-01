@@ -10,6 +10,8 @@ use ordered_float::OrderedFloat;
 pub enum Value {
     Int(i128),
     Float(OrderedFloat<f64>),
+    Complex(f64, f64),
+    Quaternion(f64, f64, f64, f64),
     Bool(bool),
     Char(char),
     Unit,
@@ -76,6 +78,7 @@ pub enum PrimFn {
     Lines, Words, Bytes,  // String splitting for wc
     StrEq, StartsWith, EndsWith, Contains,  // String comparison
     BitAnd, BitOr, BitXor, Shl, Shr,  // Bitwise operations
+    Re, Im, Conj, Arg,  // Complex/quaternion decomposition
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +97,8 @@ pub struct Env {
 impl Value {
     pub fn int(n: impl Into<i128>) -> Self { Value::Int(n.into()) }
     pub fn float(f: f64) -> Self { Value::Float(OrderedFloat(f)) }
+    pub fn complex(re: f64, im: f64) -> Self { Value::Complex(re, im) }
+    pub fn quaternion(w: f64, i: f64, j: f64, k: f64) -> Self { Value::Quaternion(w, i, j, k) }
     pub fn bool(b: bool) -> Self { Value::Bool(b) }
     pub fn char(c: char) -> Self { Value::Char(c) }
     pub fn unit() -> Self { Value::Unit }
@@ -115,7 +120,7 @@ impl Value {
 
     pub fn is_int(&self) -> bool { matches!(self, Value::Int(_)) }
     pub fn is_float(&self) -> bool { matches!(self, Value::Float(_)) }
-    pub fn is_numeric(&self) -> bool { matches!(self, Value::Int(_) | Value::Float(_)) }
+    pub fn is_numeric(&self) -> bool { matches!(self, Value::Int(_) | Value::Float(_) | Value::Complex(_, _) | Value::Quaternion(_, _, _, _)) }
     pub fn is_bool(&self) -> bool { matches!(self, Value::Bool(_)) }
     pub fn is_tensor(&self) -> bool { matches!(self, Value::Tensor(_)) }
     pub fn is_callable(&self) -> bool { matches!(self, Value::Closure(_) | Value::Primitive(_) | Value::Partial { .. }) }
@@ -127,13 +132,17 @@ impl Value {
     pub fn as_char(&self) -> Option<char> { match self { Value::Char(c) => Some(*c), _ => None } }
     pub fn as_tensor(&self) -> Option<&Tensor> { match self { Value::Tensor(t) => Some(t), _ => None } }
     pub fn as_tuple(&self) -> Option<&[Value]> { match self { Value::Tuple(vs) => Some(vs), Value::Unit => Some(&[]), _ => None } }
-    pub fn coerce_float(&self) -> Option<f64> { match self { Value::Float(f) => Some(f.0), Value::Int(n) => Some(*n as f64), _ => None } }
+    pub fn coerce_float(&self) -> Option<f64> { match self { Value::Float(f) => Some(f.0), Value::Int(n) => Some(*n as f64), Value::Complex(re, im) if *im == 0.0 => Some(*re), _ => None } }
+    pub fn coerce_complex(&self) -> Option<(f64, f64)> { match self { Value::Complex(re, im) => Some((*re, *im)), Value::Float(f) => Some((f.0, 0.0)), Value::Int(n) => Some((*n as f64, 0.0)), _ => None } }
+    pub fn coerce_quaternion(&self) -> Option<(f64, f64, f64, f64)> { match self { Value::Quaternion(w, i, j, k) => Some((*w, *i, *j, *k)), Value::Complex(re, im) => Some((*re, *im, 0.0, 0.0)), Value::Float(f) => Some((f.0, 0.0, 0.0, 0.0)), Value::Int(n) => Some((*n as f64, 0.0, 0.0, 0.0)), _ => None } }
     /// Coerce to a usize index: accepts Int directly, or Float if it's a whole number.
     pub fn as_index(&self) -> Option<usize> { match self { Value::Int(n) => Some(*n as usize), Value::Float(f) => { let v = f.0; if v.fract() == 0.0 && v >= 0.0 { Some(v as usize) } else { None } }, _ => None } }
 
     pub fn type_name(&self) -> &'static str {
         match self {
-            Value::Int(_) => "Int", Value::Float(_) => "Float", Value::Bool(_) => "Bool",
+            Value::Int(_) => "Int", Value::Float(_) => "Float",
+            Value::Complex(_, _) => "Complex", Value::Quaternion(_, _, _, _) => "Quaternion",
+            Value::Bool(_) => "Bool",
             Value::Char(_) => "Char", Value::Unit => "Unit", Value::Tensor(_) => "Tensor",
             Value::Tuple(_) => "Tuple", Value::Record(_) => "Record", Value::Variant { .. } => "Variant",
             Value::Closure(_) => "Closure", Value::Primitive(_) => "Primitive",
@@ -147,6 +156,9 @@ impl Value {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Complex(r1, i1), Value::Complex(r2, i2)) => r1 == r2 && i1 == i2,
+            (Value::Quaternion(w1, i1, j1, k1), Value::Quaternion(w2, i2, j2, k2)) =>
+                w1 == w2 && i1 == i2 && j1 == j2 && k1 == k2,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Unit, Value::Unit) => true,
@@ -299,6 +311,20 @@ impl std::fmt::Display for Value {
         match self {
             Value::Int(n) => write!(f, "{}", n),
             Value::Float(x) => write!(f, "{}", x.0),
+            Value::Complex(re, im) => {
+                if *re == 0.0 && *im == 0.0 { write!(f, "0") }
+                else if *re == 0.0 { write!(f, "{}𝕚", im) }
+                else if *im == 0.0 { write!(f, "{}", re) }
+                else if *im > 0.0 { write!(f, "{} + {}𝕚", re, im) }
+                else { write!(f, "{} - {}𝕚", re, -im) }
+            }
+            Value::Quaternion(w, i, j, k) => {
+                write!(f, "{}", w)?;
+                if *i >= 0.0 { write!(f, " + {}𝕚", i)?; } else { write!(f, " - {}𝕚", -i)?; }
+                if *j >= 0.0 { write!(f, " + {}𝕛", j)?; } else { write!(f, " - {}𝕛", -j)?; }
+                if *k >= 0.0 { write!(f, " + {}𝕜", k)?; } else { write!(f, " - {}𝕜", -k)?; }
+                Ok(())
+            }
             Value::Bool(true) => write!(f, "⊤"),
             Value::Bool(false) => write!(f, "⊥"),
             Value::Char(c) => write!(f, "'{}'", c),

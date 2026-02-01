@@ -528,6 +528,8 @@ fn literal_type(lit: &Literal) -> Type {
             Box::new(Type::Prim(PrimType::Char)),
         ),
         Literal::Unit => Type::unit(),
+        Literal::ImagI(_) => Type::Prim(PrimType::Complex),
+        Literal::ImagJ(_) | Literal::ImagK(_) => Type::Prim(PrimType::Quaternion),
     }
 }
 

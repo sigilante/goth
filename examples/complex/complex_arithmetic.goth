@@ -1,0 +1,5 @@
+# Complex arithmetic: (3+4𝕚) × (1+2𝕚) = -5+10𝕚
+# Demonstrates complex multiplication
+
+╭─ main : I64 → ℂ
+╰─ (3 + 4𝕚) * (1 + 2𝕚)

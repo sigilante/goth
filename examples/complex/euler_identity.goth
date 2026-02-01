@@ -1,0 +1,5 @@
+# Euler's identity: exp(π𝕚) + 1 ≈ 0
+# Demonstrates complex exponential
+
+╭─ main : I64 → ℂ
+╰─ exp(3.141592653589793𝕚) + 1

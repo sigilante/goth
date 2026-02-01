@@ -83,6 +83,8 @@ impl Evaluator {
             // String comparison
             ("strEq", PrimFn::StrEq), ("startsWith", PrimFn::StartsWith),
             ("endsWith", PrimFn::EndsWith), ("contains", PrimFn::Contains),
+            // Complex/quaternion decomposition
+            ("re", PrimFn::Re), ("im", PrimFn::Im), ("conj", PrimFn::Conj), ("arg", PrimFn::Arg),
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
         // Register stream constants
@@ -152,7 +154,7 @@ impl Evaluator {
     }
 
     fn eval_literal(&self, lit: &Literal) -> Value {
-        match lit { Literal::Int(n) => Value::Int(*n), Literal::Float(f) => Value::float(*f), Literal::Char(c) => Value::Char(*c), Literal::String(s) => Value::string(s), Literal::True => Value::Bool(true), Literal::False => Value::Bool(false), Literal::Unit => Value::Unit }
+        match lit { Literal::Int(n) => Value::Int(*n), Literal::Float(f) => Value::float(*f), Literal::Char(c) => Value::Char(*c), Literal::String(s) => Value::string(s), Literal::True => Value::Bool(true), Literal::False => Value::Bool(false), Literal::Unit => Value::Unit, Literal::ImagI(f) => Value::Complex(0.0, *f), Literal::ImagJ(f) => Value::Quaternion(0.0, 0.0, *f, 0.0), Literal::ImagK(f) => Value::Quaternion(0.0, 0.0, 0.0, *f) }
     }
 
     fn eval_binop(&mut self, op: &BinOp, left: &Expr, right: &Expr, env: &Env) -> EvalResult<Value> {
@@ -605,6 +607,7 @@ fn prim_arity(prim: PrimFn) -> usize {
         PrimFn::Print | PrimFn::Write | PrimFn::ReadLine | PrimFn::ReadKey | PrimFn::ReadFile | PrimFn::Sleep => 1,
         PrimFn::Flush | PrimFn::RawModeEnter | PrimFn::RawModeExit => 1,  // Terminal control (take unit)
         PrimFn::Lines | PrimFn::Words | PrimFn::Bytes => 1,  // String splitting (unary)
+        PrimFn::Re | PrimFn::Im | PrimFn::Conj | PrimFn::Arg => 1,  // Complex decomposition
         PrimFn::WriteFile | PrimFn::ReadBytes | PrimFn::WriteBytes => 2,  // Binary I/O takes 2 args
         PrimFn::Fold => 3,  // fold f acc arr
         PrimFn::StrEq | PrimFn::StartsWith | PrimFn::EndsWith | PrimFn::Contains => 2,  // String comparison (binary)

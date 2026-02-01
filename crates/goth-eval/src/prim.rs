@@ -72,6 +72,65 @@ fn multiplicative_unc(a: f64, b: f64, da: f64, db: f64) -> f64 {
     }
 }
 
+// ============ Complex arithmetic helpers ============
+
+fn complex_mul(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    (r1 * r2 - i1 * i2, r1 * i2 + i1 * r2)
+}
+
+fn complex_div(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    let denom = r2 * r2 + i2 * i2;
+    ((r1 * r2 + i1 * i2) / denom, (i1 * r2 - r1 * i2) / denom)
+}
+
+fn complex_abs(re: f64, im: f64) -> f64 { (re * re + im * im).sqrt() }
+fn complex_arg(re: f64, im: f64) -> f64 { im.atan2(re) }
+
+fn complex_exp(re: f64, im: f64) -> (f64, f64) {
+    let r = re.exp();
+    (r * im.cos(), r * im.sin())
+}
+
+fn complex_ln(re: f64, im: f64) -> (f64, f64) {
+    (complex_abs(re, im).ln(), complex_arg(re, im))
+}
+
+fn complex_sqrt(re: f64, im: f64) -> (f64, f64) {
+    let r = complex_abs(re, im);
+    let re_out = ((r + re) / 2.0).sqrt();
+    let im_out = ((r - re) / 2.0).sqrt() * if im >= 0.0 { 1.0 } else { -1.0 };
+    (re_out, im_out)
+}
+
+fn complex_sin(re: f64, im: f64) -> (f64, f64) {
+    (re.sin() * im.cosh(), re.cos() * im.sinh())
+}
+
+fn complex_cos(re: f64, im: f64) -> (f64, f64) {
+    (re.cos() * im.cosh(), -(re.sin() * im.sinh()))
+}
+
+fn complex_pow(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    let (ln_r, ln_i) = complex_ln(r1, i1);
+    let (mul_r, mul_i) = complex_mul(r2, i2, ln_r, ln_i);
+    complex_exp(mul_r, mul_i)
+}
+
+// ============ Quaternion arithmetic helpers ============
+
+fn quat_mul(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    (
+        a.0*b.0 - a.1*b.1 - a.2*b.2 - a.3*b.3,
+        a.0*b.1 + a.1*b.0 + a.2*b.3 - a.3*b.2,
+        a.0*b.2 - a.1*b.3 + a.2*b.0 + a.3*b.1,
+        a.0*b.3 + a.1*b.2 - a.2*b.1 + a.3*b.0,
+    )
+}
+
+fn quat_norm(q: (f64, f64, f64, f64)) -> f64 {
+    (q.0*q.0 + q.1*q.1 + q.2*q.2 + q.3*q.3).sqrt()
+}
+
 pub fn apply_binop(op: &goth_ast::op::BinOp, left: Value, right: Value) -> EvalResult<Value> {
     use goth_ast::op::BinOp::*;
     match op {
@@ -334,6 +393,10 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::BitXor => binary_args(&args, bitxor),
         PrimFn::Shl => binary_args(&args, shl),
         PrimFn::Shr => binary_args(&args, shr),
+        PrimFn::Re => unary_args(&args, prim_re),
+        PrimFn::Im => unary_args(&args, prim_im),
+        PrimFn::Conj => unary_args(&args, prim_conj),
+        PrimFn::Arg => unary_args(&args, prim_arg),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -367,6 +430,24 @@ fn add(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a + b, db))
         }
+        // Quaternion + anything (widest first)
+        (Value::Quaternion(w1, i1, j1, k1), _) if right.coerce_quaternion().is_some() => {
+            let (w2, i2, j2, k2) = right.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 + w2, i1 + i2, j1 + j2, k1 + k2))
+        }
+        (_, Value::Quaternion(w2, i2, j2, k2)) if left.coerce_quaternion().is_some() => {
+            let (w1, i1, j1, k1) = left.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 + w2, i1 + i2, j1 + j2, k1 + k2))
+        }
+        // Complex + anything
+        (Value::Complex(r1, i1), _) if right.coerce_complex().is_some() => {
+            let (r2, i2) = right.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 + r2, i1 + i2))
+        }
+        (_, Value::Complex(r2, i2)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 + r2, i1 + i2))
+        }
         (Value::Int(a), Value::Int(b)) => a.checked_add(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} + {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 + b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 + b.0))),
@@ -399,6 +480,24 @@ fn sub(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a - b, db))
         }
+        // Quaternion - anything (widest first)
+        (Value::Quaternion(w1, i1, j1, k1), _) if right.coerce_quaternion().is_some() => {
+            let (w2, i2, j2, k2) = right.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 - w2, i1 - i2, j1 - j2, k1 - k2))
+        }
+        (_, Value::Quaternion(w2, i2, j2, k2)) if left.coerce_quaternion().is_some() => {
+            let (w1, i1, j1, k1) = left.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 - w2, i1 - i2, j1 - j2, k1 - k2))
+        }
+        // Complex - anything
+        (Value::Complex(r1, i1), _) if right.coerce_complex().is_some() => {
+            let (r2, i2) = right.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 - r2, i1 - i2))
+        }
+        (_, Value::Complex(r2, i2)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 - r2, i1 - i2))
+        }
         (Value::Int(a), Value::Int(b)) => a.checked_sub(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} - {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 - b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 - b.0))),
@@ -428,6 +527,32 @@ fn mul(left: Value, right: Value) -> EvalResult<Value> {
             let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot multiply {} and Uncertain", left.type_name())))?;
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a * b, (a * db).abs()))
+        }
+        // Quaternion × anything (widest first, non-commutative!)
+        (Value::Quaternion(..), _) if right.coerce_quaternion().is_some() => {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let (w, i, j, k) = quat_mul(a, b);
+            Ok(Value::Quaternion(w, i, j, k))
+        }
+        (_, Value::Quaternion(..)) if left.coerce_quaternion().is_some() => {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let (w, i, j, k) = quat_mul(a, b);
+            Ok(Value::Quaternion(w, i, j, k))
+        }
+        // Complex × anything
+        (Value::Complex(..), _) if right.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_mul(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
+        }
+        (_, Value::Complex(..)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_mul(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
         }
         (Value::Int(a), Value::Int(b)) => a.checked_mul(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} × {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 * b.0))),
@@ -467,6 +592,26 @@ fn div(left: Value, right: Value) -> EvalResult<Value> {
             if b == 0.0 { return Err(EvalError::DivisionByZero); }
             let result = a / b;
             Ok(make_uncertain(result, result.abs() * (db / b).abs()))
+        }
+        // Quaternion / anything: a × conj(b) / |b|²
+        (Value::Quaternion(..), _) | (_, Value::Quaternion(..))
+            if left.coerce_quaternion().is_some() && right.coerce_quaternion().is_some() =>
+        {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let norm_sq = b.0*b.0 + b.1*b.1 + b.2*b.2 + b.3*b.3;
+            let conj_b = (b.0, -b.1, -b.2, -b.3);
+            let (w, i, j, k) = quat_mul(a, conj_b);
+            Ok(Value::Quaternion(w / norm_sq, i / norm_sq, j / norm_sq, k / norm_sq))
+        }
+        // Complex / anything
+        (Value::Complex(..), _) | (_, Value::Complex(..))
+            if left.coerce_complex().is_some() && right.coerce_complex().is_some() =>
+        {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_div(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
         }
         (Value::Int(a), Value::Int(b)) => if *b == 0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Int(a / b)) },
         (Value::Float(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(a.0 / b.0))) },
@@ -559,6 +704,15 @@ fn pow(left: Value, right: Value) -> EvalResult<Value> {
             let unc = if a > 0.0 { (result * a.ln() * db).abs() } else { 0.0 };
             Ok(make_uncertain(result, unc))
         }
+        // Complex ^ anything: exp(z2 * ln(z1))
+        (Value::Complex(..), _) | (_, Value::Complex(..))
+            if left.coerce_complex().is_some() && right.coerce_complex().is_some() =>
+        {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_pow(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
+        }
         (Value::Int(a), Value::Int(b)) => {
             if *b < 0 {
                 Ok(Value::Float(OrderedFloat((*a as f64).powi(*b as i32))))
@@ -589,6 +743,8 @@ fn negate(value: Value) -> EvalResult<Value> {
             let (a, da) = uncertain_parts(&value).unwrap();
             Ok(make_uncertain(-a, da))
         }
+        Value::Quaternion(w, i, j, k) => Ok(Value::Quaternion(-w, -i, -j, -k)),
+        Value::Complex(r, i) => Ok(Value::Complex(-r, -i)),
         Value::Int(n) => n.checked_neg().map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("negation of {} overflows", n))),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(-f.0))),
         Value::Tensor(t) => Ok(Value::Tensor(Rc::new(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into())))))),
@@ -602,6 +758,8 @@ fn abs(value: Value) -> EvalResult<Value> {
             let (a, da) = uncertain_parts(&value).unwrap();
             Ok(make_uncertain(a.abs(), da))
         }
+        Value::Quaternion(w, i, j, k) => Ok(Value::Float(OrderedFloat(quat_norm((w, i, j, k))))),
+        Value::Complex(r, i) => Ok(Value::Float(OrderedFloat(complex_abs(r, i)))),
         Value::Int(n) => Ok(Value::Int(n.abs())),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(f.0.abs()))),
         _ => Err(EvalError::type_error("numeric", &value)),
@@ -610,10 +768,12 @@ fn abs(value: Value) -> EvalResult<Value> {
 
 fn exp(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { let r = a.exp(); return Ok(make_uncertain(r, r * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_exp(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.exp())))
 }
 fn ln(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { if a <= 0.0 { return Err(EvalError::type_error_msg("ln requires positive argument")); } return Ok(make_uncertain(a.ln(), da / a.abs())); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_ln(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("ln requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.ln()))) }
 }
 fn log10(value: Value) -> EvalResult<Value> {
@@ -626,14 +786,24 @@ fn log2(value: Value) -> EvalResult<Value> {
 }
 fn sqrt(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { if a < 0.0 { return Err(EvalError::type_error_msg("sqrt requires non-negative argument")); } let r = a.sqrt(); return Ok(make_uncertain(r, da / (2.0 * r))); }
-    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < 0.0 { Err(EvalError::type_error_msg("sqrt requires non-negative argument")) } else { Ok(Value::Float(OrderedFloat(f.sqrt()))) }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_sqrt(*re, *im); return Ok(Value::Complex(r, i)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+    if f < 0.0 {
+        // sqrt of negative real → complex result
+        let (r, i) = complex_sqrt(f, 0.0);
+        Ok(Value::Complex(r, i))
+    } else {
+        Ok(Value::Float(OrderedFloat(f.sqrt())))
+    }
 }
 fn sin(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.sin(), a.cos().abs() * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_sin(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sin())))
 }
 fn cos(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.cos(), a.sin().abs() * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_cos(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cos())))
 }
 fn tan(value: Value) -> EvalResult<Value> {
@@ -680,6 +850,54 @@ fn sign(value: Value) -> EvalResult<Value> {
     // sign is exact: no uncertainty propagation
     if let Some((a, _da)) = uncertain_parts(&value) { return Ok(Value::Float(OrderedFloat(if a > 0.0 { 1.0 } else if a < 0.0 { -1.0 } else { 0.0 }))); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(if f > 0.0 { 1.0 } else if f < 0.0 { -1.0 } else { 0.0 })))
+}
+
+// Complex/quaternion decomposition primitives
+fn prim_re(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(w, _, _, _) => Ok(Value::Float(OrderedFloat(*w))),
+        Value::Complex(re, _) => Ok(Value::Float(OrderedFloat(*re))),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(f)))
+        }
+    }
+}
+
+fn prim_im(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(_, i, j, k) => Ok(Value::Tuple(vec![
+            Value::Float(OrderedFloat(*i)),
+            Value::Float(OrderedFloat(*j)),
+            Value::Float(OrderedFloat(*k)),
+        ])),
+        Value::Complex(_, im) => Ok(Value::Float(OrderedFloat(*im))),
+        _ => {
+            let _ = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(0.0)))
+        }
+    }
+}
+
+fn prim_conj(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(w, i, j, k) => Ok(Value::Quaternion(*w, -i, -j, -k)),
+        Value::Complex(re, im) => Ok(Value::Complex(*re, -im)),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(f)))
+        }
+    }
+}
+
+fn prim_arg(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Complex(re, im) => Ok(Value::Float(OrderedFloat(complex_arg(*re, *im)))),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(if f >= 0.0 { 0.0 } else { std::f64::consts::PI })))
+        }
+    }
 }
 
 // Digamma (ψ) function via finite differences for uncertainty propagation.

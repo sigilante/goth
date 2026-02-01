@@ -1,0 +1,5 @@
+# Square root of negative number: √(-4) = 2𝕚
+# Automatically promotes to complex domain
+
+╭─ main : I64 → ℂ
+╰─ sqrt(0 - 4)
