@@ -1,7 +1,7 @@
 //! Primitive operations for Goth
 
 use std::rc::Rc;
-use crate::value::{Value, Tensor, PrimFn};
+use crate::value::{Value, Tensor, TensorData, PrimFn};
 use crate::error::{EvalError, EvalResult};
 use ordered_float::OrderedFloat;
 
@@ -1503,5 +1503,322 @@ fn str_contains(str_val: Value, substr_val: Value) -> EvalResult<Value> {
             str_val.type_name(),
             substr_val.type_name()
         ))),
+    }
+}
+
+// ── Matrix utility helpers ──
+
+fn tensor_to_floats(t: &Tensor) -> EvalResult<Vec<f64>> {
+    let n = t.shape.iter().product::<usize>();
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let v = t.get_flat(i).ok_or_else(|| EvalError::shape_mismatch("index out of bounds"))?;
+        out.push(v.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &v))?);
+    }
+    Ok(out)
+}
+
+fn build_float_matrix(m: usize, n: usize, data: Vec<f64>) -> Tensor {
+    Tensor { shape: vec![m, n], data: TensorData::Float(data.into_iter().map(OrderedFloat).collect()) }
+}
+
+fn build_float_vector(data: Vec<f64>) -> Tensor {
+    let len = data.len();
+    Tensor { shape: vec![len], data: TensorData::Float(data.into_iter().map(OrderedFloat).collect()) }
+}
+
+// ── LU decomposition with partial pivoting ──
+
+/// In-place LU decomposition. Returns (pivot_indices, det_sign).
+/// Does NOT error on singular matrices — leaves near-zero pivots for caller to check.
+fn lu_decompose(a: &mut [f64], n: usize) -> (Vec<usize>, f64) {
+    let mut piv: Vec<usize> = (0..n).collect();
+    let mut sign = 1.0;
+    for k in 0..n {
+        // Find pivot
+        let mut max_val = a[k * n + k].abs();
+        let mut max_row = k;
+        for i in (k + 1)..n {
+            let v = a[i * n + k].abs();
+            if v > max_val { max_val = v; max_row = i; }
+        }
+        if max_row != k {
+            // Swap rows k and max_row
+            for j in 0..n { a.swap(k * n + j, max_row * n + j); }
+            piv.swap(k, max_row);
+            sign = -sign;
+        }
+        let pivot = a[k * n + k];
+        if pivot.abs() < 1e-15 { continue; }
+        // Eliminate below
+        for i in (k + 1)..n {
+            let factor = a[i * n + k] / pivot;
+            a[i * n + k] = factor; // Store L factor
+            for j in (k + 1)..n {
+                a[i * n + j] -= factor * a[k * n + j];
+            }
+        }
+    }
+    (piv, sign)
+}
+
+/// Solve Ax = b given LU factorization with pivoting.
+fn lu_solve(lu: &[f64], piv: &[usize], b: &[f64], n: usize) -> Vec<f64> {
+    // Apply permutation
+    let mut x: Vec<f64> = piv.iter().map(|&i| b[i]).collect();
+    // Forward substitution (L * y = Pb, L has 1s on diagonal)
+    for i in 1..n {
+        for j in 0..i {
+            x[i] -= lu[i * n + j] * x[j];
+        }
+    }
+    // Back substitution (U * x = y)
+    for i in (0..n).rev() {
+        for j in (i + 1)..n {
+            x[i] -= lu[i * n + j] * x[j];
+        }
+        x[i] /= lu[i * n + i];
+    }
+    x
+}
+
+// ── QR decomposition (Householder reflections) ──
+
+/// QR decomposition of m×n matrix (m >= n). Returns (Q, R) as flat arrays.
+fn householder_qr(a: &[f64], m: usize, n: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut r = a.to_vec();
+    // Q starts as identity
+    let mut q = vec![0.0; m * m];
+    for i in 0..m { q[i * m + i] = 1.0; }
+
+    let k_max = if m > n { n } else { m };
+    for k in 0..k_max {
+        // Extract column k below diagonal
+        let mut col = vec![0.0; m - k];
+        for i in k..m { col[i - k] = r[i * n + k]; }
+        let col_norm = col.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if col_norm < 1e-15 { continue; }
+
+        // Householder vector
+        let sign = if col[0] >= 0.0 { 1.0 } else { -1.0 };
+        col[0] += sign * col_norm;
+        let v_norm_sq = col.iter().map(|x| x * x).sum::<f64>();
+        if v_norm_sq < 1e-30 { continue; }
+
+        // Apply H = I - 2vv^T/v^Tv to R (columns k..n)
+        for j in k..n {
+            let mut dot = 0.0;
+            for i in k..m { dot += col[i - k] * r[i * n + j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for i in k..m { r[i * n + j] -= factor * col[i - k]; }
+        }
+        // Apply H to Q (all columns)
+        for j in 0..m {
+            let mut dot = 0.0;
+            for i in k..m { dot += col[i - k] * q[i * m + j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for i in k..m { q[i * m + j] -= factor * col[i - k]; }
+        }
+    }
+    // Transpose Q (we accumulated H*Q^T, need Q = (H*Q^T)^T)
+    let mut qt = vec![0.0; m * m];
+    for i in 0..m { for j in 0..m { qt[i * m + j] = q[j * m + i]; } }
+    (qt, r)
+}
+
+/// Solve Ax=b via QR. Handles overdetermined (least squares) systems.
+fn qr_solve_impl(a: &[f64], b: &[f64], m: usize, n: usize) -> Vec<f64> {
+    let (q, r) = householder_qr(a, m, n);
+    // Compute Q^T * b
+    let mut qtb = vec![0.0; m];
+    for i in 0..m {
+        for j in 0..m { qtb[i] += q[j * m + i] * b[j]; }
+    }
+    // Back substitution with R (use first n rows/cols)
+    let mut x = vec![0.0; n];
+    for i in (0..n).rev() {
+        x[i] = qtb[i];
+        for j in (i + 1)..n { x[i] -= r[i * n + j] * x[j]; }
+        if r[i * n + i].abs() > 1e-15 { x[i] /= r[i * n + i]; }
+    }
+    x
+}
+
+// ── Matrix primitive implementations ──
+
+fn mat_trace(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("trace requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut sum = 0.0f64;
+            for i in 0..n {
+                sum += t.get(&[i, i]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+            }
+            Ok(Value::Float(OrderedFloat(sum)))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_eye(value: Value) -> EvalResult<Value> {
+    let n = value.as_index().ok_or_else(|| EvalError::type_error("Int", &value))?;
+    if n == 0 { return Err(EvalError::shape_mismatch("eye requires positive size")); }
+    let mut data = vec![0.0f64; n * n];
+    for i in 0..n { data[i * n + i] = 1.0; }
+    Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, data))))
+}
+
+fn mat_diag(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() == 1 {
+                // Vector → diagonal matrix
+                let n = t.shape[0];
+                let mut data = vec![0.0f64; n * n];
+                for i in 0..n {
+                    data[i * n + i] = t.get(&[i]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+                }
+                Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, data))))
+            } else if t.shape.len() == 2 {
+                // Matrix → diagonal vector
+                let n = t.shape[0].min(t.shape[1]);
+                let mut data = Vec::with_capacity(n);
+                for i in 0..n {
+                    data.push(t.get(&[i, i]).and_then(|v| v.coerce_float()).unwrap_or(0.0));
+                }
+                Ok(Value::Tensor(Rc::new(build_float_vector(data))))
+            } else {
+                Err(EvalError::shape_mismatch("diag requires 1D or 2D tensor"))
+            }
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_det(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("det requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut a = tensor_to_floats(t)?;
+            let (_piv, sign) = lu_decompose(&mut a, n);
+            let product: f64 = (0..n).map(|i| a[i * n + i]).product();
+            Ok(Value::Float(OrderedFloat(sign * product)))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_inv(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("inv requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut a = tensor_to_floats(t)?;
+            let (piv, _sign) = lu_decompose(&mut a, n);
+            // Check singularity
+            for i in 0..n {
+                if a[i * n + i].abs() < 1e-12 {
+                    return Err(EvalError::shape_mismatch("singular matrix: cannot compute inverse"));
+                }
+            }
+            // Solve A * X = I column by column
+            let mut result = vec![0.0f64; n * n];
+            for col in 0..n {
+                let mut e_col = vec![0.0; n];
+                e_col[col] = 1.0;
+                let x = lu_solve(&a, &piv, &e_col, n);
+                for row in 0..n { result[row * n + col] = x[row]; }
+            }
+            Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, result))))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn solve_lu_impl(a_val: &Value, b_val: &Value) -> EvalResult<Value> {
+    match (a_val, b_val) {
+        (Value::Tensor(at), Value::Tensor(bt)) => {
+            if at.shape.len() != 2 || at.shape[0] != at.shape[1] {
+                return Err(EvalError::shape_mismatch("solve requires square 2D matrix"));
+            }
+            let n = at.shape[0];
+            if bt.shape.len() != 1 || bt.shape[0] != n {
+                return Err(EvalError::shape_mismatch(format!(
+                    "solve dimension mismatch: {}×{} matrix vs length-{} vector",
+                    n, n, bt.shape[0]
+                )));
+            }
+            let mut a = tensor_to_floats(at)?;
+            let b = tensor_to_floats(bt)?;
+            let (piv, _sign) = lu_decompose(&mut a, n);
+            for i in 0..n {
+                if a[i * n + i].abs() < 1e-12 {
+                    return Err(EvalError::shape_mismatch("singular matrix: cannot solve"));
+                }
+            }
+            let x = lu_solve(&a, &piv, &b, n);
+            Ok(Value::Tensor(Rc::new(build_float_vector(x))))
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "solve requires (Tensor, Tensor), got ({}, {})",
+            a_val.type_name(), b_val.type_name()
+        ))),
+    }
+}
+
+fn solve_qr_impl(a_val: &Value, b_val: &Value) -> EvalResult<Value> {
+    match (a_val, b_val) {
+        (Value::Tensor(at), Value::Tensor(bt)) => {
+            if at.shape.len() != 2 {
+                return Err(EvalError::shape_mismatch("solveWith(qr) requires 2D matrix"));
+            }
+            let m = at.shape[0];
+            let n = at.shape[1];
+            if m < n {
+                return Err(EvalError::shape_mismatch("solveWith(qr) requires m >= n (not underdetermined)"));
+            }
+            if bt.shape.len() != 1 || bt.shape[0] != m {
+                return Err(EvalError::shape_mismatch(format!(
+                    "solveWith(qr) dimension mismatch: {}×{} matrix vs length-{} vector",
+                    m, n, bt.shape[0]
+                )));
+            }
+            let a = tensor_to_floats(at)?;
+            let b = tensor_to_floats(bt)?;
+            let x = qr_solve_impl(&a, &b, m, n);
+            Ok(Value::Tensor(Rc::new(build_float_vector(x))))
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "solveWith requires (Tensor, Tensor, String), got ({}, {})",
+            a_val.type_name(), b_val.type_name()
+        ))),
+    }
+}
+
+fn mat_solve(a_val: Value, b_val: Value) -> EvalResult<Value> {
+    solve_lu_impl(&a_val, &b_val)
+}
+
+fn mat_solve_with(a_val: Value, b_val: Value, method_val: Value) -> EvalResult<Value> {
+    let method_str = match &method_val {
+        Value::Tensor(t) => t.to_string_value()
+            .ok_or_else(|| EvalError::type_error_msg("solveWith: third argument must be a method string"))?,
+        _ => return Err(EvalError::type_error_msg(format!(
+            "solveWith: third argument must be a string, got {}",
+            method_val.type_name()
+        ))),
+    };
+    match method_str.as_str() {
+        "lu" => solve_lu_impl(&a_val, &b_val),
+        "qr" => solve_qr_impl(&a_val, &b_val),
+        other => Err(EvalError::not_implemented(format!("solve method '{}' (available: lu, qr)", other))),
     }
 }

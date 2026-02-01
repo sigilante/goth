@@ -1565,4 +1565,275 @@ mod tests {
         // 3² + 4² = 25, should be Complex(25, 0)
         assert_complex_approx(&e.eval(&expr).unwrap(), 25.0, 0.0, 1e-10, "z*conj(z)");
     }
+
+    // ── Matrix utility tests ──
+
+    fn mat2x2(a: f64, b: f64, c: f64, d: f64) -> Expr {
+        Expr::array(vec![
+            Expr::array(vec![Expr::float(a), Expr::float(b)]),
+            Expr::array(vec![Expr::float(c), Expr::float(d)]),
+        ])
+    }
+
+    fn mat3x3(vals: [f64; 9]) -> Expr {
+        Expr::array(vec![
+            Expr::array(vec![Expr::float(vals[0]), Expr::float(vals[1]), Expr::float(vals[2])]),
+            Expr::array(vec![Expr::float(vals[3]), Expr::float(vals[4]), Expr::float(vals[5])]),
+            Expr::array(vec![Expr::float(vals[6]), Expr::float(vals[7]), Expr::float(vals[8])]),
+        ])
+    }
+
+    fn vec_expr(vals: &[f64]) -> Expr {
+        Expr::array(vals.iter().map(|&v| Expr::float(v)).collect())
+    }
+
+    fn assert_tensor_float(result: &Value, idx: &[usize], expected: f64, tol: f64, label: &str) {
+        match result {
+            Value::Tensor(t) => {
+                let v = t.get(idx).unwrap_or_else(|| panic!("{}: index {:?} out of bounds", label, idx));
+                let f = v.coerce_float().unwrap_or_else(|| panic!("{}: not numeric at {:?}", label, idx));
+                assert!((f - expected).abs() < tol, "{}: at {:?} got {}, expected {}", label, idx, f, expected);
+            }
+            other => panic!("{}: expected Tensor, got {:?}", label, other),
+        }
+    }
+
+    // Phase 1: trace + eye
+
+    #[test]
+    fn test_trace_general() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("trace"), mat2x2(1.0, 2.0, 3.0, 4.0));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(5.0));
+    }
+
+    #[test]
+    fn test_trace_identity_3x3() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("trace"), Expr::app(Expr::name("eye"), Expr::int(3)));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(3.0));
+    }
+
+    #[test]
+    fn test_trace_non_square_error() {
+        let mut e = Evaluator::new();
+        let mat = Expr::array(vec![
+            Expr::array(vec![Expr::float(1.0), Expr::float(2.0), Expr::float(3.0)]),
+            Expr::array(vec![Expr::float(4.0), Expr::float(5.0), Expr::float(6.0)]),
+        ]);
+        assert!(e.eval(&Expr::app(Expr::name("trace"), mat)).is_err());
+    }
+
+    #[test]
+    fn test_eye_3() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("eye"), Expr::int(3))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![3, 3]);
+            for i in 0..3 { for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert_eq!(t.get(&[i, j]).unwrap().coerce_float().unwrap(), expected);
+            }}
+        } else { panic!("Expected tensor"); }
+    }
+
+    #[test]
+    fn test_eye_1() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("eye"), Expr::int(1))).unwrap();
+        assert_tensor_float(&result, &[0, 0], 1.0, 1e-15, "eye(1)");
+    }
+
+    // Phase 2: diag
+
+    #[test]
+    fn test_diag_vec_to_matrix() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("diag"), vec_expr(&[1.0, 2.0, 3.0]))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![3, 3]);
+        } else { panic!("Expected tensor"); }
+        assert_tensor_float(&result, &[0, 0], 1.0, 1e-15, "diag[0,0]");
+        assert_tensor_float(&result, &[1, 1], 2.0, 1e-15, "diag[1,1]");
+        assert_tensor_float(&result, &[2, 2], 3.0, 1e-15, "diag[2,2]");
+        assert_tensor_float(&result, &[0, 1], 0.0, 1e-15, "diag[0,1]");
+    }
+
+    #[test]
+    fn test_diag_matrix_to_vec() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("diag"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![2]);
+            assert_eq!(t.get(&[0]).unwrap().coerce_float().unwrap(), 1.0);
+            assert_eq!(t.get(&[1]).unwrap().coerce_float().unwrap(), 4.0);
+        } else { panic!("Expected tensor"); }
+    }
+
+    // Phase 3: det
+
+    #[test]
+    fn test_det_2x2() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - (-2.0)).abs() < 1e-10, "det = {}, expected -2", f);
+    }
+
+    #[test]
+    fn test_det_3x3() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat3x3([6.0,1.0,1.0, 4.0,-2.0,5.0, 2.0,8.0,7.0]))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - (-306.0)).abs() < 1e-8, "det = {}, expected -306", f);
+    }
+
+    #[test]
+    fn test_det_identity() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), Expr::app(Expr::name("eye"), Expr::int(3)))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - 1.0).abs() < 1e-12, "det(I) = {}, expected 1", f);
+    }
+
+    #[test]
+    fn test_det_singular() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat2x2(1.0, 2.0, 2.0, 4.0))).unwrap()
+            .coerce_float().unwrap();
+        assert!(f.abs() < 1e-10, "det(singular) = {}, expected 0", f);
+    }
+
+    // Phase 4: inv
+
+    #[test]
+    fn test_inv_2x2() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("inv"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap();
+        let tol = 1e-10;
+        assert_tensor_float(&result, &[0, 0], -2.0, tol, "inv[0,0]");
+        assert_tensor_float(&result, &[0, 1], 1.0, tol, "inv[0,1]");
+        assert_tensor_float(&result, &[1, 0], 1.5, tol, "inv[1,0]");
+        assert_tensor_float(&result, &[1, 1], -0.5, tol, "inv[1,1]");
+    }
+
+    #[test]
+    fn test_inv_identity() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("inv"), Expr::app(Expr::name("eye"), Expr::int(3)))).unwrap();
+        for i in 0..3 { for j in 0..3 {
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert_tensor_float(&result, &[i, j], expected, 1e-10, &format!("inv(I)[{},{}]", i, j));
+        }}
+    }
+
+    #[test]
+    fn test_inv_singular_error() {
+        let mut e = Evaluator::new();
+        assert!(e.eval(&Expr::app(Expr::name("inv"), mat2x2(1.0, 2.0, 2.0, 4.0))).is_err());
+    }
+
+    #[test]
+    fn test_inv_roundtrip() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let inv_a = Expr::app(Expr::name("inv"), a.clone());
+        let product = Expr::app(Expr::app(Expr::name("matmul"), a), inv_a);
+        let result = e.eval(&product).unwrap();
+        for i in 0..2 { for j in 0..2 {
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert_tensor_float(&result, &[i, j], expected, 1e-10, &format!("A*inv(A)[{},{}]", i, j));
+        }}
+    }
+
+    // Phase 5: solve
+
+    #[test]
+    fn test_solve_2x2() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let result = e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-10, "x[1]");
+    }
+
+    #[test]
+    fn test_solve_3x3() {
+        let mut e = Evaluator::new();
+        let a = mat3x3([1.0,1.0,1.0, 0.0,2.0,5.0, 2.0,5.0,-1.0]);
+        let b = vec_expr(&[6.0, -4.0, 27.0]);
+        let result = e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "x[0]");
+        assert_tensor_float(&result, &[1], 3.0, 1e-10, "x[1]");
+        assert_tensor_float(&result, &[2], -2.0, 1e-10, "x[2]");
+    }
+
+    #[test]
+    fn test_solve_singular_error() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 2.0, 2.0, 4.0);
+        let b = vec_expr(&[1.0, 2.0]);
+        assert!(e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).is_err());
+    }
+
+    #[test]
+    fn test_solve_dimension_mismatch() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 2.0, 3.0, 4.0);
+        let b = vec_expr(&[1.0, 2.0, 3.0]);
+        assert!(e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).is_err());
+    }
+
+    // Phase 6: solveWith + QR
+
+    #[test]
+    fn test_solve_with_lu_explicit() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let method = Expr::Lit(Literal::string("lu"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "lu x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-10, "lu x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_qr() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let method = Expr::Lit(Literal::string("qr"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-8, "qr x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-8, "qr x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_qr_overdetermined() {
+        let mut e = Evaluator::new();
+        let a = Expr::array(vec![
+            Expr::array(vec![Expr::float(1.0), Expr::float(1.0)]),
+            Expr::array(vec![Expr::float(1.0), Expr::float(2.0)]),
+            Expr::array(vec![Expr::float(1.0), Expr::float(3.0)]),
+        ]);
+        let b = vec_expr(&[1.0, 2.0, 2.0]);
+        let method = Expr::Lit(Literal::string("qr"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 2.0 / 3.0, 1e-8, "lstsq x[0]");
+        assert_tensor_float(&result, &[1], 0.5, 1e-8, "lstsq x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_unknown_method() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 0.0, 0.0, 1.0);
+        let b = vec_expr(&[1.0, 2.0]);
+        let method = Expr::Lit(Literal::string("nonsense"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        assert!(e.eval(&expr).is_err());
+    }
 }
