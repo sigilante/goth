@@ -1,0 +1,10 @@
+# Mapping a tensor does not affect the original
+# Input: n (size of array)
+# Tests that tensor sharing doesn't cause mutation leaks
+
+╭─ main : I64 → Bool
+│  ⊢ ₀ > 0
+│  ⊨ ₀ = true
+╰─ let xs = ι ₀ in
+   let ys = xs ↦ (λ→ ₀ × 2) in
+   xs[0] = 0 ∧ ys[0] = 0

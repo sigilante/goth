@@ -1,0 +1,13 @@
+# Closure remains valid after partial application
+# Input: n
+# Tests that creating partial applications doesn't corrupt the original closure
+
+╭─ main : I64 → Bool
+│  ⊨ ₀ = true
+╰─ let n = ₀ in
+   let add = λ→ λ→ ₁ + ₀ in
+   let g = add 5 in
+   let h = add 10 in
+   let a = g n in
+   let b = h n in
+   a + b = n + n + 15

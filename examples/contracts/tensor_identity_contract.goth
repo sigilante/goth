@@ -1,0 +1,11 @@
+# Identity map preserves value equality
+# Input: n (size of array to test)
+# Postcondition: identity-mapping an array produces equal result
+# Tests that tensor operations don't corrupt data through sharing
+
+╭─ main : I64 → Bool
+│  ⊢ ₀ > 0
+│  ⊨ ₀ = true
+╰─ let original = ι ₀ in
+   let mapped = original ↦ (λ→ ₀) in
+   original ≡ mapped
