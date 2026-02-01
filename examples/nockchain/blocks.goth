@@ -1,0 +1,10 @@
+# List recent blocks from Nockchain
+# Usage: nockchain-bridge examples/nockchain/blocks.goth
+#
+# Sends GET_BLOCKS, reads multi-line response (each line: OK <height> <id> <ts>),
+# terminated by a blank line.
+
+╭─ main : I64 → ()
+╰─ let _ = print "GET_BLOCKS" in
+   let resp = readLine ⟨⟩ in
+   print resp

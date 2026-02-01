@@ -1,0 +1,19 @@
+# JSON Parsing Example
+# Parse a JSON string and extract fields
+use "../../stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let input = "{\"name\":\"Goth\",\"version\":1.0,\"features\":[\"arrays\",\"tuples\",\"unicode\"],\"stable\":true}"
+   in let result = parseJson input
+   in if ¬(result.0) then "Parse error: " ⧺ result.2
+   else let json = result.1
+   in let nameOpt = jsonGet "name" json
+   in let nameLine = if nameOpt.0 then "Name: " ⧺ asStr nameOpt.1 else "No name"
+   in let verOpt = jsonGet "version" json
+   in let verLine = if verOpt.0 then "Version: " ⧺ toString (asNum verOpt.1) else "No version"
+   in let featOpt = jsonGet "features" json
+   in let featLine = if featOpt.0 then "Features: " ⧺ toString (jsonLen featOpt.1) else "No features"
+   in let stableOpt = jsonGet "stable" json
+   in let stableLine = if stableOpt.0 then "Stable: " ⧺ toString (asBool stableOpt.1) else "No stable"
+   in let serialized = toJson json
+   in nameLine ⧺ "\n" ⧺ verLine ⧺ "\n" ⧺ featLine ⧺ "\n" ⧺ stableLine ⧺ "\n" ⧺ "Serialized: " ⧺ serialized

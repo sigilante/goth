@@ -1,0 +1,12 @@
+# Query wallet balance via nockchain-bridge
+# Usage: nockchain-bridge examples/nockchain/balance.goth <address>
+#
+# The bridge spawns this program, pipes its stdout as commands,
+# and feeds gRPC responses back via stdin.
+#
+# Protocol: print "BALANCE <addr>", readLine → "OK <nicks>" or "ERROR <msg>"
+
+╭─ main : String → ()
+╰─ let _ = print ("BALANCE " ⧺ ₀) in
+   let resp = readLine ⟨⟩ in
+   print (words resp)

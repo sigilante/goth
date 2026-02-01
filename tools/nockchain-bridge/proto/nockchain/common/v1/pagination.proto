@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package nockchain.common.v1;
+
+message PageRequest {
+  uint32 client_page_items_limit = 1;
+  string page_token = 2;
+  uint64 max_bytes = 3;
+}
+
+message PageResponse {
+  string next_page_token = 1;
+}

@@ -1,0 +1,9 @@
+# Check if a transaction has been accepted
+# Usage: nockchain-bridge examples/nockchain/tx_status.goth <tx_id>
+#
+# Protocol: print "TX_ACCEPTED <txid>", readLine → "OK true|false" or "ERROR <msg>"
+
+╭─ main : String → ()
+╰─ let _ = print ("TX_ACCEPTED " ⧺ ₀) in
+   let resp = readLine ⟨⟩ in
+   print resp

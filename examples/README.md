@@ -277,6 +277,32 @@ cargo run --quiet --package goth-cli -- ../examples/crypto/hashfile.goth /tmp/te
 
 ---
 
+## json/
+
+JSON parsing and serialization — pure Goth implementation using recursive descent parsing and fold-based serialization. All functions are implemented entirely in Goth via the `json.goth` standard library.
+
+| File | Description | Example |
+|------|-------------|---------|
+| `parse_simple.goth` | Parse JSON, extract fields, serialize | `parseJson "{\"name\":\"Goth\"}" → ⟨⊤, ..., ""⟩` |
+| `roundtrip.goth` | Parse → serialize → re-parse roundtrip test | `toJson (parseJson input).1` |
+
+```sh
+# Parse and extract fields from JSON
+cargo run --quiet --package goth-cli -- ../examples/json/parse_simple.goth
+# Name: Goth
+# Version: 1
+# Features: 3
+# ...
+
+# Roundtrip: parse → serialize → parse → serialize
+cargo run --quiet --package goth-cli -- ../examples/json/roundtrip.goth
+# Roundtrip: PASS
+```
+
+**Demonstrates:** Recursive descent parsing, `chars`, `fromChars`, `parseFloat`, fold-based string building, tagged tuples as sum types, `strEq`, `use` imports.
+
+---
+
 ## Language Features Covered
 
 | Feature | Examples |
@@ -291,13 +317,13 @@ cargo run --quiet --package goth-cli -- ../examples/crypto/hashfile.goth /tmp/te
 | Sum/Product (`Σ`/`Π`) | numeric, higher-order, simulation |
 | Iota (`ι`) | numeric, simulation |
 | Array concat (`⊕`) | higher-order |
-| String concat (`⧺`) | simulation, crypto |
+| String concat (`⧺`) | simulation, crypto, json |
 | Conditionals (`if/then/else`) | basic, recursion, algorithms |
 | Contracts (`⊢`/`⊨`) | contracts, random |
 | Uncertainty (`±`) | uncertainty |
 | File I/O (`▷`, `writeFile`, `readFile`) | io, simulation, crypto |
-| Module imports (`use`) | simulation, random, crypto |
+| Module imports (`use`) | simulation, random, crypto, json |
 | Tail-call optimization | tco |
 | Bitwise ops (`bitand`, `bitor`, `bitxor`, `shl`, `shr`) | crypto |
-| Tuple destructuring (`⟨a, b⟩`) | random |
+| Tuple destructuring (`⟨a, b⟩`) | random, json |
 | PRNG / entropy | random |
