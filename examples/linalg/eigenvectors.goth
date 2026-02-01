@@ -1,0 +1,6 @@
+# Compute eigenvectors of a symmetric matrix
+# diag([5,3]) has eigenvalues 5, 3 with standard basis eigenvectors
+# Returns ⟨eigenvalues, eigenvector_matrix⟩
+
+╭─ main : I64 → T
+╰─ eigvecs (diag [5,3])
