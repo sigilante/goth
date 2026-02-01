@@ -404,6 +404,8 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::Eye => unary_args(&args, mat_eye),
         PrimFn::Solve => binary_args(&args, mat_solve),
         PrimFn::SolveWith => ternary_args(&args, mat_solve_with),
+        PrimFn::Eig => unary_args(&args, mat_eig),
+        PrimFn::EigVecs => unary_args(&args, mat_eigvecs),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -1820,5 +1822,441 @@ fn mat_solve_with(a_val: Value, b_val: Value, method_val: Value) -> EvalResult<V
         "lu" => solve_lu_impl(&a_val, &b_val),
         "qr" => solve_qr_impl(&a_val, &b_val),
         other => Err(EvalError::not_implemented(format!("solve method '{}' (available: lu, qr)", other))),
+    }
+}
+
+// ── Eigenvalue / Eigenvector support ──
+
+/// Eigenvalues of a 2×2 matrix [[a,b],[c,d]] via quadratic formula.
+/// Returns ((re1,im1), (re2,im2)).
+fn eigenvalues_2x2(a: f64, b: f64, c: f64, d: f64) -> ((f64, f64), (f64, f64)) {
+    let tr = a + d;
+    let det = a * d - b * c;
+    let disc = tr * tr - 4.0 * det;
+    if disc >= 0.0 {
+        let sq = disc.sqrt();
+        ((0.5 * (tr + sq), 0.0), (0.5 * (tr - sq), 0.0))
+    } else {
+        let sq = (-disc).sqrt();
+        ((0.5 * tr, 0.5 * sq), (0.5 * tr, -0.5 * sq))
+    }
+}
+
+/// Wilkinson shift: eigenvalue of bottom-right 2×2 block closest to d.
+/// For complex eigenvalues, returns d.
+fn wilkinson_shift(a: f64, b: f64, c: f64, d: f64) -> f64 {
+    let tr = a + d;
+    let det = a * d - b * c;
+    let disc = tr * tr - 4.0 * det;
+    if disc < 0.0 {
+        return d;
+    }
+    let sq = disc.sqrt();
+    let e1 = 0.5 * (tr + sq);
+    let e2 = 0.5 * (tr - sq);
+    if (e1 - d).abs() < (e2 - d).abs() { e1 } else { e2 }
+}
+
+/// Reduce a general n×n matrix to upper Hessenberg form via Householder similarity transforms.
+/// Returns (H, Q) where H = Q^T A Q and Q is orthogonal, both as flat n×n arrays.
+fn hessenberg_reduce(a: &[f64], n: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut h = a.to_vec();
+    let mut q = vec![0.0; n * n];
+    for i in 0..n { q[i * n + i] = 1.0; }
+
+    for k in 0..(n.saturating_sub(2)) {
+        // Build Householder vector from column k, rows k+1..n
+        let len = n - k - 1;
+        let mut col = vec![0.0; len];
+        for i in 0..len { col[i] = h[(k + 1 + i) * n + k]; }
+        let col_norm = col.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if col_norm < 1e-15 { continue; }
+
+        let sign = if col[0] >= 0.0 { 1.0 } else { -1.0 };
+        col[0] += sign * col_norm;
+        let v_norm_sq = col.iter().map(|x| x * x).sum::<f64>();
+        if v_norm_sq < 1e-30 { continue; }
+
+        // Apply H from the left: H = H - 2*v*(v^T*H) / (v^T*v)
+        // Affects rows k+1..n, all columns
+        for j in 0..n {
+            let mut dot = 0.0;
+            for i in 0..len { dot += col[i] * h[(k + 1 + i) * n + j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for i in 0..len { h[(k + 1 + i) * n + j] -= factor * col[i]; }
+        }
+
+        // Apply H from the right: H = H - 2*(H*v)*v^T / (v^T*v)
+        // Affects all rows, columns k+1..n
+        for i in 0..n {
+            let mut dot = 0.0;
+            for j in 0..len { dot += h[i * n + (k + 1 + j)] * col[j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for j in 0..len { h[i * n + (k + 1 + j)] -= factor * col[j]; }
+        }
+
+        // Accumulate Q = Q * H_k (multiply Q from the right by Householder)
+        for i in 0..n {
+            let mut dot = 0.0;
+            for j in 0..len { dot += q[i * n + (k + 1 + j)] * col[j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for j in 0..len { q[i * n + (k + 1 + j)] -= factor * col[j]; }
+        }
+    }
+    (h, q)
+}
+
+/// Apply a Givens rotation to zero out h[i][j] using h[i-1][j].
+/// Returns (c, s) for the rotation.
+fn givens_rotation(a: f64, b: f64) -> (f64, f64) {
+    if b.abs() < 1e-30 {
+        return (1.0, 0.0);
+    }
+    let r = (a * a + b * b).sqrt();
+    (a / r, -b / r)
+}
+
+/// QR iteration on upper Hessenberg matrix with Wilkinson shifts.
+/// Uses Givens rotations (O(n²) per step). Extracts eigenvalues as (re, im) pairs.
+/// If q is Some, accumulates the Schur vectors into it.
+fn qr_iteration_hessenberg(h: &mut [f64], n: usize, mut q: Option<&mut [f64]>) -> Vec<(f64, f64)> {
+    let mut eigenvalues = Vec::with_capacity(n);
+    let max_iter = 100 * n;
+    let mut iter_count = 0;
+    let mut m = n; // Active submatrix is 0..m
+
+    while m > 0 {
+        if m == 1 {
+            eigenvalues.push((h[0], 0.0));
+            break;
+        }
+
+        // Check for deflation: is subdiagonal element h[m-1, m-2] small enough?
+        let sub = h[(m - 1) * n + (m - 2)];
+        let diag_sum = h[(m - 1) * n + (m - 1)].abs() + h[(m - 2) * n + (m - 2)].abs();
+        let tol = 1e-14 * if diag_sum > 1.0 { diag_sum } else { 1.0 };
+
+        if sub.abs() <= tol {
+            // Deflation: bottom element has converged
+            eigenvalues.push((h[(m - 1) * n + (m - 1)], 0.0));
+            m -= 1;
+            continue;
+        }
+
+        // Check for 2×2 block convergence (m >= 3 and h[m-2, m-3] is small)
+        if m >= 3 {
+            let sub2 = h[(m - 2) * n + (m - 3)];
+            let diag_sum2 = h[(m - 2) * n + (m - 2)].abs() + h[(m - 3) * n + (m - 3)].abs();
+            let tol2 = 1e-14 * if diag_sum2 > 1.0 { diag_sum2 } else { 1.0 };
+            if sub2.abs() <= tol2 {
+                // 2×2 block at bottom has converged
+                let a = h[(m - 2) * n + (m - 2)];
+                let b = h[(m - 2) * n + (m - 1)];
+                let c = h[(m - 1) * n + (m - 2)];
+                let d = h[(m - 1) * n + (m - 1)];
+                let (e1, e2) = eigenvalues_2x2(a, b, c, d);
+                eigenvalues.push(e1);
+                eigenvalues.push(e2);
+                m -= 2;
+                continue;
+            }
+        } else if m == 2 {
+            // Final 2×2 block
+            let a = h[0];
+            let b = h[1];
+            let c = h[n];
+            let d = h[n + 1];
+            let (e1, e2) = eigenvalues_2x2(a, b, c, d);
+            eigenvalues.push(e1);
+            eigenvalues.push(e2);
+            break;
+        }
+
+        if iter_count >= max_iter {
+            // Extract remaining as diagonal
+            for i in 0..m { eigenvalues.push((h[i * n + i], 0.0)); }
+            break;
+        }
+        iter_count += 1;
+
+        // Compute Wilkinson shift from bottom-right 2×2
+        let a = h[(m - 2) * n + (m - 2)];
+        let b = h[(m - 2) * n + (m - 1)];
+        let c = h[(m - 1) * n + (m - 2)];
+        let d = h[(m - 1) * n + (m - 1)];
+        let shift = wilkinson_shift(a, b, c, d);
+
+        // Apply shift
+        for i in 0..m { h[i * n + i] -= shift; }
+
+        // QR step via Givens rotations on upper Hessenberg
+        let mut cs = Vec::with_capacity(m - 1);
+        for i in 0..(m - 1) {
+            let (c_val, s_val) = givens_rotation(h[i * n + i], h[(i + 1) * n + i]);
+            cs.push((c_val, s_val));
+            // Apply G^T from the left to rows i, i+1 (columns i..m)
+            for j in i..m {
+                let t1 = h[i * n + j];
+                let t2 = h[(i + 1) * n + j];
+                h[i * n + j] = c_val * t1 - s_val * t2;
+                h[(i + 1) * n + j] = s_val * t1 + c_val * t2;
+            }
+        }
+
+        // Apply G from the right: R * Q
+        for (i, &(c_val, s_val)) in cs.iter().enumerate() {
+            // Columns i, i+1, rows 0..min(i+2, m-1)+1
+            let row_max = if i + 2 < m { i + 2 } else { m - 1 };
+            for j in 0..=row_max {
+                let t1 = h[j * n + i];
+                let t2 = h[j * n + (i + 1)];
+                h[j * n + i] = c_val * t1 - s_val * t2;
+                h[j * n + (i + 1)] = s_val * t1 + c_val * t2;
+            }
+        }
+
+        // Undo shift
+        for i in 0..m { h[i * n + i] += shift; }
+
+        // Accumulate Givens into Q if requested
+        if let Some(ref mut q_mat) = q.as_deref_mut() {
+            for (i, &(c_val, s_val)) in cs.iter().enumerate() {
+                for j in 0..n {
+                    let t1 = q_mat[j * n + i];
+                    let t2 = q_mat[j * n + (i + 1)];
+                    q_mat[j * n + i] = c_val * t1 - s_val * t2;
+                    q_mat[j * n + (i + 1)] = s_val * t1 + c_val * t2;
+                }
+            }
+        }
+    }
+
+    eigenvalues
+}
+
+/// Build eigenvalue result with dynamic type promotion:
+/// All real → Float tensor, any complex → Generic tensor of Complex values.
+fn build_eigenvalue_result(eigenvalues: &mut Vec<(f64, f64)>) -> Value {
+    // Sort by real part descending, then imaginary part descending
+    eigenvalues.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)
+        .then(b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)));
+
+    let all_real = eigenvalues.iter().all(|(_, im)| im.abs() < 1e-12);
+    let len = eigenvalues.len();
+
+    if all_real {
+        let data: Vec<f64> = eigenvalues.iter().map(|(re, _)| *re).collect();
+        Value::Tensor(Rc::new(build_float_vector(data)))
+    } else {
+        let data: Vec<Value> = eigenvalues.iter().map(|(re, im)| {
+            if im.abs() < 1e-12 {
+                Value::float(*re)
+            } else {
+                Value::complex(*re, *im)
+            }
+        }).collect();
+        Value::Tensor(Rc::new(Tensor {
+            shape: vec![len],
+            data: TensorData::Generic(data),
+        }))
+    }
+}
+
+/// Compute eigenvectors via inverse iteration on the original matrix A.
+/// For each eigenvalue λ, solve (A - σI)x = b repeatedly with σ close to λ.
+fn inverse_iteration_eigenvectors(a: &[f64], eigenvalues: &[(f64, f64)], n: usize) -> Vec<Vec<(f64, f64)>> {
+    let mut eigvecs = Vec::with_capacity(eigenvalues.len());
+
+    let mut idx = 0;
+    while idx < eigenvalues.len() {
+        let (re, im) = eigenvalues[idx];
+        if im.abs() < 1e-12 {
+            // Real eigenvalue: inverse iteration with (A - λI)
+            let lambda = re;
+            // Shift slightly to avoid exact singularity
+            let sigma = lambda + 1e-10;
+            let mut shifted = a.to_vec();
+            for i in 0..n { shifted[i * n + i] -= sigma; }
+
+            let (piv, _sign) = lu_decompose(&mut shifted, n);
+
+            // Start with random-ish vector
+            let mut x: Vec<f64> = (0..n).map(|i| 1.0 / (1.0 + i as f64)).collect();
+
+            // A few iterations of inverse iteration
+            for _ in 0..20 {
+                x = lu_solve(&shifted, &piv, &x, n);
+                let norm = x.iter().map(|v| v * v).sum::<f64>().sqrt();
+                if norm > 1e-15 {
+                    for v in &mut x { *v /= norm; }
+                }
+            }
+
+            let v: Vec<(f64, f64)> = x.iter().map(|&v| (v, 0.0)).collect();
+            eigvecs.push(v);
+            idx += 1;
+        } else {
+            // Complex eigenvalue pair: λ = re ± im*i
+            // Use real inverse iteration with the 2×2 block approach:
+            // Solve (A - re*I)^2 + im^2*I = (A - λI)(A - λ̄I) which is real
+            // Then extract real/imaginary parts from the invariant subspace
+
+            // Build M = (A - re*I)
+            let mut m = a.to_vec();
+            for i in 0..n { m[i * n + i] -= re; }
+
+            // Compute M^2 + im^2 * I  (which is real and singular at ±im eigenvalues)
+            // Instead, use complex inverse iteration directly
+            // (A - λI) x = b in complex arithmetic
+
+            let sigma_r = re + 1e-10;
+            let sigma_i = im;
+
+            // Build complex shifted matrix and solve via real embedding
+            // [A-σr*I, σi*I; -σi*I, A-σr*I] * [xr; xi] = [br; bi]
+            let nn = 2 * n;
+            let mut big = vec![0.0; nn * nn];
+            for i in 0..n {
+                for j in 0..n {
+                    // Top-left: A - σr*I
+                    big[i * nn + j] = a[i * n + j];
+                    // Bottom-right: A - σr*I
+                    big[(n + i) * nn + (n + j)] = a[i * n + j];
+                }
+                big[i * nn + i] -= sigma_r;
+                big[(n + i) * nn + (n + i)] -= sigma_r;
+                // Top-right: σi*I
+                big[i * nn + (n + i)] = sigma_i;
+                // Bottom-left: -σi*I
+                big[(n + i) * nn + i] = -sigma_i;
+            }
+
+            let (piv, _sign) = lu_decompose(&mut big, nn);
+
+            let mut x: Vec<f64> = (0..nn).map(|i| 1.0 / (1.0 + i as f64)).collect();
+
+            for _ in 0..20 {
+                x = lu_solve(&big, &piv, &x, nn);
+                let norm = x.iter().map(|v| v * v).sum::<f64>().sqrt();
+                if norm > 1e-15 {
+                    for v in &mut x { *v /= norm; }
+                }
+            }
+
+            // Extract real and imaginary parts
+            let mut vr: Vec<f64> = x[0..n].to_vec();
+            let mut vi: Vec<f64> = x[n..nn].to_vec();
+            let norm = (0..n).map(|i| vr[i] * vr[i] + vi[i] * vi[i]).sum::<f64>().sqrt();
+            if norm > 1e-15 {
+                for i in 0..n { vr[i] /= norm; vi[i] /= norm; }
+            }
+
+            let v1: Vec<(f64, f64)> = (0..n).map(|i| (vr[i], vi[i])).collect();
+            let v2: Vec<(f64, f64)> = (0..n).map(|i| (vr[i], -vi[i])).collect();
+            eigvecs.push(v1);
+            if idx + 1 < eigenvalues.len() {
+                eigvecs.push(v2);
+                idx += 2;
+            } else {
+                idx += 1;
+            }
+        }
+    }
+    eigvecs
+}
+
+fn mat_eig(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("eig requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            if n == 0 {
+                return Err(EvalError::shape_mismatch("eig requires non-empty matrix"));
+            }
+            if n == 1 {
+                let v = t.get(&[0, 0]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+                return Ok(Value::Tensor(Rc::new(build_float_vector(vec![v]))));
+            }
+            let a = tensor_to_floats(t)?;
+            let (mut h, _q) = hessenberg_reduce(&a, n);
+            let mut eigenvalues = qr_iteration_hessenberg(&mut h, n, None);
+            Ok(build_eigenvalue_result(&mut eigenvalues))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_eigvecs(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("eigvecs requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            if n == 0 {
+                return Err(EvalError::shape_mismatch("eigvecs requires non-empty matrix"));
+            }
+            if n == 1 {
+                let v = t.get(&[0, 0]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+                let evals = Value::Tensor(Rc::new(build_float_vector(vec![v])));
+                let evecs = Value::Tensor(Rc::new(build_float_matrix(1, 1, vec![1.0])));
+                return Ok(Value::Tuple(vec![evals, evecs]));
+            }
+            let a = tensor_to_floats(t)?;
+            let (mut h, _q_acc) = hessenberg_reduce(&a, n);
+            let eigenvalues = qr_iteration_hessenberg(&mut h, n, None);
+
+            // Compute eigenvectors via inverse iteration on original matrix
+            let evecs_raw = inverse_iteration_eigenvectors(&a, &eigenvalues, n);
+
+            // Sort eigenvalues (and eigenvectors) by real part descending
+            let mut indices: Vec<usize> = (0..eigenvalues.len()).collect();
+            indices.sort_by(|&a, &b| eigenvalues[b].0.partial_cmp(&eigenvalues[a].0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(eigenvalues[b].1.partial_cmp(&eigenvalues[a].1).unwrap_or(std::cmp::Ordering::Equal)));
+
+            let sorted_evals: Vec<(f64, f64)> = indices.iter().map(|&i| eigenvalues[i]).collect();
+            let sorted_evecs: Vec<&Vec<(f64, f64)>> = indices.iter().map(|&i| &evecs_raw[i.min(evecs_raw.len() - 1)]).collect();
+
+            let all_real = sorted_evals.iter().all(|(_, im)| im.abs() < 1e-12);
+
+            let eval_val = {
+                let mut evals = sorted_evals.clone();
+                build_eigenvalue_result(&mut evals)
+            };
+
+            let evec_val = if all_real {
+                // Build n×n float matrix where column j is eigenvector j
+                let mut data = vec![0.0; n * n];
+                for j in 0..n {
+                    for i in 0..n {
+                        data[i * n + j] = sorted_evecs[j][i].0;
+                    }
+                }
+                Value::Tensor(Rc::new(build_float_matrix(n, n, data)))
+            } else {
+                // Build n×n Generic matrix of Complex values
+                let mut data = Vec::with_capacity(n * n);
+                for i in 0..n {
+                    for j in 0..n {
+                        let (re, im) = sorted_evecs[j][i];
+                        if im.abs() < 1e-12 {
+                            data.push(Value::float(re));
+                        } else {
+                            data.push(Value::complex(re, im));
+                        }
+                    }
+                }
+                Value::Tensor(Rc::new(Tensor {
+                    shape: vec![n, n],
+                    data: TensorData::Generic(data),
+                }))
+            };
+
+            Ok(Value::Tuple(vec![eval_val, evec_val]))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
     }
 }
