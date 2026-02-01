@@ -1,5 +1,6 @@
 # Complex arithmetic: (3+4𝕚) × (1+2𝕚) = -5+10𝕚
-# Demonstrates complex multiplication
+# Postcondition verifies real and imaginary parts
 
 ╭─ main : I64 → ℂ
+│  ⊨ re(₀) = 0.0 - 5.0 ∧ im(₀) = 10.0
 ╰─ (3 + 4𝕚) * (1 + 2𝕚)

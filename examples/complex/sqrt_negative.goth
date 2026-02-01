@@ -1,5 +1,6 @@
 # Square root of negative number: √(-4) = 2𝕚
-# Automatically promotes to complex domain
+# Postcondition: squaring the result gives back -4
 
 ╭─ main : I64 → ℂ
+│  ⊨ abs(₀ * ₀ + 4) < 0.0001
 ╰─ √(0 - 4)
