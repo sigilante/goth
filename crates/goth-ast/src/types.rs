@@ -43,6 +43,10 @@ pub enum PrimType {
     // Arbitrary precision (for compile-time computation)
     Nat,    // ℕ - natural numbers
     Int,    // ℤ - integers
+
+    // Complex number types
+    Complex,    // ℂ - complex (f64, f64)
+    Quaternion, // ℍ - quaternion (f64, f64, f64, f64)
 }
 
 /// Type representation
@@ -173,6 +177,8 @@ impl Type {
     pub fn bool() -> Self { Type::Prim(PrimType::Bool) }
     pub fn char() -> Self { Type::Prim(PrimType::Char) }
     pub fn nat() -> Self { Type::Prim(PrimType::Nat) }
+    pub fn complex() -> Self { Type::Prim(PrimType::Complex) }
+    pub fn quaternion() -> Self { Type::Prim(PrimType::Quaternion) }
 
     // Tensor
     pub fn tensor(shape: Shape, elem: Type) -> Self {
@@ -282,7 +288,7 @@ impl PrimType {
     }
 
     pub fn is_float(&self) -> bool {
-        matches!(self, PrimType::F64 | PrimType::F32)
+        matches!(self, PrimType::F64 | PrimType::F32 | PrimType::Complex | PrimType::Quaternion)
     }
 
     pub fn is_int(&self) -> bool {
@@ -306,7 +312,9 @@ impl PrimType {
             PrimType::F32 | PrimType::I32 | PrimType::U32 | PrimType::Char => Some(32),
             PrimType::I16 | PrimType::U16 => Some(16),
             PrimType::I8 | PrimType::U8 | PrimType::Byte | PrimType::Bool => Some(8),
-            PrimType::Nat | PrimType::Int | PrimType::String => None, // Variable/arbitrary size
+            PrimType::Complex => Some(128),    // 2 × f64
+            PrimType::Quaternion => None,       // 4 × f64 = 256, doesn't fit u8
+            PrimType::Nat | PrimType::Int | PrimType::String => None,
         }
     }
 }
@@ -332,6 +340,8 @@ impl std::fmt::Display for PrimType {
             PrimType::String => write!(f, "String"),
             PrimType::Nat => write!(f, "ℕ"),
             PrimType::Int => write!(f, "ℤ"),
+            PrimType::Complex => write!(f, "ℂ"),
+            PrimType::Quaternion => write!(f, "ℍ"),
         }
     }
 }

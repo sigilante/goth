@@ -83,6 +83,13 @@ impl Evaluator {
             // String comparison
             ("strEq", PrimFn::StrEq), ("startsWith", PrimFn::StartsWith),
             ("endsWith", PrimFn::EndsWith), ("contains", PrimFn::Contains),
+            // Complex/quaternion decomposition
+            ("re", PrimFn::Re), ("im", PrimFn::Im), ("conj", PrimFn::Conj), ("arg", PrimFn::Arg),
+            // Matrix utilities
+            ("trace", PrimFn::Trace), ("tr", PrimFn::Trace),
+            ("det", PrimFn::Det), ("inv", PrimFn::Inv),
+            ("diag", PrimFn::Diag), ("eye", PrimFn::Eye),
+            ("solve", PrimFn::Solve), ("solveWith", PrimFn::SolveWith),
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
         // Register stream constants
@@ -152,7 +159,7 @@ impl Evaluator {
     }
 
     fn eval_literal(&self, lit: &Literal) -> Value {
-        match lit { Literal::Int(n) => Value::Int(*n), Literal::Float(f) => Value::float(*f), Literal::Char(c) => Value::Char(*c), Literal::String(s) => Value::string(s), Literal::True => Value::Bool(true), Literal::False => Value::Bool(false), Literal::Unit => Value::Unit }
+        match lit { Literal::Int(n) => Value::Int(*n), Literal::Float(f) => Value::float(*f), Literal::Char(c) => Value::Char(*c), Literal::String(s) => Value::string(s), Literal::True => Value::Bool(true), Literal::False => Value::Bool(false), Literal::Unit => Value::Unit, Literal::ImagI(f) => Value::Complex(0.0, *f), Literal::ImagJ(f) => Value::Quaternion(0.0, 0.0, *f, 0.0), Literal::ImagK(f) => Value::Quaternion(0.0, 0.0, 0.0, *f) }
     }
 
     fn eval_binop(&mut self, op: &BinOp, left: &Expr, right: &Expr, env: &Env) -> EvalResult<Value> {
@@ -419,7 +426,42 @@ impl Evaluator {
         else if all_float { Value::Tensor(Rc::new(Tensor { shape, data: crate::value::TensorData::Float(values.iter().map(|v| ordered_float::OrderedFloat(v.coerce_float().unwrap())).collect()) })) }
         else if all_bool { Value::Tensor(Rc::new(Tensor { shape, data: crate::value::TensorData::Bool(values.iter().map(|v| v.as_bool().unwrap()).collect()) })) }
         else if all_char { Value::Tensor(Rc::new(Tensor { shape, data: crate::value::TensorData::Char(values.iter().map(|v| v.as_char().unwrap()).collect()) })) }
-        else { Value::Tensor(Rc::new(Tensor::from_values(shape, values))) }
+        else {
+            // Auto-flatten: if all values are tensors with the same shape and compatible data,
+            // combine into a higher-dimensional tensor (e.g., [[1,2],[3,4]] → shape [2,2])
+            let all_tensor_same_shape = if let Some(Value::Tensor(first)) = values.first() {
+                let s = &first.shape;
+                values.iter().all(|v| matches!(v, Value::Tensor(t) if &t.shape == s))
+            } else { false };
+            if all_tensor_same_shape {
+                let sub_tensors: Vec<&Tensor> = values.iter().map(|v| match v { Value::Tensor(t) => t.as_ref(), _ => unreachable!() }).collect();
+                let sub_shape = &sub_tensors[0].shape;
+                let mut new_shape = shape.clone();
+                new_shape.extend_from_slice(sub_shape);
+                // Try to flatten into typed tensor
+                let all_int = sub_tensors.iter().all(|t| matches!(t.data, crate::value::TensorData::Int(_)));
+                let all_float = sub_tensors.iter().all(|t| matches!(t.data, crate::value::TensorData::Int(_) | crate::value::TensorData::Float(_)));
+                let all_bool = sub_tensors.iter().all(|t| matches!(t.data, crate::value::TensorData::Bool(_)));
+                if all_int {
+                    let data: Vec<i128> = sub_tensors.iter().flat_map(|t| match &t.data { crate::value::TensorData::Int(v) => v.iter().copied(), _ => unreachable!() }).collect();
+                    Value::Tensor(Rc::new(Tensor { shape: new_shape, data: crate::value::TensorData::Int(data) }))
+                } else if all_float {
+                    let data: Vec<ordered_float::OrderedFloat<f64>> = sub_tensors.iter().flat_map(|t| match &t.data {
+                        crate::value::TensorData::Float(v) => v.clone(),
+                        crate::value::TensorData::Int(v) => v.iter().map(|&i| ordered_float::OrderedFloat(i as f64)).collect(),
+                        _ => unreachable!()
+                    }).collect();
+                    Value::Tensor(Rc::new(Tensor { shape: new_shape, data: crate::value::TensorData::Float(data) }))
+                } else if all_bool {
+                    let data: Vec<bool> = sub_tensors.iter().flat_map(|t| match &t.data { crate::value::TensorData::Bool(v) => v.iter().copied(), _ => unreachable!() }).collect();
+                    Value::Tensor(Rc::new(Tensor { shape: new_shape, data: crate::value::TensorData::Bool(data) }))
+                } else {
+                    Value::Tensor(Rc::new(Tensor::from_values(shape, values)))
+                }
+            } else {
+                Value::Tensor(Rc::new(Tensor::from_values(shape, values)))
+            }
+        }
     }
 
     fn access_field(&self, val: Value, access: &FieldAccess) -> EvalResult<Value> {
@@ -605,6 +647,10 @@ fn prim_arity(prim: PrimFn) -> usize {
         PrimFn::Print | PrimFn::Write | PrimFn::ReadLine | PrimFn::ReadKey | PrimFn::ReadFile | PrimFn::Sleep => 1,
         PrimFn::Flush | PrimFn::RawModeEnter | PrimFn::RawModeExit => 1,  // Terminal control (take unit)
         PrimFn::Lines | PrimFn::Words | PrimFn::Bytes => 1,  // String splitting (unary)
+        PrimFn::Re | PrimFn::Im | PrimFn::Conj | PrimFn::Arg => 1,  // Complex decomposition
+        PrimFn::Trace | PrimFn::Det | PrimFn::Inv | PrimFn::Diag | PrimFn::Eye => 1,  // Matrix utilities
+        PrimFn::Solve => 2,  // Linear solve (default LU)
+        PrimFn::SolveWith => 3,  // Linear solve with method string
         PrimFn::WriteFile | PrimFn::ReadBytes | PrimFn::WriteBytes => 2,  // Binary I/O takes 2 args
         PrimFn::Fold => 3,  // fold f acc arr
         PrimFn::StrEq | PrimFn::StartsWith | PrimFn::EndsWith | PrimFn::Contains => 2,  // String comparison (binary)

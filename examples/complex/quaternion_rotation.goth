@@ -1,0 +1,6 @@
+# Hamilton's identity: 𝕚 × 𝕛 × 𝕜 = -1
+# Postcondition verifies the result is exactly -1
+
+╭─ main : I64 → ℍ
+│  ⊨ re(₀) = 0.0 - 1.0 ∧ abs(₀ + 1) < 0.0001
+╰─ 𝕚 * 𝕛 * 𝕜

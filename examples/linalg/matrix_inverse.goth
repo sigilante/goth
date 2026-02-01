@@ -1,0 +1,6 @@
+# Compute the inverse of a 2x2 matrix
+# Postcondition: A × A⁻¹ has trace 2 (identity)
+
+╭─ main : I64 → [m][n]F64
+│  ⊨ abs(tr(matmul [[1,2],[3,4]] ₀) - 2.0) < 0.001
+╰─ inv [[1,2],[3,4]]

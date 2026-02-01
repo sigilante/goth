@@ -1,7 +1,7 @@
 //! Primitive operations for Goth
 
 use std::rc::Rc;
-use crate::value::{Value, Tensor, PrimFn};
+use crate::value::{Value, Tensor, TensorData, PrimFn};
 use crate::error::{EvalError, EvalResult};
 use ordered_float::OrderedFloat;
 
@@ -70,6 +70,65 @@ fn multiplicative_unc(a: f64, b: f64, da: f64, db: f64) -> f64 {
         let rb = if b != 0.0 { db / b } else { 0.0 };
         result.abs() * (ra * ra + rb * rb).sqrt()
     }
+}
+
+// ============ Complex arithmetic helpers ============
+
+fn complex_mul(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    (r1 * r2 - i1 * i2, r1 * i2 + i1 * r2)
+}
+
+fn complex_div(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    let denom = r2 * r2 + i2 * i2;
+    ((r1 * r2 + i1 * i2) / denom, (i1 * r2 - r1 * i2) / denom)
+}
+
+fn complex_abs(re: f64, im: f64) -> f64 { (re * re + im * im).sqrt() }
+fn complex_arg(re: f64, im: f64) -> f64 { im.atan2(re) }
+
+fn complex_exp(re: f64, im: f64) -> (f64, f64) {
+    let r = re.exp();
+    (r * im.cos(), r * im.sin())
+}
+
+fn complex_ln(re: f64, im: f64) -> (f64, f64) {
+    (complex_abs(re, im).ln(), complex_arg(re, im))
+}
+
+fn complex_sqrt(re: f64, im: f64) -> (f64, f64) {
+    let r = complex_abs(re, im);
+    let re_out = ((r + re) / 2.0).sqrt();
+    let im_out = ((r - re) / 2.0).sqrt() * if im >= 0.0 { 1.0 } else { -1.0 };
+    (re_out, im_out)
+}
+
+fn complex_sin(re: f64, im: f64) -> (f64, f64) {
+    (re.sin() * im.cosh(), re.cos() * im.sinh())
+}
+
+fn complex_cos(re: f64, im: f64) -> (f64, f64) {
+    (re.cos() * im.cosh(), -(re.sin() * im.sinh()))
+}
+
+fn complex_pow(r1: f64, i1: f64, r2: f64, i2: f64) -> (f64, f64) {
+    let (ln_r, ln_i) = complex_ln(r1, i1);
+    let (mul_r, mul_i) = complex_mul(r2, i2, ln_r, ln_i);
+    complex_exp(mul_r, mul_i)
+}
+
+// ============ Quaternion arithmetic helpers ============
+
+fn quat_mul(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    (
+        a.0*b.0 - a.1*b.1 - a.2*b.2 - a.3*b.3,
+        a.0*b.1 + a.1*b.0 + a.2*b.3 - a.3*b.2,
+        a.0*b.2 - a.1*b.3 + a.2*b.0 + a.3*b.1,
+        a.0*b.3 + a.1*b.2 - a.2*b.1 + a.3*b.0,
+    )
+}
+
+fn quat_norm(q: (f64, f64, f64, f64)) -> f64 {
+    (q.0*q.0 + q.1*q.1 + q.2*q.2 + q.3*q.3).sqrt()
 }
 
 pub fn apply_binop(op: &goth_ast::op::BinOp, left: Value, right: Value) -> EvalResult<Value> {
@@ -334,6 +393,17 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::BitXor => binary_args(&args, bitxor),
         PrimFn::Shl => binary_args(&args, shl),
         PrimFn::Shr => binary_args(&args, shr),
+        PrimFn::Re => unary_args(&args, prim_re),
+        PrimFn::Im => unary_args(&args, prim_im),
+        PrimFn::Conj => unary_args(&args, prim_conj),
+        PrimFn::Arg => unary_args(&args, prim_arg),
+        PrimFn::Trace => unary_args(&args, mat_trace),
+        PrimFn::Det => unary_args(&args, mat_det),
+        PrimFn::Inv => unary_args(&args, mat_inv),
+        PrimFn::Diag => unary_args(&args, mat_diag),
+        PrimFn::Eye => unary_args(&args, mat_eye),
+        PrimFn::Solve => binary_args(&args, mat_solve),
+        PrimFn::SolveWith => ternary_args(&args, mat_solve_with),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -346,6 +416,11 @@ fn unary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Valu
 fn binary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Value, Value) -> EvalResult<Value> {
     if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
     f(args[0].clone(), args[1].clone())
+}
+
+fn ternary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Value, Value, Value) -> EvalResult<Value> {
+    if args.len() != 3 { return Err(EvalError::ArityMismatch { expected: 3, got: args.len() }); }
+    f(args[0].clone(), args[1].clone(), args[2].clone())
 }
 
 fn add(left: Value, right: Value) -> EvalResult<Value> {
@@ -366,6 +441,24 @@ fn add(left: Value, right: Value) -> EvalResult<Value> {
             let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot add {} and Uncertain", left.type_name())))?;
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a + b, db))
+        }
+        // Quaternion + anything (widest first)
+        (Value::Quaternion(w1, i1, j1, k1), _) if right.coerce_quaternion().is_some() => {
+            let (w2, i2, j2, k2) = right.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 + w2, i1 + i2, j1 + j2, k1 + k2))
+        }
+        (_, Value::Quaternion(w2, i2, j2, k2)) if left.coerce_quaternion().is_some() => {
+            let (w1, i1, j1, k1) = left.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 + w2, i1 + i2, j1 + j2, k1 + k2))
+        }
+        // Complex + anything
+        (Value::Complex(r1, i1), _) if right.coerce_complex().is_some() => {
+            let (r2, i2) = right.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 + r2, i1 + i2))
+        }
+        (_, Value::Complex(r2, i2)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 + r2, i1 + i2))
         }
         (Value::Int(a), Value::Int(b)) => a.checked_add(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} + {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 + b.0))),
@@ -399,6 +492,24 @@ fn sub(left: Value, right: Value) -> EvalResult<Value> {
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a - b, db))
         }
+        // Quaternion - anything (widest first)
+        (Value::Quaternion(w1, i1, j1, k1), _) if right.coerce_quaternion().is_some() => {
+            let (w2, i2, j2, k2) = right.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 - w2, i1 - i2, j1 - j2, k1 - k2))
+        }
+        (_, Value::Quaternion(w2, i2, j2, k2)) if left.coerce_quaternion().is_some() => {
+            let (w1, i1, j1, k1) = left.coerce_quaternion().unwrap();
+            Ok(Value::Quaternion(w1 - w2, i1 - i2, j1 - j2, k1 - k2))
+        }
+        // Complex - anything
+        (Value::Complex(r1, i1), _) if right.coerce_complex().is_some() => {
+            let (r2, i2) = right.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 - r2, i1 - i2))
+        }
+        (_, Value::Complex(r2, i2)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            Ok(Value::Complex(r1 - r2, i1 - i2))
+        }
         (Value::Int(a), Value::Int(b)) => a.checked_sub(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} - {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 - b.0))),
         (Value::Int(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(*a as f64 - b.0))),
@@ -428,6 +539,32 @@ fn mul(left: Value, right: Value) -> EvalResult<Value> {
             let a = left.coerce_float().ok_or_else(|| EvalError::type_error_msg(format!("Cannot multiply {} and Uncertain", left.type_name())))?;
             let (b, db) = uncertain_parts(&right).unwrap();
             Ok(make_uncertain(a * b, (a * db).abs()))
+        }
+        // Quaternion × anything (widest first, non-commutative!)
+        (Value::Quaternion(..), _) if right.coerce_quaternion().is_some() => {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let (w, i, j, k) = quat_mul(a, b);
+            Ok(Value::Quaternion(w, i, j, k))
+        }
+        (_, Value::Quaternion(..)) if left.coerce_quaternion().is_some() => {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let (w, i, j, k) = quat_mul(a, b);
+            Ok(Value::Quaternion(w, i, j, k))
+        }
+        // Complex × anything
+        (Value::Complex(..), _) if right.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_mul(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
+        }
+        (_, Value::Complex(..)) if left.coerce_complex().is_some() => {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_mul(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
         }
         (Value::Int(a), Value::Int(b)) => a.checked_mul(*b).map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("{} × {} overflows", a, b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(OrderedFloat(a.0 * b.0))),
@@ -467,6 +604,26 @@ fn div(left: Value, right: Value) -> EvalResult<Value> {
             if b == 0.0 { return Err(EvalError::DivisionByZero); }
             let result = a / b;
             Ok(make_uncertain(result, result.abs() * (db / b).abs()))
+        }
+        // Quaternion / anything: a × conj(b) / |b|²
+        (Value::Quaternion(..), _) | (_, Value::Quaternion(..))
+            if left.coerce_quaternion().is_some() && right.coerce_quaternion().is_some() =>
+        {
+            let a = left.coerce_quaternion().unwrap();
+            let b = right.coerce_quaternion().unwrap();
+            let norm_sq = b.0*b.0 + b.1*b.1 + b.2*b.2 + b.3*b.3;
+            let conj_b = (b.0, -b.1, -b.2, -b.3);
+            let (w, i, j, k) = quat_mul(a, conj_b);
+            Ok(Value::Quaternion(w / norm_sq, i / norm_sq, j / norm_sq, k / norm_sq))
+        }
+        // Complex / anything
+        (Value::Complex(..), _) | (_, Value::Complex(..))
+            if left.coerce_complex().is_some() && right.coerce_complex().is_some() =>
+        {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_div(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
         }
         (Value::Int(a), Value::Int(b)) => if *b == 0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Int(a / b)) },
         (Value::Float(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(a.0 / b.0))) },
@@ -559,6 +716,15 @@ fn pow(left: Value, right: Value) -> EvalResult<Value> {
             let unc = if a > 0.0 { (result * a.ln() * db).abs() } else { 0.0 };
             Ok(make_uncertain(result, unc))
         }
+        // Complex ^ anything: exp(z2 * ln(z1))
+        (Value::Complex(..), _) | (_, Value::Complex(..))
+            if left.coerce_complex().is_some() && right.coerce_complex().is_some() =>
+        {
+            let (r1, i1) = left.coerce_complex().unwrap();
+            let (r2, i2) = right.coerce_complex().unwrap();
+            let (r, i) = complex_pow(r1, i1, r2, i2);
+            Ok(Value::Complex(r, i))
+        }
         (Value::Int(a), Value::Int(b)) => {
             if *b < 0 {
                 Ok(Value::Float(OrderedFloat((*a as f64).powi(*b as i32))))
@@ -589,6 +755,8 @@ fn negate(value: Value) -> EvalResult<Value> {
             let (a, da) = uncertain_parts(&value).unwrap();
             Ok(make_uncertain(-a, da))
         }
+        Value::Quaternion(w, i, j, k) => Ok(Value::Quaternion(-w, -i, -j, -k)),
+        Value::Complex(r, i) => Ok(Value::Complex(-r, -i)),
         Value::Int(n) => n.checked_neg().map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("negation of {} overflows", n))),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(-f.0))),
         Value::Tensor(t) => Ok(Value::Tensor(Rc::new(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into())))))),
@@ -602,6 +770,8 @@ fn abs(value: Value) -> EvalResult<Value> {
             let (a, da) = uncertain_parts(&value).unwrap();
             Ok(make_uncertain(a.abs(), da))
         }
+        Value::Quaternion(w, i, j, k) => Ok(Value::Float(OrderedFloat(quat_norm((w, i, j, k))))),
+        Value::Complex(r, i) => Ok(Value::Float(OrderedFloat(complex_abs(r, i)))),
         Value::Int(n) => Ok(Value::Int(n.abs())),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(f.0.abs()))),
         _ => Err(EvalError::type_error("numeric", &value)),
@@ -610,10 +780,12 @@ fn abs(value: Value) -> EvalResult<Value> {
 
 fn exp(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { let r = a.exp(); return Ok(make_uncertain(r, r * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_exp(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.exp())))
 }
 fn ln(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { if a <= 0.0 { return Err(EvalError::type_error_msg("ln requires positive argument")); } return Ok(make_uncertain(a.ln(), da / a.abs())); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_ln(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f <= 0.0 { Err(EvalError::type_error_msg("ln requires positive argument")) } else { Ok(Value::Float(OrderedFloat(f.ln()))) }
 }
 fn log10(value: Value) -> EvalResult<Value> {
@@ -626,14 +798,24 @@ fn log2(value: Value) -> EvalResult<Value> {
 }
 fn sqrt(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { if a < 0.0 { return Err(EvalError::type_error_msg("sqrt requires non-negative argument")); } let r = a.sqrt(); return Ok(make_uncertain(r, da / (2.0 * r))); }
-    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; if f < 0.0 { Err(EvalError::type_error_msg("sqrt requires non-negative argument")) } else { Ok(Value::Float(OrderedFloat(f.sqrt()))) }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_sqrt(*re, *im); return Ok(Value::Complex(r, i)); }
+    let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+    if f < 0.0 {
+        // sqrt of negative real → complex result
+        let (r, i) = complex_sqrt(f, 0.0);
+        Ok(Value::Complex(r, i))
+    } else {
+        Ok(Value::Float(OrderedFloat(f.sqrt())))
+    }
 }
 fn sin(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.sin(), a.cos().abs() * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_sin(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.sin())))
 }
 fn cos(value: Value) -> EvalResult<Value> {
     if let Some((a, da)) = uncertain_parts(&value) { return Ok(make_uncertain(a.cos(), a.sin().abs() * da)); }
+    if let Value::Complex(re, im) = &value { let (r, i) = complex_cos(*re, *im); return Ok(Value::Complex(r, i)); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(f.cos())))
 }
 fn tan(value: Value) -> EvalResult<Value> {
@@ -680,6 +862,54 @@ fn sign(value: Value) -> EvalResult<Value> {
     // sign is exact: no uncertainty propagation
     if let Some((a, _da)) = uncertain_parts(&value) { return Ok(Value::Float(OrderedFloat(if a > 0.0 { 1.0 } else if a < 0.0 { -1.0 } else { 0.0 }))); }
     let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?; Ok(Value::Float(OrderedFloat(if f > 0.0 { 1.0 } else if f < 0.0 { -1.0 } else { 0.0 })))
+}
+
+// Complex/quaternion decomposition primitives
+fn prim_re(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(w, _, _, _) => Ok(Value::Float(OrderedFloat(*w))),
+        Value::Complex(re, _) => Ok(Value::Float(OrderedFloat(*re))),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(f)))
+        }
+    }
+}
+
+fn prim_im(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(_, i, j, k) => Ok(Value::Tuple(vec![
+            Value::Float(OrderedFloat(*i)),
+            Value::Float(OrderedFloat(*j)),
+            Value::Float(OrderedFloat(*k)),
+        ])),
+        Value::Complex(_, im) => Ok(Value::Float(OrderedFloat(*im))),
+        _ => {
+            let _ = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(0.0)))
+        }
+    }
+}
+
+fn prim_conj(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Quaternion(w, i, j, k) => Ok(Value::Quaternion(*w, -i, -j, -k)),
+        Value::Complex(re, im) => Ok(Value::Complex(*re, -im)),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(f)))
+        }
+    }
+}
+
+fn prim_arg(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Complex(re, im) => Ok(Value::Float(OrderedFloat(complex_arg(*re, *im)))),
+        _ => {
+            let f = value.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &value))?;
+            Ok(Value::Float(OrderedFloat(if f >= 0.0 { 0.0 } else { std::f64::consts::PI })))
+        }
+    }
 }
 
 // Digamma (ψ) function via finite differences for uncertainty propagation.
@@ -1273,5 +1503,322 @@ fn str_contains(str_val: Value, substr_val: Value) -> EvalResult<Value> {
             str_val.type_name(),
             substr_val.type_name()
         ))),
+    }
+}
+
+// ── Matrix utility helpers ──
+
+fn tensor_to_floats(t: &Tensor) -> EvalResult<Vec<f64>> {
+    let n = t.shape.iter().product::<usize>();
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let v = t.get_flat(i).ok_or_else(|| EvalError::shape_mismatch("index out of bounds"))?;
+        out.push(v.coerce_float().ok_or_else(|| EvalError::type_error("numeric", &v))?);
+    }
+    Ok(out)
+}
+
+fn build_float_matrix(m: usize, n: usize, data: Vec<f64>) -> Tensor {
+    Tensor { shape: vec![m, n], data: TensorData::Float(data.into_iter().map(OrderedFloat).collect()) }
+}
+
+fn build_float_vector(data: Vec<f64>) -> Tensor {
+    let len = data.len();
+    Tensor { shape: vec![len], data: TensorData::Float(data.into_iter().map(OrderedFloat).collect()) }
+}
+
+// ── LU decomposition with partial pivoting ──
+
+/// In-place LU decomposition. Returns (pivot_indices, det_sign).
+/// Does NOT error on singular matrices — leaves near-zero pivots for caller to check.
+fn lu_decompose(a: &mut [f64], n: usize) -> (Vec<usize>, f64) {
+    let mut piv: Vec<usize> = (0..n).collect();
+    let mut sign = 1.0;
+    for k in 0..n {
+        // Find pivot
+        let mut max_val = a[k * n + k].abs();
+        let mut max_row = k;
+        for i in (k + 1)..n {
+            let v = a[i * n + k].abs();
+            if v > max_val { max_val = v; max_row = i; }
+        }
+        if max_row != k {
+            // Swap rows k and max_row
+            for j in 0..n { a.swap(k * n + j, max_row * n + j); }
+            piv.swap(k, max_row);
+            sign = -sign;
+        }
+        let pivot = a[k * n + k];
+        if pivot.abs() < 1e-15 { continue; }
+        // Eliminate below
+        for i in (k + 1)..n {
+            let factor = a[i * n + k] / pivot;
+            a[i * n + k] = factor; // Store L factor
+            for j in (k + 1)..n {
+                a[i * n + j] -= factor * a[k * n + j];
+            }
+        }
+    }
+    (piv, sign)
+}
+
+/// Solve Ax = b given LU factorization with pivoting.
+fn lu_solve(lu: &[f64], piv: &[usize], b: &[f64], n: usize) -> Vec<f64> {
+    // Apply permutation
+    let mut x: Vec<f64> = piv.iter().map(|&i| b[i]).collect();
+    // Forward substitution (L * y = Pb, L has 1s on diagonal)
+    for i in 1..n {
+        for j in 0..i {
+            x[i] -= lu[i * n + j] * x[j];
+        }
+    }
+    // Back substitution (U * x = y)
+    for i in (0..n).rev() {
+        for j in (i + 1)..n {
+            x[i] -= lu[i * n + j] * x[j];
+        }
+        x[i] /= lu[i * n + i];
+    }
+    x
+}
+
+// ── QR decomposition (Householder reflections) ──
+
+/// QR decomposition of m×n matrix (m >= n). Returns (Q, R) as flat arrays.
+fn householder_qr(a: &[f64], m: usize, n: usize) -> (Vec<f64>, Vec<f64>) {
+    let mut r = a.to_vec();
+    // Q starts as identity
+    let mut q = vec![0.0; m * m];
+    for i in 0..m { q[i * m + i] = 1.0; }
+
+    let k_max = if m > n { n } else { m };
+    for k in 0..k_max {
+        // Extract column k below diagonal
+        let mut col = vec![0.0; m - k];
+        for i in k..m { col[i - k] = r[i * n + k]; }
+        let col_norm = col.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if col_norm < 1e-15 { continue; }
+
+        // Householder vector
+        let sign = if col[0] >= 0.0 { 1.0 } else { -1.0 };
+        col[0] += sign * col_norm;
+        let v_norm_sq = col.iter().map(|x| x * x).sum::<f64>();
+        if v_norm_sq < 1e-30 { continue; }
+
+        // Apply H = I - 2vv^T/v^Tv to R (columns k..n)
+        for j in k..n {
+            let mut dot = 0.0;
+            for i in k..m { dot += col[i - k] * r[i * n + j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for i in k..m { r[i * n + j] -= factor * col[i - k]; }
+        }
+        // Apply H to Q (all columns)
+        for j in 0..m {
+            let mut dot = 0.0;
+            for i in k..m { dot += col[i - k] * q[i * m + j]; }
+            let factor = 2.0 * dot / v_norm_sq;
+            for i in k..m { q[i * m + j] -= factor * col[i - k]; }
+        }
+    }
+    // Transpose Q (we accumulated H*Q^T, need Q = (H*Q^T)^T)
+    let mut qt = vec![0.0; m * m];
+    for i in 0..m { for j in 0..m { qt[i * m + j] = q[j * m + i]; } }
+    (qt, r)
+}
+
+/// Solve Ax=b via QR. Handles overdetermined (least squares) systems.
+fn qr_solve_impl(a: &[f64], b: &[f64], m: usize, n: usize) -> Vec<f64> {
+    let (q, r) = householder_qr(a, m, n);
+    // Compute Q^T * b
+    let mut qtb = vec![0.0; m];
+    for i in 0..m {
+        for j in 0..m { qtb[i] += q[j * m + i] * b[j]; }
+    }
+    // Back substitution with R (use first n rows/cols)
+    let mut x = vec![0.0; n];
+    for i in (0..n).rev() {
+        x[i] = qtb[i];
+        for j in (i + 1)..n { x[i] -= r[i * n + j] * x[j]; }
+        if r[i * n + i].abs() > 1e-15 { x[i] /= r[i * n + i]; }
+    }
+    x
+}
+
+// ── Matrix primitive implementations ──
+
+fn mat_trace(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("trace requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut sum = 0.0f64;
+            for i in 0..n {
+                sum += t.get(&[i, i]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+            }
+            Ok(Value::Float(OrderedFloat(sum)))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_eye(value: Value) -> EvalResult<Value> {
+    let n = value.as_index().ok_or_else(|| EvalError::type_error("Int", &value))?;
+    if n == 0 { return Err(EvalError::shape_mismatch("eye requires positive size")); }
+    let mut data = vec![0.0f64; n * n];
+    for i in 0..n { data[i * n + i] = 1.0; }
+    Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, data))))
+}
+
+fn mat_diag(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() == 1 {
+                // Vector → diagonal matrix
+                let n = t.shape[0];
+                let mut data = vec![0.0f64; n * n];
+                for i in 0..n {
+                    data[i * n + i] = t.get(&[i]).and_then(|v| v.coerce_float()).unwrap_or(0.0);
+                }
+                Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, data))))
+            } else if t.shape.len() == 2 {
+                // Matrix → diagonal vector
+                let n = t.shape[0].min(t.shape[1]);
+                let mut data = Vec::with_capacity(n);
+                for i in 0..n {
+                    data.push(t.get(&[i, i]).and_then(|v| v.coerce_float()).unwrap_or(0.0));
+                }
+                Ok(Value::Tensor(Rc::new(build_float_vector(data))))
+            } else {
+                Err(EvalError::shape_mismatch("diag requires 1D or 2D tensor"))
+            }
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_det(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("det requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut a = tensor_to_floats(t)?;
+            let (_piv, sign) = lu_decompose(&mut a, n);
+            let product: f64 = (0..n).map(|i| a[i * n + i]).product();
+            Ok(Value::Float(OrderedFloat(sign * product)))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn mat_inv(value: Value) -> EvalResult<Value> {
+    match &value {
+        Value::Tensor(t) => {
+            if t.shape.len() != 2 || t.shape[0] != t.shape[1] {
+                return Err(EvalError::shape_mismatch("inv requires square 2D tensor"));
+            }
+            let n = t.shape[0];
+            let mut a = tensor_to_floats(t)?;
+            let (piv, _sign) = lu_decompose(&mut a, n);
+            // Check singularity
+            for i in 0..n {
+                if a[i * n + i].abs() < 1e-12 {
+                    return Err(EvalError::shape_mismatch("singular matrix: cannot compute inverse"));
+                }
+            }
+            // Solve A * X = I column by column
+            let mut result = vec![0.0f64; n * n];
+            for col in 0..n {
+                let mut e_col = vec![0.0; n];
+                e_col[col] = 1.0;
+                let x = lu_solve(&a, &piv, &e_col, n);
+                for row in 0..n { result[row * n + col] = x[row]; }
+            }
+            Ok(Value::Tensor(Rc::new(build_float_matrix(n, n, result))))
+        }
+        _ => Err(EvalError::type_error("Tensor", &value)),
+    }
+}
+
+fn solve_lu_impl(a_val: &Value, b_val: &Value) -> EvalResult<Value> {
+    match (a_val, b_val) {
+        (Value::Tensor(at), Value::Tensor(bt)) => {
+            if at.shape.len() != 2 || at.shape[0] != at.shape[1] {
+                return Err(EvalError::shape_mismatch("solve requires square 2D matrix"));
+            }
+            let n = at.shape[0];
+            if bt.shape.len() != 1 || bt.shape[0] != n {
+                return Err(EvalError::shape_mismatch(format!(
+                    "solve dimension mismatch: {}×{} matrix vs length-{} vector",
+                    n, n, bt.shape[0]
+                )));
+            }
+            let mut a = tensor_to_floats(at)?;
+            let b = tensor_to_floats(bt)?;
+            let (piv, _sign) = lu_decompose(&mut a, n);
+            for i in 0..n {
+                if a[i * n + i].abs() < 1e-12 {
+                    return Err(EvalError::shape_mismatch("singular matrix: cannot solve"));
+                }
+            }
+            let x = lu_solve(&a, &piv, &b, n);
+            Ok(Value::Tensor(Rc::new(build_float_vector(x))))
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "solve requires (Tensor, Tensor), got ({}, {})",
+            a_val.type_name(), b_val.type_name()
+        ))),
+    }
+}
+
+fn solve_qr_impl(a_val: &Value, b_val: &Value) -> EvalResult<Value> {
+    match (a_val, b_val) {
+        (Value::Tensor(at), Value::Tensor(bt)) => {
+            if at.shape.len() != 2 {
+                return Err(EvalError::shape_mismatch("solveWith(qr) requires 2D matrix"));
+            }
+            let m = at.shape[0];
+            let n = at.shape[1];
+            if m < n {
+                return Err(EvalError::shape_mismatch("solveWith(qr) requires m >= n (not underdetermined)"));
+            }
+            if bt.shape.len() != 1 || bt.shape[0] != m {
+                return Err(EvalError::shape_mismatch(format!(
+                    "solveWith(qr) dimension mismatch: {}×{} matrix vs length-{} vector",
+                    m, n, bt.shape[0]
+                )));
+            }
+            let a = tensor_to_floats(at)?;
+            let b = tensor_to_floats(bt)?;
+            let x = qr_solve_impl(&a, &b, m, n);
+            Ok(Value::Tensor(Rc::new(build_float_vector(x))))
+        }
+        _ => Err(EvalError::type_error_msg(format!(
+            "solveWith requires (Tensor, Tensor, String), got ({}, {})",
+            a_val.type_name(), b_val.type_name()
+        ))),
+    }
+}
+
+fn mat_solve(a_val: Value, b_val: Value) -> EvalResult<Value> {
+    solve_lu_impl(&a_val, &b_val)
+}
+
+fn mat_solve_with(a_val: Value, b_val: Value, method_val: Value) -> EvalResult<Value> {
+    let method_str = match &method_val {
+        Value::Tensor(t) => t.to_string_value()
+            .ok_or_else(|| EvalError::type_error_msg("solveWith: third argument must be a method string"))?,
+        _ => return Err(EvalError::type_error_msg(format!(
+            "solveWith: third argument must be a string, got {}",
+            method_val.type_name()
+        ))),
+    };
+    match method_str.as_str() {
+        "lu" => solve_lu_impl(&a_val, &b_val),
+        "qr" => solve_qr_impl(&a_val, &b_val),
+        other => Err(EvalError::not_implemented(format!("solve method '{}' (available: lu, qr)", other))),
     }
 }

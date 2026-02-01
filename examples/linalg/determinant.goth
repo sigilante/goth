@@ -1,0 +1,6 @@
+# Determinant of a 3x3 matrix
+# Postcondition verifies the known value
+
+╭─ main : I64 → F64
+│  ⊨ abs(₀ + 306.0) < 0.001
+╰─ det [[6,1,1],[4,0-2,5],[2,8,7]]

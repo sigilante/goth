@@ -1206,4 +1206,634 @@ mod tests {
             _ => panic!("Expected tensors"),
         }
     }
+
+    // ============ Complex / Quaternion Foundation Tests ============
+
+    #[test]
+    fn test_complex_literal_i() {
+        let expr = Expr::Lit(Literal::ImagI(3.0));
+        assert_eq!(eval(&expr).unwrap(), Value::Complex(0.0, 3.0));
+    }
+
+    #[test]
+    fn test_complex_literal_j() {
+        let expr = Expr::Lit(Literal::ImagJ(2.0));
+        assert_eq!(eval(&expr).unwrap(), Value::Quaternion(0.0, 0.0, 2.0, 0.0));
+    }
+
+    #[test]
+    fn test_complex_literal_k() {
+        let expr = Expr::Lit(Literal::ImagK(5.0));
+        assert_eq!(eval(&expr).unwrap(), Value::Quaternion(0.0, 0.0, 0.0, 5.0));
+    }
+
+    #[test]
+    fn test_complex_display() {
+        assert_eq!(format!("{}", Value::Complex(3.0, 4.0)), "3 + 4𝕚");
+        assert_eq!(format!("{}", Value::Complex(3.0, -4.0)), "3 - 4𝕚");
+        assert_eq!(format!("{}", Value::Complex(0.0, 1.0)), "1𝕚");
+        assert_eq!(format!("{}", Value::Complex(5.0, 0.0)), "5");
+        assert_eq!(format!("{}", Value::Complex(0.0, 0.0)), "0");
+    }
+
+    #[test]
+    fn test_complex_type_name() {
+        assert_eq!(Value::Complex(1.0, 2.0).type_name(), "Complex");
+        assert_eq!(Value::Quaternion(1.0, 0.0, 0.0, 0.0).type_name(), "Quaternion");
+    }
+
+    #[test]
+    fn test_complex_is_numeric() {
+        assert!(Value::Complex(1.0, 2.0).is_numeric());
+        assert!(Value::Quaternion(1.0, 0.0, 0.0, 0.0).is_numeric());
+    }
+
+    #[test]
+    fn test_complex_deep_eq() {
+        assert!(Value::Complex(1.0, 2.0).deep_eq(&Value::Complex(1.0, 2.0)));
+        assert!(!Value::Complex(1.0, 2.0).deep_eq(&Value::Complex(1.0, 3.0)));
+        assert!(Value::Quaternion(1.0, 2.0, 3.0, 4.0).deep_eq(&Value::Quaternion(1.0, 2.0, 3.0, 4.0)));
+        assert!(!Value::Quaternion(1.0, 2.0, 3.0, 4.0).deep_eq(&Value::Quaternion(1.0, 2.0, 3.0, 5.0)));
+    }
+
+    #[test]
+    fn test_complex_coerce_float() {
+        assert_eq!(Value::Complex(3.0, 0.0).coerce_float(), Some(3.0));
+        assert_eq!(Value::Complex(3.0, 1.0).coerce_float(), None);
+    }
+
+    #[test]
+    fn test_complex_coerce_complex() {
+        assert_eq!(Value::Int(5).coerce_complex(), Some((5.0, 0.0)));
+        assert_eq!(Value::float(3.14).coerce_complex(), Some((3.14, 0.0)));
+        assert_eq!(Value::Complex(1.0, 2.0).coerce_complex(), Some((1.0, 2.0)));
+    }
+
+    #[test]
+    fn test_quaternion_coerce() {
+        assert_eq!(Value::Int(5).coerce_quaternion(), Some((5.0, 0.0, 0.0, 0.0)));
+        assert_eq!(Value::Complex(1.0, 2.0).coerce_quaternion(), Some((1.0, 2.0, 0.0, 0.0)));
+        assert_eq!(Value::Quaternion(1.0, 2.0, 3.0, 4.0).coerce_quaternion(), Some((1.0, 2.0, 3.0, 4.0)));
+    }
+
+    // ── Phase 3: Complex + Quaternion arithmetic ──
+
+    fn assert_complex_approx(result: &Value, re: f64, im: f64, tol: f64, label: &str) {
+        match result {
+            Value::Complex(r, i) => {
+                assert!((*r - re).abs() < tol, "{}: re = {}, expected {}", label, r, re);
+                assert!((*i - im).abs() < tol, "{}: im = {}, expected {}", label, i, im);
+            }
+            other => panic!("{}: expected Complex, got {:?}", label, other),
+        }
+    }
+
+    fn assert_quat_approx(result: &Value, w: f64, i: f64, j: f64, k: f64, tol: f64, label: &str) {
+        match result {
+            Value::Quaternion(rw, ri, rj, rk) => {
+                assert!((*rw - w).abs() < tol, "{}: w = {}, expected {}", label, rw, w);
+                assert!((*ri - i).abs() < tol, "{}: i = {}, expected {}", label, ri, i);
+                assert!((*rj - j).abs() < tol, "{}: j = {}, expected {}", label, rj, j);
+                assert!((*rk - k).abs() < tol, "{}: k = {}, expected {}", label, rk, k);
+            }
+            other => panic!("{}: expected Quaternion, got {:?}", label, other),
+        }
+    }
+
+    #[test]
+    fn test_complex_add() {
+        // (3+4i) + (1+2i) = 4+6i
+        let expr = Expr::add(
+            Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))),
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 4.0, 6.0, 1e-10, "complex add");
+    }
+
+    #[test]
+    fn test_complex_sub() {
+        // (3+4i) - (1+2i) = 2+2i
+        let expr = Expr::sub(
+            Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))),
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 2.0, 2.0, 1e-10, "complex sub");
+    }
+
+    #[test]
+    fn test_complex_mul() {
+        // (3+4i)(1+2i) = 3*1 - 4*2 + (3*2 + 4*1)i = -5+10i
+        let expr = Expr::mul(
+            Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))),
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), -5.0, 10.0, 1e-10, "complex mul");
+    }
+
+    #[test]
+    fn test_complex_mul_i_squared() {
+        // i * i = -1
+        let expr = Expr::mul(
+            Expr::lit(Literal::ImagI(1.0)),
+            Expr::lit(Literal::ImagI(1.0)),
+        );
+        let result = eval(&expr).unwrap();
+        assert_complex_approx(&result, -1.0, 0.0, 1e-10, "i*i");
+    }
+
+    #[test]
+    fn test_complex_div() {
+        // (3+4i)/(1+2i) = (3+8+4-6i)/(1+4) = (11-2i)/5 = 2.2-0.4i
+        let expr = Expr::div(
+            Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))),
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 2.2, -0.4, 1e-10, "complex div");
+    }
+
+    #[test]
+    fn test_complex_abs() {
+        // |3+4i| = 5.0
+        let expr = Expr::UnaryOp(
+            UnaryOp::Abs,
+            Box::new(Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0)))),
+        );
+        assert_eq!(eval(&expr).unwrap(), Value::float(5.0));
+    }
+
+    #[test]
+    fn test_complex_negate() {
+        // -(3+4i) = -3-4i
+        let expr = Expr::UnaryOp(
+            UnaryOp::Neg,
+            Box::new(Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0)))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), -3.0, -4.0, 1e-10, "complex negate");
+    }
+
+    #[test]
+    fn test_complex_auto_promote() {
+        // 5 + 3i = Complex(5, 3)
+        let expr = Expr::add(Expr::int(5), Expr::lit(Literal::ImagI(3.0)));
+        assert_complex_approx(&eval(&expr).unwrap(), 5.0, 3.0, 1e-10, "auto-promote");
+    }
+
+    #[test]
+    fn test_complex_exp_euler() {
+        // exp(πi) ≈ -1 + 0i
+        let pi = std::f64::consts::PI;
+        let expr = Expr::UnaryOp(
+            UnaryOp::Exp,
+            Box::new(Expr::lit(Literal::ImagI(pi))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), -1.0, 0.0, 1e-10, "euler identity");
+    }
+
+    #[test]
+    fn test_complex_sin() {
+        // sin(i) = i·sinh(1)
+        let expr = Expr::UnaryOp(
+            UnaryOp::Sin,
+            Box::new(Expr::lit(Literal::ImagI(1.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 0.0, 1.0_f64.sinh(), 1e-10, "sin(i)");
+    }
+
+    #[test]
+    fn test_complex_cos() {
+        // cos(i) = cosh(1)
+        let expr = Expr::UnaryOp(
+            UnaryOp::Cos,
+            Box::new(Expr::lit(Literal::ImagI(1.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 1.0_f64.cosh(), 0.0, 1e-10, "cos(i)");
+    }
+
+    #[test]
+    fn test_complex_ln() {
+        // ln(i) = πi/2
+        let expr = Expr::UnaryOp(
+            UnaryOp::Ln,
+            Box::new(Expr::lit(Literal::ImagI(1.0))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 0.0, std::f64::consts::FRAC_PI_2, 1e-10, "ln(i)");
+    }
+
+    #[test]
+    fn test_complex_sqrt_negative() {
+        // sqrt(-4) = 2i
+        let expr = Expr::UnaryOp(
+            UnaryOp::Sqrt,
+            Box::new(Expr::UnaryOp(UnaryOp::Neg, Box::new(Expr::int(4)))),
+        );
+        assert_complex_approx(&eval(&expr).unwrap(), 0.0, 2.0, 1e-10, "sqrt(-4)");
+    }
+
+    #[test]
+    fn test_quaternion_ij_eq_k() {
+        // i × j = k
+        let expr = Expr::mul(
+            Expr::lit(Literal::ImagI(1.0)),
+            Expr::lit(Literal::ImagJ(1.0)),
+        );
+        assert_quat_approx(&eval(&expr).unwrap(), 0.0, 0.0, 0.0, 1.0, 1e-10, "i*j=k");
+    }
+
+    #[test]
+    fn test_quaternion_ji_eq_neg_k() {
+        // j × i = -k
+        let expr = Expr::mul(
+            Expr::lit(Literal::ImagJ(1.0)),
+            Expr::lit(Literal::ImagI(1.0)),
+        );
+        assert_quat_approx(&eval(&expr).unwrap(), 0.0, 0.0, 0.0, -1.0, 1e-10, "j*i=-k");
+    }
+
+    #[test]
+    fn test_quaternion_jk_eq_i() {
+        // j × k = i
+        let expr = Expr::mul(
+            Expr::lit(Literal::ImagJ(1.0)),
+            Expr::lit(Literal::ImagK(1.0)),
+        );
+        assert_quat_approx(&eval(&expr).unwrap(), 0.0, 1.0, 0.0, 0.0, 1e-10, "j*k=i");
+    }
+
+    #[test]
+    fn test_quaternion_ijk_eq_neg1() {
+        // i × j × k = -1
+        let expr = Expr::mul(
+            Expr::mul(
+                Expr::lit(Literal::ImagI(1.0)),
+                Expr::lit(Literal::ImagJ(1.0)),
+            ),
+            Expr::lit(Literal::ImagK(1.0)),
+        );
+        assert_quat_approx(&eval(&expr).unwrap(), -1.0, 0.0, 0.0, 0.0, 1e-10, "ijk=-1");
+    }
+
+    #[test]
+    fn test_quaternion_add() {
+        // (1+2i+3j+4k) + (5+6i+7j+8k) = 6+8i+10j+12k
+        let q1 = Expr::add(
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+            Expr::add(Expr::lit(Literal::ImagJ(3.0)), Expr::lit(Literal::ImagK(4.0))),
+        );
+        let q2 = Expr::add(
+            Expr::add(Expr::int(5), Expr::lit(Literal::ImagI(6.0))),
+            Expr::add(Expr::lit(Literal::ImagJ(7.0)), Expr::lit(Literal::ImagK(8.0))),
+        );
+        let expr = Expr::add(q1, q2);
+        assert_quat_approx(&eval(&expr).unwrap(), 6.0, 8.0, 10.0, 12.0, 1e-10, "quat add");
+    }
+
+    #[test]
+    fn test_quaternion_norm() {
+        // |1+2i+3j+4k| = √(1+4+9+16) = √30
+        let q = Expr::add(
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+            Expr::add(Expr::lit(Literal::ImagJ(3.0)), Expr::lit(Literal::ImagK(4.0))),
+        );
+        let expr = Expr::UnaryOp(UnaryOp::Abs, Box::new(q));
+        assert_eq!(eval(&expr).unwrap(), Value::float(30.0_f64.sqrt()));
+    }
+
+    // ── Phase 4: re, im, conj, arg primitives ──
+
+    #[test]
+    fn test_re_complex() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("re"), Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(3.0));
+    }
+
+    #[test]
+    fn test_im_complex() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("im"), Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(4.0));
+    }
+
+    #[test]
+    fn test_conj_complex() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("conj"), Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0))));
+        assert_complex_approx(&e.eval(&expr).unwrap(), 3.0, -4.0, 1e-10, "conj(3+4i)");
+    }
+
+    #[test]
+    fn test_arg_complex() {
+        let mut e = Evaluator::new();
+        // arg(i) = π/2
+        let expr = Expr::app(Expr::name("arg"), Expr::lit(Literal::ImagI(1.0)));
+        assert_approx(
+            match e.eval(&expr).unwrap() { Value::Float(f) => f.0, v => panic!("expected Float, got {:?}", v) },
+            std::f64::consts::FRAC_PI_2, 1e-10, "arg(i)"
+        );
+    }
+
+    #[test]
+    fn test_conj_quaternion() {
+        let mut e = Evaluator::new();
+        let q = Expr::add(
+            Expr::add(Expr::int(1), Expr::lit(Literal::ImagI(2.0))),
+            Expr::add(Expr::lit(Literal::ImagJ(3.0)), Expr::lit(Literal::ImagK(4.0))),
+        );
+        let expr = Expr::app(Expr::name("conj"), q);
+        assert_quat_approx(&e.eval(&expr).unwrap(), 1.0, -2.0, -3.0, -4.0, 1e-10, "conj(quat)");
+    }
+
+    #[test]
+    fn test_re_of_real() {
+        let mut e = Evaluator::new();
+        assert_eq!(e.eval(&Expr::app(Expr::name("re"), Expr::float(5.0))).unwrap(), Value::float(5.0));
+    }
+
+    #[test]
+    fn test_conj_of_real() {
+        let mut e = Evaluator::new();
+        assert_eq!(e.eval(&Expr::app(Expr::name("conj"), Expr::float(5.0))).unwrap(), Value::float(5.0));
+    }
+
+    #[test]
+    fn test_z_times_conj_z() {
+        // z × conj(z) = |z|² (real)
+        let mut e = Evaluator::new();
+        let z = Expr::add(Expr::int(3), Expr::lit(Literal::ImagI(4.0)));
+        let conj_z = Expr::app(Expr::name("conj"), z.clone());
+        let expr = Expr::mul(z, conj_z);
+        // 3² + 4² = 25, should be Complex(25, 0)
+        assert_complex_approx(&e.eval(&expr).unwrap(), 25.0, 0.0, 1e-10, "z*conj(z)");
+    }
+
+    // ── Matrix utility tests ──
+
+    fn mat2x2(a: f64, b: f64, c: f64, d: f64) -> Expr {
+        Expr::array(vec![
+            Expr::array(vec![Expr::float(a), Expr::float(b)]),
+            Expr::array(vec![Expr::float(c), Expr::float(d)]),
+        ])
+    }
+
+    fn mat3x3(vals: [f64; 9]) -> Expr {
+        Expr::array(vec![
+            Expr::array(vec![Expr::float(vals[0]), Expr::float(vals[1]), Expr::float(vals[2])]),
+            Expr::array(vec![Expr::float(vals[3]), Expr::float(vals[4]), Expr::float(vals[5])]),
+            Expr::array(vec![Expr::float(vals[6]), Expr::float(vals[7]), Expr::float(vals[8])]),
+        ])
+    }
+
+    fn vec_expr(vals: &[f64]) -> Expr {
+        Expr::array(vals.iter().map(|&v| Expr::float(v)).collect())
+    }
+
+    fn assert_tensor_float(result: &Value, idx: &[usize], expected: f64, tol: f64, label: &str) {
+        match result {
+            Value::Tensor(t) => {
+                let v = t.get(idx).unwrap_or_else(|| panic!("{}: index {:?} out of bounds", label, idx));
+                let f = v.coerce_float().unwrap_or_else(|| panic!("{}: not numeric at {:?}", label, idx));
+                assert!((f - expected).abs() < tol, "{}: at {:?} got {}, expected {}", label, idx, f, expected);
+            }
+            other => panic!("{}: expected Tensor, got {:?}", label, other),
+        }
+    }
+
+    // Phase 1: trace + eye
+
+    #[test]
+    fn test_trace_general() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("trace"), mat2x2(1.0, 2.0, 3.0, 4.0));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(5.0));
+    }
+
+    #[test]
+    fn test_trace_identity_3x3() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(Expr::name("trace"), Expr::app(Expr::name("eye"), Expr::int(3)));
+        assert_eq!(e.eval(&expr).unwrap(), Value::float(3.0));
+    }
+
+    #[test]
+    fn test_trace_non_square_error() {
+        let mut e = Evaluator::new();
+        let mat = Expr::array(vec![
+            Expr::array(vec![Expr::float(1.0), Expr::float(2.0), Expr::float(3.0)]),
+            Expr::array(vec![Expr::float(4.0), Expr::float(5.0), Expr::float(6.0)]),
+        ]);
+        assert!(e.eval(&Expr::app(Expr::name("trace"), mat)).is_err());
+    }
+
+    #[test]
+    fn test_eye_3() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("eye"), Expr::int(3))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![3, 3]);
+            for i in 0..3 { for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert_eq!(t.get(&[i, j]).unwrap().coerce_float().unwrap(), expected);
+            }}
+        } else { panic!("Expected tensor"); }
+    }
+
+    #[test]
+    fn test_eye_1() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("eye"), Expr::int(1))).unwrap();
+        assert_tensor_float(&result, &[0, 0], 1.0, 1e-15, "eye(1)");
+    }
+
+    // Phase 2: diag
+
+    #[test]
+    fn test_diag_vec_to_matrix() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("diag"), vec_expr(&[1.0, 2.0, 3.0]))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![3, 3]);
+        } else { panic!("Expected tensor"); }
+        assert_tensor_float(&result, &[0, 0], 1.0, 1e-15, "diag[0,0]");
+        assert_tensor_float(&result, &[1, 1], 2.0, 1e-15, "diag[1,1]");
+        assert_tensor_float(&result, &[2, 2], 3.0, 1e-15, "diag[2,2]");
+        assert_tensor_float(&result, &[0, 1], 0.0, 1e-15, "diag[0,1]");
+    }
+
+    #[test]
+    fn test_diag_matrix_to_vec() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("diag"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap();
+        if let Value::Tensor(t) = &result {
+            assert_eq!(t.shape, vec![2]);
+            assert_eq!(t.get(&[0]).unwrap().coerce_float().unwrap(), 1.0);
+            assert_eq!(t.get(&[1]).unwrap().coerce_float().unwrap(), 4.0);
+        } else { panic!("Expected tensor"); }
+    }
+
+    // Phase 3: det
+
+    #[test]
+    fn test_det_2x2() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - (-2.0)).abs() < 1e-10, "det = {}, expected -2", f);
+    }
+
+    #[test]
+    fn test_det_3x3() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat3x3([6.0,1.0,1.0, 4.0,-2.0,5.0, 2.0,8.0,7.0]))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - (-306.0)).abs() < 1e-8, "det = {}, expected -306", f);
+    }
+
+    #[test]
+    fn test_det_identity() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), Expr::app(Expr::name("eye"), Expr::int(3)))).unwrap()
+            .coerce_float().unwrap();
+        assert!((f - 1.0).abs() < 1e-12, "det(I) = {}, expected 1", f);
+    }
+
+    #[test]
+    fn test_det_singular() {
+        let mut e = Evaluator::new();
+        let f = e.eval(&Expr::app(Expr::name("det"), mat2x2(1.0, 2.0, 2.0, 4.0))).unwrap()
+            .coerce_float().unwrap();
+        assert!(f.abs() < 1e-10, "det(singular) = {}, expected 0", f);
+    }
+
+    // Phase 4: inv
+
+    #[test]
+    fn test_inv_2x2() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("inv"), mat2x2(1.0, 2.0, 3.0, 4.0))).unwrap();
+        let tol = 1e-10;
+        assert_tensor_float(&result, &[0, 0], -2.0, tol, "inv[0,0]");
+        assert_tensor_float(&result, &[0, 1], 1.0, tol, "inv[0,1]");
+        assert_tensor_float(&result, &[1, 0], 1.5, tol, "inv[1,0]");
+        assert_tensor_float(&result, &[1, 1], -0.5, tol, "inv[1,1]");
+    }
+
+    #[test]
+    fn test_inv_identity() {
+        let mut e = Evaluator::new();
+        let result = e.eval(&Expr::app(Expr::name("inv"), Expr::app(Expr::name("eye"), Expr::int(3)))).unwrap();
+        for i in 0..3 { for j in 0..3 {
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert_tensor_float(&result, &[i, j], expected, 1e-10, &format!("inv(I)[{},{}]", i, j));
+        }}
+    }
+
+    #[test]
+    fn test_inv_singular_error() {
+        let mut e = Evaluator::new();
+        assert!(e.eval(&Expr::app(Expr::name("inv"), mat2x2(1.0, 2.0, 2.0, 4.0))).is_err());
+    }
+
+    #[test]
+    fn test_inv_roundtrip() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let inv_a = Expr::app(Expr::name("inv"), a.clone());
+        let product = Expr::app(Expr::app(Expr::name("matmul"), a), inv_a);
+        let result = e.eval(&product).unwrap();
+        for i in 0..2 { for j in 0..2 {
+            let expected = if i == j { 1.0 } else { 0.0 };
+            assert_tensor_float(&result, &[i, j], expected, 1e-10, &format!("A*inv(A)[{},{}]", i, j));
+        }}
+    }
+
+    // Phase 5: solve
+
+    #[test]
+    fn test_solve_2x2() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let result = e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-10, "x[1]");
+    }
+
+    #[test]
+    fn test_solve_3x3() {
+        let mut e = Evaluator::new();
+        let a = mat3x3([1.0,1.0,1.0, 0.0,2.0,5.0, 2.0,5.0,-1.0]);
+        let b = vec_expr(&[6.0, -4.0, 27.0]);
+        let result = e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "x[0]");
+        assert_tensor_float(&result, &[1], 3.0, 1e-10, "x[1]");
+        assert_tensor_float(&result, &[2], -2.0, 1e-10, "x[2]");
+    }
+
+    #[test]
+    fn test_solve_singular_error() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 2.0, 2.0, 4.0);
+        let b = vec_expr(&[1.0, 2.0]);
+        assert!(e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).is_err());
+    }
+
+    #[test]
+    fn test_solve_dimension_mismatch() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 2.0, 3.0, 4.0);
+        let b = vec_expr(&[1.0, 2.0, 3.0]);
+        assert!(e.eval(&Expr::app(Expr::app(Expr::name("solve"), a), b)).is_err());
+    }
+
+    // Phase 6: solveWith + QR
+
+    #[test]
+    fn test_solve_with_lu_explicit() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let method = Expr::Lit(Literal::string("lu"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-10, "lu x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-10, "lu x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_qr() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(2.0, 1.0, 5.0, 3.0);
+        let b = vec_expr(&[4.0, 7.0]);
+        let method = Expr::Lit(Literal::string("qr"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 5.0, 1e-8, "qr x[0]");
+        assert_tensor_float(&result, &[1], -6.0, 1e-8, "qr x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_qr_overdetermined() {
+        let mut e = Evaluator::new();
+        let a = Expr::array(vec![
+            Expr::array(vec![Expr::float(1.0), Expr::float(1.0)]),
+            Expr::array(vec![Expr::float(1.0), Expr::float(2.0)]),
+            Expr::array(vec![Expr::float(1.0), Expr::float(3.0)]),
+        ]);
+        let b = vec_expr(&[1.0, 2.0, 2.0]);
+        let method = Expr::Lit(Literal::string("qr"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        let result = e.eval(&expr).unwrap();
+        assert_tensor_float(&result, &[0], 2.0 / 3.0, 1e-8, "lstsq x[0]");
+        assert_tensor_float(&result, &[1], 0.5, 1e-8, "lstsq x[1]");
+    }
+
+    #[test]
+    fn test_solve_with_unknown_method() {
+        let mut e = Evaluator::new();
+        let a = mat2x2(1.0, 0.0, 0.0, 1.0);
+        let b = vec_expr(&[1.0, 2.0]);
+        let method = Expr::Lit(Literal::string("nonsense"));
+        let expr = Expr::app(Expr::app(Expr::app(Expr::name("solveWith"), a), b), method);
+        assert!(e.eval(&expr).is_err());
+    }
 }

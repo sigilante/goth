@@ -1,0 +1,6 @@
+# Euler's identity: e^(π𝕚) + 1 ≈ 0
+# Postcondition verifies the result is near zero
+
+╭─ main : I64 → ℂ
+│  ⊨ abs(₀) < 0.0001
+╰─ exp(π * 𝕚) + 1
