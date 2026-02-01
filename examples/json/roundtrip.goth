@@ -1,0 +1,18 @@
+# JSON Roundtrip Example
+# Parse JSON, serialize back, and compare
+use "../../stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let input = "{\"a\":1,\"b\":[2,3],\"c\":{\"d\":true},\"e\":null,\"f\":\"hello\\nworld\"}"
+   in let r1 = parseJson input
+   in if ¬(r1.0) then "Parse error: " ⧺ r1.2
+   else let serialized = toJson r1.1
+   in let r2 = parseJson serialized
+   in if ¬(r2.0) then "Re-parse error: " ⧺ r2.2
+   else let serialized2 = toJson r2.1
+   in "Input:      " ⧺ input ⧺ "\n"
+      ⧺ "Serialized: " ⧺ serialized ⧺ "\n"
+      ⧺ "Re-serial:  " ⧺ serialized2 ⧺ "\n"
+      ⧺ if strEq serialized serialized2
+        then "Roundtrip: PASS"
+        else "Roundtrip: FAIL"
