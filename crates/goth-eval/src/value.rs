@@ -13,11 +13,11 @@ pub enum Value {
     Bool(bool),
     Char(char),
     Unit,
-    Tensor(Tensor),
+    Tensor(Rc<Tensor>),
     Tuple(Vec<Value>),
     Record(Rc<HashMap<String, Value>>),
     Variant { tag: String, payload: Option<Box<Value>> },
-    Closure(Closure),
+    Closure(Rc<Closure>),
     Primitive(PrimFn),
     Partial { func: Box<Value>, args: Vec<Value>, remaining: usize },
     Thunk(Thunk),
@@ -97,7 +97,7 @@ impl Value {
     pub fn bool(b: bool) -> Self { Value::Bool(b) }
     pub fn char(c: char) -> Self { Value::Char(c) }
     pub fn unit() -> Self { Value::Unit }
-    pub fn string(s: &str) -> Self { Value::Tensor(Tensor::from_string(s)) }
+    pub fn string(s: &str) -> Self { Value::Tensor(Rc::new(Tensor::from_string(s))) }
     pub fn tuple(values: Vec<Value>) -> Self {
         if values.is_empty() { Value::Unit } else { Value::Tuple(values) }
     }
@@ -106,10 +106,10 @@ impl Value {
     }
     pub fn error(msg: impl Into<String>) -> Self { Value::Error(msg.into()) }
     pub fn closure(arity: u32, body: goth_ast::expr::Expr, env: Env) -> Self {
-        Value::Closure(Closure { arity, body, env, preconditions: vec![], postconditions: vec![] })
+        Value::Closure(Rc::new(Closure { arity, body, env, preconditions: vec![], postconditions: vec![] }))
     }
     pub fn closure_with_contracts(arity: u32, body: goth_ast::expr::Expr, env: Env, preconditions: Vec<goth_ast::expr::Expr>, postconditions: Vec<goth_ast::expr::Expr>) -> Self {
-        Value::Closure(Closure { arity, body, env, preconditions, postconditions })
+        Value::Closure(Rc::new(Closure { arity, body, env, preconditions, postconditions }))
     }
     pub fn primitive(prim: PrimFn) -> Self { Value::Primitive(prim) }
 

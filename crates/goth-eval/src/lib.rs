@@ -15,6 +15,7 @@ pub mod prelude {
 mod tests {
     use super::prelude::*;
     use goth_ast::prelude::*;
+    use std::rc::Rc;
 
     #[test] fn test_int_literal() { assert_eq!(eval(&Expr::int(42)).unwrap(), Value::Int(42)); }
     #[test] fn test_float_literal() { assert_eq!(eval(&Expr::float(3.14)).unwrap(), Value::float(3.14)); }
@@ -1057,5 +1058,152 @@ mod tests {
             _ => panic!("Expected string tensor")
         }
         let _ = fs::remove_file(temp_path);
+    }
+
+    // ============ Rc-wrapping invariant tests ============
+    // These must pass BEFORE and AFTER the Rc-wrapping refactor.
+
+    #[test]
+    fn invariant_tensor_string_roundtrip() {
+        let v = Value::string("hello");
+        match &v {
+            Value::Tensor(t) => assert_eq!(t.to_string_value(), Some("hello".to_string())),
+            _ => panic!("Expected Tensor"),
+        }
+    }
+
+    #[test]
+    fn invariant_tensor_clone_independence() {
+        let v1 = Value::Tensor(Rc::new(Tensor::from_ints(vec![1, 2, 3])));
+        let v2 = v1.clone();
+        assert_eq!(v1, v2);
+    }
+
+    #[test]
+    fn invariant_tensor_deep_eq() {
+        let a = Value::Tensor(Rc::new(Tensor::from_ints(vec![1, 2, 3])));
+        let b = Value::Tensor(Rc::new(Tensor::from_ints(vec![1, 2, 3])));
+        assert!(a.deep_eq(&b));
+    }
+
+    #[test]
+    fn invariant_tensor_as_tensor() {
+        let v = Value::Tensor(Rc::new(Tensor::from_floats(vec![1.0, 2.0])));
+        let t = v.as_tensor().unwrap();
+        assert_eq!(t.shape, vec![2]);
+        assert_eq!(t.len(), 2);
+    }
+
+    #[test]
+    fn invariant_tensor_display() {
+        let v = Value::Tensor(Rc::new(Tensor::from_ints(vec![1, 2, 3])));
+        let s = format!("{}", v);
+        assert!(s.contains("1") && s.contains("2") && s.contains("3"));
+    }
+
+    #[test]
+    fn invariant_concat_strings() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(
+            Expr::app(Expr::name("concat"), Expr::Lit(Literal::String("ab".into()))),
+            Expr::Lit(Literal::String("cd".into())),
+        );
+        let result = e.eval(&expr).unwrap();
+        match &result {
+            Value::Tensor(t) => assert_eq!(t.to_string_value(), Some("abcd".to_string())),
+            _ => panic!("Expected string tensor"),
+        }
+    }
+
+    #[test]
+    fn invariant_concat_int_arrays() {
+        let mut e = Evaluator::new();
+        let expr = Expr::app(
+            Expr::app(
+                Expr::name("concat"),
+                Expr::array(vec![Expr::int(1), Expr::int(2)]),
+            ),
+            Expr::array(vec![Expr::int(3), Expr::int(4)]),
+        );
+        let result = e.eval(&expr).unwrap();
+        match &result {
+            Value::Tensor(t) => {
+                assert_eq!(t.len(), 4);
+                assert_eq!(t.get_flat(0), Some(Value::Int(1)));
+                assert_eq!(t.get_flat(3), Some(Value::Int(4)));
+            }
+            _ => panic!("Expected tensor"),
+        }
+    }
+
+    #[test]
+    fn invariant_closure_apply() {
+        let result = eval(&Expr::app(
+            Expr::lam(Expr::mul(Expr::idx(0), Expr::int(2))),
+            Expr::int(21),
+        )).unwrap();
+        assert_eq!(result, Value::Int(42));
+    }
+
+    #[test]
+    fn invariant_closure_partial_application() {
+        let add_fn = Expr::lam(Expr::lam(Expr::add(Expr::idx(1), Expr::idx(0))));
+        let add5 = Expr::app(add_fn, Expr::int(5));
+        let result = eval(&Expr::app(add5, Expr::int(3))).unwrap();
+        assert_eq!(result, Value::Int(8));
+    }
+
+    #[test]
+    fn invariant_closure_captures_env() {
+        let expr = Expr::let_(
+            Pattern::var("x"), Expr::int(10),
+            Expr::app(Expr::lam(Expr::add(Expr::idx(0), Expr::idx(1))), Expr::int(5)),
+        );
+        assert_eq!(eval(&expr).unwrap(), Value::Int(15));
+    }
+
+    #[test]
+    fn invariant_closure_eq() {
+        let c1 = Value::closure(1, Expr::idx(0), Env::new());
+        let c2 = Value::closure(1, Expr::idx(0), Env::new());
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn invariant_closure_is_callable() {
+        let v = Value::closure(1, Expr::idx(0), Env::new());
+        assert!(v.is_callable());
+    }
+
+    // ============ Rc sharing tests ============
+
+    #[test]
+    fn sharing_closure_clone_shares_rc() {
+        let v1 = Value::closure(1, Expr::idx(0), Env::new());
+        let v2 = v1.clone();
+        match (&v1, &v2) {
+            (Value::Closure(a), Value::Closure(b)) => assert!(Rc::ptr_eq(a, b)),
+            _ => panic!("Expected closures"),
+        }
+    }
+
+    #[test]
+    fn sharing_tensor_clone_shares_rc() {
+        let v1 = Value::Tensor(Rc::new(Tensor::from_ints(vec![1, 2, 3])));
+        let v2 = v1.clone();
+        match (&v1, &v2) {
+            (Value::Tensor(a), Value::Tensor(b)) => assert!(Rc::ptr_eq(a, b)),
+            _ => panic!("Expected tensors"),
+        }
+    }
+
+    #[test]
+    fn sharing_string_value_is_rc_tensor() {
+        let v1 = Value::string("hello");
+        let v2 = v1.clone();
+        match (&v1, &v2) {
+            (Value::Tensor(a), Value::Tensor(b)) => assert!(Rc::ptr_eq(a, b)),
+            _ => panic!("Expected tensors"),
+        }
     }
 }

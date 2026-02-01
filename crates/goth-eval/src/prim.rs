@@ -1,5 +1,6 @@
 //! Primitive operations for Goth
 
+use std::rc::Rc;
 use crate::value::{Value, Tensor, PrimFn};
 use crate::error::{EvalError, EvalResult};
 use ordered_float::OrderedFloat;
@@ -293,7 +294,7 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
             file.read_exact(&mut buf)
                 .map_err(|e| EvalError::IoError(format!("Failed to read {} bytes from '{}': {}", count, path, e)))?;
             let byte_vals: Vec<i128> = buf.iter().map(|&b| b as i128).collect();
-            Ok(Value::Tensor(Tensor::from_ints(byte_vals)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_ints(byte_vals))))
         }
         PrimFn::WriteBytes => {
             if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
@@ -373,10 +374,10 @@ fn add(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Tensor(a), Value::Tensor(b)) => {
             if a.shape != b.shape { return Err(EvalError::shape_mismatch(format!("Cannot add tensors with shapes {:?} and {:?}", a.shape, b.shape))); }
             let result = a.zip_with(b, |x, y| add(x, y).unwrap_or(Value::Error("add failed".into()))).ok_or_else(|| EvalError::shape_mismatch("zip failed"))?;
-            Ok(Value::Tensor(result))
+            Ok(Value::Tensor(Rc::new(result)))
         }
-        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(t.map(|x| add(x, scalar.clone()).unwrap_or(Value::Error("add failed".into()))))),
-        (scalar, Value::Tensor(t)) if scalar.is_numeric() => Ok(Value::Tensor(t.map(|x| add(scalar.clone(), x).unwrap_or(Value::Error("add failed".into()))))),
+        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(Rc::new(t.map(|x| add(x, scalar.clone()).unwrap_or(Value::Error("add failed".into())))))),
+        (scalar, Value::Tensor(t)) if scalar.is_numeric() => Ok(Value::Tensor(Rc::new(t.map(|x| add(scalar.clone(), x).unwrap_or(Value::Error("add failed".into())))))),
         _ => Err(EvalError::type_error_msg(format!("Cannot add {} and {}", left.type_name(), right.type_name()))),
     }
 }
@@ -405,7 +406,7 @@ fn sub(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Tensor(a), Value::Tensor(b)) => {
             if a.shape != b.shape { return Err(EvalError::shape_mismatch("Tensor shapes must match for subtraction")); }
             let result = a.zip_with(b, |x, y| sub(x, y).unwrap_or(Value::Error("sub failed".into()))).ok_or_else(|| EvalError::shape_mismatch("zip failed"))?;
-            Ok(Value::Tensor(result))
+            Ok(Value::Tensor(Rc::new(result)))
         }
         _ => Err(EvalError::type_error_msg(format!("Cannot subtract {} and {}", left.type_name(), right.type_name()))),
     }
@@ -435,10 +436,10 @@ fn mul(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Tensor(a), Value::Tensor(b)) => {
             if a.shape != b.shape { return Err(EvalError::shape_mismatch("Tensor shapes must match for multiplication")); }
             let result = a.zip_with(b, |x, y| mul(x, y).unwrap_or(Value::Error("mul failed".into()))).ok_or_else(|| EvalError::shape_mismatch("zip failed"))?;
-            Ok(Value::Tensor(result))
+            Ok(Value::Tensor(Rc::new(result)))
         }
-        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(t.map(|x| mul(x, scalar.clone()).unwrap_or(Value::Error("mul failed".into()))))),
-        (scalar, Value::Tensor(t)) if scalar.is_numeric() => Ok(Value::Tensor(t.map(|x| mul(scalar.clone(), x).unwrap_or(Value::Error("mul failed".into()))))),
+        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(Rc::new(t.map(|x| mul(x, scalar.clone()).unwrap_or(Value::Error("mul failed".into())))))),
+        (scalar, Value::Tensor(t)) if scalar.is_numeric() => Ok(Value::Tensor(Rc::new(t.map(|x| mul(scalar.clone(), x).unwrap_or(Value::Error("mul failed".into())))))),
         _ => Err(EvalError::type_error_msg(format!("Cannot multiply {} and {}", left.type_name(), right.type_name()))),
     }
 }
@@ -471,7 +472,7 @@ fn div(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Float(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(a.0 / b.0))) },
         (Value::Int(a), Value::Float(b)) => if b.0 == 0.0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(*a as f64 / b.0))) },
         (Value::Float(a), Value::Int(b)) => if *b == 0 { Err(EvalError::DivisionByZero) } else { Ok(Value::Float(OrderedFloat(a.0 / *b as f64))) },
-        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(t.map(|x| div(x, scalar.clone()).unwrap_or(Value::Error("div failed".into()))))),
+        (Value::Tensor(t), scalar) if scalar.is_numeric() => Ok(Value::Tensor(Rc::new(t.map(|x| div(x, scalar.clone()).unwrap_or(Value::Error("div failed".into())))))),
         _ => Err(EvalError::type_error_msg(format!("Cannot divide {} by {}", left.type_name(), right.type_name()))),
     }
 }
@@ -590,7 +591,7 @@ fn negate(value: Value) -> EvalResult<Value> {
         }
         Value::Int(n) => n.checked_neg().map(Value::Int).ok_or_else(|| EvalError::Overflow(format!("negation of {} overflows", n))),
         Value::Float(f) => Ok(Value::Float(OrderedFloat(-f.0))),
-        Value::Tensor(t) => Ok(Value::Tensor(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into()))))),
+        Value::Tensor(t) => Ok(Value::Tensor(Rc::new(t.map(|x| negate(x).unwrap_or(Value::Error("negate failed".into())))))),
         _ => Err(EvalError::type_error("numeric", &value)),
     }
 }
@@ -823,15 +824,15 @@ fn scan(value: Value) -> EvalResult<Value> {
         Value::Tensor(t) => {
             let mut running = Value::Int(0);
             let scanned: Vec<Value> = t.iter().map(|v| { running = add(running.clone(), v).unwrap_or(Value::Error("scan failed".into())); running.clone() }).collect();
-            Ok(Value::Tensor(Tensor::from_values(t.shape.clone(), scanned)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(t.shape.clone(), scanned))))
         }
         _ => Err(EvalError::type_error("Tensor", &value)),
     }
 }
 
 fn len(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => Ok(Value::Int(t.len() as i128)), Value::Tuple(vs) => Ok(Value::Int(vs.len() as i128)), _ => Err(EvalError::type_error("Tensor or Tuple", &value)) } }
-fn shape(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => Ok(Value::Tensor(Tensor::from_ints(t.shape.iter().map(|&d| d as i128).collect()))), _ => Err(EvalError::type_error("Tensor", &value)) } }
-fn reverse(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => { let mut data = t.to_vec(); data.reverse(); Ok(Value::Tensor(Tensor::from_values(t.shape.clone(), data))) } Value::Tuple(mut vs) => { vs.reverse(); Ok(Value::Tuple(vs)) } _ => Err(EvalError::type_error("Tensor or Tuple", &value)) } }
+fn shape(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => Ok(Value::Tensor(Rc::new(Tensor::from_ints(t.shape.iter().map(|&d| d as i128).collect())))), _ => Err(EvalError::type_error("Tensor", &value)) } }
+fn reverse(value: Value) -> EvalResult<Value> { match value { Value::Tensor(t) => { let mut data = t.to_vec(); data.reverse(); Ok(Value::Tensor(Rc::new(Tensor::from_values(t.shape.clone(), data)))) } Value::Tuple(mut vs) => { vs.reverse(); Ok(Value::Tuple(vs)) } _ => Err(EvalError::type_error("Tensor or Tuple", &value)) } }
 
 fn concat(left: Value, right: Value) -> EvalResult<Value> {
     use crate::value::TensorData;
@@ -855,7 +856,7 @@ fn concat(left: Value, right: Value) -> EvalResult<Value> {
                 }
                 _ => { let mut data = a.to_vec(); data.extend(b.iter()); TensorData::Generic(data) }
             };
-            Ok(Value::Tensor(Tensor { shape: vec![new_len], data }))
+            Ok(Value::Tensor(Rc::new(Tensor { shape: vec![new_len], data })))
         }
         (Value::Tuple(a), Value::Tuple(b)) => { let mut result = a.clone(); result.extend(b.iter().cloned()); Ok(Value::Tuple(result)) }
         _ => Err(EvalError::type_error_msg(format!("Cannot concat {} and {}", left.type_name(), right.type_name()))),
@@ -867,7 +868,7 @@ fn zip_with(left: Value, right: Value) -> EvalResult<Value> {
         (Value::Tensor(a), Value::Tensor(b)) => {
             if a.shape != b.shape { return Err(EvalError::shape_mismatch(format!("Cannot zip tensors with shapes {:?} and {:?}", a.shape, b.shape))); }
             let zipped: Vec<Value> = a.iter().zip(b.iter()).map(|(x, y)| Value::Tuple(vec![x, y])).collect();
-            Ok(Value::Tensor(Tensor::from_values(a.shape.clone(), zipped)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(a.shape.clone(), zipped))))
         }
         _ => Err(EvalError::type_error_msg(format!("Cannot zip {} and {}", left.type_name(), right.type_name()))),
     }
@@ -899,7 +900,7 @@ fn matmul(left: Value, right: Value) -> EvalResult<Value> {
             if n != b.shape[0] { return Err(EvalError::shape_mismatch(format!("Matrix dimensions incompatible: [{} {}] × [{} {}]", m, n, b.shape[0], p))); }
             let mut result = vec![Value::Float(OrderedFloat(0.0)); m * p];
             for i in 0..m { for j in 0..p { let mut sum = 0.0f64; for k in 0..n { let a_ik = a.get(&[i, k]).and_then(|v| v.coerce_float()).unwrap_or(0.0); let b_kj = b.get(&[k, j]).and_then(|v| v.coerce_float()).unwrap_or(0.0); sum += a_ik * b_kj; } result[i * p + j] = Value::Float(OrderedFloat(sum)); } }
-            Ok(Value::Tensor(Tensor::from_values(vec![m, p], result)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![m, p], result))))
         }
         _ => Err(EvalError::type_error("Tensor", &left)),
     }
@@ -912,7 +913,7 @@ fn transpose(value: Value) -> EvalResult<Value> {
             let m = t.shape[0]; let n = t.shape[1];
             let mut result = vec![Value::Float(OrderedFloat(0.0)); m * n];
             for i in 0..m { for j in 0..n { if let Some(v) = t.get(&[i, j]) { result[j * m + i] = v; } } }
-            Ok(Value::Tensor(Tensor::from_values(vec![n, m], result)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![n, m], result))))
         }
         _ => Err(EvalError::type_error("Tensor", &value)),
     }
@@ -993,7 +994,7 @@ fn iota(n: Value) -> EvalResult<Value> {
                 return Err(EvalError::type_error_msg("iota requires non-negative integer"));
             }
             let data: Vec<i128> = (0..count).collect();
-            Ok(Value::Tensor(Tensor::from_ints(data)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_ints(data))))
         }
         _ => Err(EvalError::type_error("integer", &n)),
     }
@@ -1004,7 +1005,7 @@ fn range(start: Value, end: Value) -> EvalResult<Value> {
     match (&start, &end) {
         (Value::Int(s), Value::Int(e)) => {
             let data: Vec<i128> = (*s..*e).collect();
-            Ok(Value::Tensor(Tensor::from_ints(data)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_ints(data))))
         }
         _ => Err(EvalError::type_error_msg(format!(
             "range requires two integers, got {} and {}",
@@ -1098,7 +1099,7 @@ fn take(n: Value, arr: Value) -> EvalResult<Value> {
                 return Ok(Value::string(&taken));
             }
             let data: Vec<Value> = (0..count).map(|i| t.get_flat(i).unwrap()).collect();
-            Ok(Value::Tensor(Tensor::from_values(vec![data.len()], data)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![data.len()], data))))
         }
         (Value::Int(count), Value::Tuple(vs)) => {
             let count = (*count).max(0) as usize;
@@ -1128,7 +1129,7 @@ fn drop_fn(n: Value, arr: Value) -> EvalResult<Value> {
                 return Ok(Value::string(&dropped));
             }
             let data: Vec<Value> = (count..t.len()).map(|i| t.get_flat(i).unwrap()).collect();
-            Ok(Value::Tensor(Tensor::from_values(vec![data.len()], data)))
+            Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![data.len()], data))))
         }
         (Value::Int(count), Value::Tuple(vs)) => {
             let count = (*count).max(0) as usize;
@@ -1168,7 +1169,7 @@ fn lines(value: Value) -> EvalResult<Value> {
         Value::Tensor(t) => {
             if let Some(s) = t.to_string_value() {
                 let line_strs: Vec<Value> = s.lines().map(|l| Value::string(l)).collect();
-                Ok(Value::Tensor(Tensor::from_values(vec![line_strs.len()], line_strs)))
+                Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![line_strs.len()], line_strs))))
             } else {
                 Err(EvalError::type_error("String", &Value::Tensor(t)))
             }
@@ -1183,7 +1184,7 @@ fn words(value: Value) -> EvalResult<Value> {
         Value::Tensor(t) => {
             if let Some(s) = t.to_string_value() {
                 let word_strs: Vec<Value> = s.split_whitespace().map(|w| Value::string(w)).collect();
-                Ok(Value::Tensor(Tensor::from_values(vec![word_strs.len()], word_strs)))
+                Ok(Value::Tensor(Rc::new(Tensor::from_values(vec![word_strs.len()], word_strs))))
             } else {
                 Err(EvalError::type_error("String", &Value::Tensor(t)))
             }
@@ -1198,7 +1199,7 @@ fn bytes(value: Value) -> EvalResult<Value> {
         Value::Tensor(t) => {
             if let Some(s) = t.to_string_value() {
                 let byte_vals: Vec<i128> = s.as_bytes().iter().map(|&b| b as i128).collect();
-                Ok(Value::Tensor(Tensor::from_ints(byte_vals)))
+                Ok(Value::Tensor(Rc::new(Tensor::from_ints(byte_vals))))
             } else {
                 Err(EvalError::type_error("String", &Value::Tensor(t)))
             }
