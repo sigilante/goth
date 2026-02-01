@@ -79,6 +79,8 @@ pub enum PrimFn {
     StrEq, StartsWith, EndsWith, Contains,  // String comparison
     BitAnd, BitOr, BitXor, Shl, Shr,  // Bitwise operations
     Re, Im, Conj, Arg,  // Complex/quaternion decomposition
+    Trace, Det, Inv, Diag, Eye,  // Matrix utilities
+    Solve, SolveWith,  // Linear system solvers
 }
 
 #[derive(Debug, Clone)]

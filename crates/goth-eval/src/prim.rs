@@ -397,6 +397,13 @@ pub fn apply_prim(prim: PrimFn, args: Vec<Value>) -> EvalResult<Value> {
         PrimFn::Im => unary_args(&args, prim_im),
         PrimFn::Conj => unary_args(&args, prim_conj),
         PrimFn::Arg => unary_args(&args, prim_arg),
+        PrimFn::Trace => unary_args(&args, mat_trace),
+        PrimFn::Det => unary_args(&args, mat_det),
+        PrimFn::Inv => unary_args(&args, mat_inv),
+        PrimFn::Diag => unary_args(&args, mat_diag),
+        PrimFn::Eye => unary_args(&args, mat_eye),
+        PrimFn::Solve => binary_args(&args, mat_solve),
+        PrimFn::SolveWith => ternary_args(&args, mat_solve_with),
         _ => Err(EvalError::not_implemented(format!("primitive: {:?}", prim))),
     }
 }
@@ -409,6 +416,11 @@ fn unary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Valu
 fn binary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Value, Value) -> EvalResult<Value> {
     if args.len() != 2 { return Err(EvalError::ArityMismatch { expected: 2, got: args.len() }); }
     f(args[0].clone(), args[1].clone())
+}
+
+fn ternary_args<F>(args: &[Value], f: F) -> EvalResult<Value> where F: FnOnce(Value, Value, Value) -> EvalResult<Value> {
+    if args.len() != 3 { return Err(EvalError::ArityMismatch { expected: 3, got: args.len() }); }
+    f(args[0].clone(), args[1].clone(), args[2].clone())
 }
 
 fn add(left: Value, right: Value) -> EvalResult<Value> {

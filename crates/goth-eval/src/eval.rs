@@ -85,6 +85,11 @@ impl Evaluator {
             ("endsWith", PrimFn::EndsWith), ("contains", PrimFn::Contains),
             // Complex/quaternion decomposition
             ("re", PrimFn::Re), ("im", PrimFn::Im), ("conj", PrimFn::Conj), ("arg", PrimFn::Arg),
+            // Matrix utilities
+            ("trace", PrimFn::Trace), ("tr", PrimFn::Trace),
+            ("det", PrimFn::Det), ("inv", PrimFn::Inv),
+            ("diag", PrimFn::Diag), ("eye", PrimFn::Eye),
+            ("solve", PrimFn::Solve), ("solveWith", PrimFn::SolveWith),
         ];
         for (name, prim) in prims { self.globals.borrow_mut().insert(name.to_string(), Value::Primitive(*prim)); }
         // Register stream constants
@@ -608,6 +613,9 @@ fn prim_arity(prim: PrimFn) -> usize {
         PrimFn::Flush | PrimFn::RawModeEnter | PrimFn::RawModeExit => 1,  // Terminal control (take unit)
         PrimFn::Lines | PrimFn::Words | PrimFn::Bytes => 1,  // String splitting (unary)
         PrimFn::Re | PrimFn::Im | PrimFn::Conj | PrimFn::Arg => 1,  // Complex decomposition
+        PrimFn::Trace | PrimFn::Det | PrimFn::Inv | PrimFn::Diag | PrimFn::Eye => 1,  // Matrix utilities
+        PrimFn::Solve => 2,  // Linear solve (default LU)
+        PrimFn::SolveWith => 3,  // Linear solve with method string
         PrimFn::WriteFile | PrimFn::ReadBytes | PrimFn::WriteBytes => 2,  // Binary I/O takes 2 args
         PrimFn::Fold => 3,  // fold f acc arr
         PrimFn::StrEq | PrimFn::StartsWith | PrimFn::EndsWith | PrimFn::Contains => 2,  // String comparison (binary)
