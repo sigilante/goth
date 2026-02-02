@@ -1,0 +1,341 @@
+# Goth Standard Library - JSON Parser and Serializer
+# Pure Goth implementation of a JSON parser and serializer.
+#
+# Usage:
+#   use "stdlib/json.goth"
+#   let result = parseJson "{\"name\":\"goth\",\"version\":1}"
+#   in if result.0 then toJson result.1 else "parse error: " ⧺ result.2
+#
+# JSON values are represented as tagged 2-tuples ⟨tag, payload⟩:
+#   Tag  Type     Payload
+#   0    null     0
+#   1    bool     Bool
+#   2    number   F64
+#   3    string   String
+#   4    array    [n]Json
+#   5    object   [n]⟨String, Json⟩
+
+# ============ Constructors ============
+
+# Create a JSON null
+╭─ jsonNull : ⟨⟩ → ⟨ℤ, ℤ⟩
+╰─ ⟨0, 0⟩
+
+# Create a JSON boolean
+╭─ jsonBool : Bool → ⟨ℤ, Bool⟩
+╰─ ⟨1, ₀⟩
+
+# Create a JSON number
+╭─ jsonNum : F → ⟨ℤ, F⟩
+╰─ ⟨2, ₀⟩
+
+# Create a JSON string
+╭─ jsonStr : String → ⟨ℤ, String⟩
+╰─ ⟨3, ₀⟩
+
+# Create a JSON array
+╭─ jsonArr : [n]α → ⟨ℤ, [n]α⟩
+╰─ ⟨4, ₀⟩
+
+# Create a JSON object from key-value pairs
+╭─ jsonObj : [n]⟨String, α⟩ → ⟨ℤ, [n]⟨String, α⟩⟩
+╰─ ⟨5, ₀⟩
+
+# ============ Type Predicates ============
+
+╭─ isNull : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 0
+
+╭─ isBool : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 1
+
+╭─ isNum : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 2
+
+╭─ isStr : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 3
+
+╭─ isArr : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 4
+
+╭─ isObj : ⟨ℤ, α⟩ → Bool
+╰─ ₀.0 = 5
+
+# ============ Extractors ============
+
+# Get payload (unsafe — caller must check tag first)
+╭─ asBool : ⟨ℤ, α⟩ → Bool
+╰─ ₀.1
+
+╭─ asNum : ⟨ℤ, α⟩ → F
+╰─ ₀.1
+
+╭─ asStr : ⟨ℤ, α⟩ → String
+╰─ ₀.1
+
+╭─ asArr : ⟨ℤ, α⟩ → [n]α
+╰─ ₀.1
+
+╭─ asObj : ⟨ℤ, α⟩ → [n]⟨String, α⟩
+╰─ ₀.1
+
+# ============ Type Name ============
+
+╭─ jsonType : ⟨ℤ, α⟩ → String
+╰─ if ₀.0 = 0 then "null"
+   else if ₀.0 = 1 then "bool"
+   else if ₀.0 = 2 then "number"
+   else if ₀.0 = 3 then "string"
+   else if ₀.0 = 4 then "array"
+   else if ₀.0 = 5 then "object"
+   else "unknown"
+
+# ============ Object/Array Access ============
+
+# Lookup key in JSON object → Option ⟨Bool, Json⟩
+╭─ jsonGet : String → ⟨ℤ, α⟩ → ⟨Bool, α⟩
+╰─ if ₀.0 ≠ 5 then ⟨⊥, 0⟩
+   else let entries = ₀.1
+   # ₀=entries ₁=json ₂=key
+   in let matches = iota (len ₀) ▸ λ→ strEq ₁[₀].0 ₃
+   # ₀=matches ₁=entries ₂=json ₃=key
+   in if len ₀ > 0 then ⟨⊤, ₁[₀[0]].1⟩ else ⟨⊥, 0⟩
+
+# Index into JSON array → Option ⟨Bool, Json⟩
+╭─ jsonIndex : ℤ → ⟨ℤ, α⟩ → ⟨Bool, α⟩
+╰─ if ₀.0 ≠ 4 then ⟨⊥, 0⟩
+   else let elems = ₀.1
+   # ₀=elems ₁=json ₂=idx
+   in if ₂ ≥ 0 ∧ ₂ < len ₀ then ⟨⊤, ₀[₂]⟩ else ⟨⊥, 0⟩
+
+# Get all keys from a JSON object
+╭─ jsonKeys : ⟨ℤ, α⟩ → [n]String
+╰─ if ₀.0 ≠ 5 then []
+   else ₀.1 ↦ λ→ ₀.0
+
+# Get all values from a JSON object
+╭─ jsonValues : ⟨ℤ, α⟩ → [n]α
+╰─ if ₀.0 ≠ 5 then []
+   else ₀.1 ↦ λ→ ₀.1
+
+# Length of array or object
+╭─ jsonLen : ⟨ℤ, α⟩ → ℤ
+╰─ if ₀.0 = 4 ∨ ₀.0 = 5 then len ₀.1 else 0
+
+# ============ Serializer ============
+
+# Escape special characters in a string for JSON output
+╭─ escapeJsonStr : String → String
+╰─ let cs = chars ₀
+   in ⌿ (λ→ λ→
+     # ₁=acc ₀=ch
+     if ₀ = '"' then ₁ ⧺ "\\\""
+     else if ₀ = '\\' then ₁ ⧺ "\\\\"
+     else if ₀ = '\n' then ₁ ⧺ "\\n"
+     else if ₀ = '\t' then ₁ ⧺ "\\t"
+     else if ₀ = '\r' then ₁ ⧺ "\\r"
+     else ₁ ⧺ (fromChars [₀])
+   ) "" cs
+
+# Serialize a JSON value to a compact string
+╭─ toJson : ⟨ℤ, α⟩ → String
+╰─ if ₀.0 = 0 then "null"
+   else if ₀.0 = 1 then if ₀.1 then "true" else "false"
+   else if ₀.0 = 2 then toString ₀.1
+   else if ₀.0 = 3 then "\"" ⧺ escapeJsonStr ₀.1 ⧺ "\""
+   else if ₀.0 = 4 then
+     let elems = ₀.1
+     in if len ₀ = 0 then "[]"
+     else "[" ⧺ ⌿ (λ→ λ→
+       # ₁=acc ₀=elem
+       if ₁ = "" then toJson ₀
+       else ₁ ⧺ "," ⧺ toJson ₀
+     ) "" ₀ ⧺ "]"
+   else if ₀.0 = 5 then
+     let entries = ₀.1
+     in if len ₀ = 0 then "{}"
+     else "{" ⧺ ⌿ (λ→ λ→
+       # ₁=acc ₀=kv
+       let kvStr = "\"" ⧺ escapeJsonStr ₀.0 ⧺ "\":" ⧺ toJson ₀.1
+       # ₀=kvStr ₁=kv ₂=acc
+       in if ₂ = "" then ₀
+       else ₂ ⧺ "," ⧺ ₀
+     ) "" ₀ ⧺ "}"
+   else "null"
+
+# Alias
+╭─ showJson : ⟨ℤ, α⟩ → String
+╰─ toJson ₀
+
+# ============ Parser Internals ============
+
+# Skip whitespace characters starting at position
+# Returns new position after whitespace
+╭─ pSkipWS : [n]Char → ℤ → ℤ
+╰─ if ₀ ≥ len ₁ then ₀
+   else if ₁[₀] = ' ' ∨ ₁[₀] = '\t' ∨ ₁[₀] = '\n' ∨ ₁[₀] = '\r'
+     then pSkipWS ₁ (₀ + 1)
+   else ₀
+
+# Parse a JSON string literal (opening " already peeked but not consumed)
+# ₁=chars ₀=pos (pointing at opening ")
+# Returns ⟨Bool, ⟨ℤ, String⟩, ℤ⟩
+╭─ pStringInner : [n]Char → ℤ → [m]Char → ⟨Bool, α, ℤ⟩
+╰─ # ₂=chars ₁=pos ₀=acc (accumulated chars)
+   if ₁ ≥ len ₂ then ⟨⊥, 0, ₁⟩
+   else if ₂[₁] = '"' then ⟨⊤, jsonStr (fromChars ₀), ₁ + 1⟩
+   else if ₂[₁] = '\\' then
+     if ₁ + 1 ≥ len ₂ then ⟨⊥, 0, ₁⟩
+     else if ₂[₁ + 1] = '"' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['"'])
+     else if ₂[₁ + 1] = '\\' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['\\'])
+     else if ₂[₁ + 1] = '/' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['/'])
+     else if ₂[₁ + 1] = 'n' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['\n'])
+     else if ₂[₁ + 1] = 't' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['\t'])
+     else if ₂[₁ + 1] = 'r' then pStringInner ₂ (₁ + 2) (₀ ⧺ ['\r'])
+     else if ₂[₁ + 1] = 'b' then pStringInner ₂ (₁ + 2) (₀ ⧺ [' '])
+     else if ₂[₁ + 1] = 'f' then pStringInner ₂ (₁ + 2) (₀ ⧺ [' '])
+     else if ₂[₁ + 1] = 'u' then pStringInner ₂ (₁ + 6) (₀ ⧺ ['?'])
+     else pStringInner ₂ (₁ + 2) (₀ ⧺ [₂[₁ + 1]])
+   else pStringInner ₂ (₁ + 1) (₀ ⧺ [₂[₁]])
+
+╭─ pString : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ pStringInner ₁ (₀ + 1) []
+
+# Collect number characters (digits, '.', '-', '+', 'e', 'E')
+╭─ pNumChars : [n]Char → ℤ → ℤ
+╰─ if ₀ ≥ len ₁ then ₀
+   else if (₁[₀] ≥ '0' ∧ ₁[₀] ≤ '9') ∨ ₁[₀] = '.' ∨ ₁[₀] = '-' ∨ ₁[₀] = '+' ∨ ₁[₀] = 'e' ∨ ₁[₀] = 'E'
+     then pNumChars ₁ (₀ + 1)
+   else ₀
+
+╭─ pNumber : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ let endPos = pNumChars ₁ ₀
+   # ₀=endPos ₁=startPos ₂=chars
+   in if ₀ = ₁ then ⟨⊥, 0, ₁⟩
+   else let numStr = fromChars (take (₀ - ₁) (drop ₁ ₂))
+   # ₀=numStr ₁=endPos ₂=startPos ₃=chars
+   in ⟨⊤, jsonNum (parseFloat ₀), ₁⟩
+
+# Parse "true"
+╭─ pTrue : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ if ₀ + 4 > len ₁ then ⟨⊥, 0, ₀⟩
+   else if ₁[₀] = 't' ∧ ₁[₀ + 1] = 'r' ∧ ₁[₀ + 2] = 'u' ∧ ₁[₀ + 3] = 'e'
+     then ⟨⊤, jsonBool ⊤, ₀ + 4⟩
+   else ⟨⊥, 0, ₀⟩
+
+# Parse "false"
+╭─ pFalse : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ if ₀ + 5 > len ₁ then ⟨⊥, 0, ₀⟩
+   else if ₁[₀] = 'f' ∧ ₁[₀ + 1] = 'a' ∧ ₁[₀ + 2] = 'l' ∧ ₁[₀ + 3] = 's' ∧ ₁[₀ + 4] = 'e'
+     then ⟨⊤, jsonBool ⊥, ₀ + 5⟩
+   else ⟨⊥, 0, ₀⟩
+
+# Parse "null"
+╭─ pNull : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ if ₀ + 4 > len ₁ then ⟨⊥, 0, ₀⟩
+   else if ₁[₀] = 'n' ∧ ₁[₀ + 1] = 'u' ∧ ₁[₀ + 2] = 'l' ∧ ₁[₀ + 3] = 'l'
+     then ⟨⊤, jsonNull ⟨⟩, ₀ + 4⟩
+   else ⟨⊥, 0, ₀⟩
+
+# Parse array elements after '[' and optional whitespace
+# ₂=chars ₁=pos ₀=acc (accumulated elements)
+╭─ pArrayElems : [n]Char → ℤ → [m]α → ⟨Bool, α, ℤ⟩
+╰─ let r = pValue ₂ ₁
+   # ₀=r ₁=acc ₂=pos ₃=chars
+   in if ¬(₀.0) then ⟨⊥, 0, ₀.2⟩
+   else let newAcc = ₁ ⧺ [₀.1]
+   # ₀=newAcc ₁=r ₂=acc ₃=pos ₄=chars
+   in let p2 = pSkipWS ₄ ₁.2
+   # ₀=p2 ₁=newAcc ₂=r ₃=acc ₄=pos ₅=chars
+   in if ₀ ≥ len ₅ then ⟨⊥, 0, ₀⟩
+   else if ₅[₀] = ']' then ⟨⊤, jsonArr ₁, ₀ + 1⟩
+   else if ₅[₀] = ',' then pArrayElems ₅ (pSkipWS ₅ (₀ + 1)) ₁
+   else ⟨⊥, 0, ₀⟩
+
+# Parse a JSON array
+╭─ pArray : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ let p1 = pSkipWS ₁ (₀ + 1)
+   # ₀=p1 ₁=startPos ₂=chars
+   in if ₀ ≥ len ₂ then ⟨⊥, 0, ₀⟩
+   else if ₂[₀] = ']' then ⟨⊤, jsonArr [], ₀ + 1⟩
+   else pArrayElems ₂ ₀ []
+
+# Helper: extract the string payload from a jsonStr value
+╭─ getStrPayload : ⟨ℤ, α⟩ → String
+╰─ ₀.1
+
+# Helper: parse one object entry (key:value), return ⟨ok, ⟨keyStr, val⟩, newPos⟩
+# ₁=chars ₀=pos (pointing at the key's opening ")
+╭─ pOneEntry : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ let keyRes = pString ₁ ₀
+   # ₀=keyRes ₁=pos ₂=chars
+   in if ¬(₀.0) then ⟨⊥, 0, ₀.2⟩
+   else let keyStr = getStrPayload ₀.1
+   # ₀=keyStr ₁=keyRes ₂=pos ₃=chars
+   in let p2 = pSkipWS ₃ ₁.2
+   # ₀=p2 ₁=keyStr ₂=keyRes ₃=pos ₄=chars
+   in if ₀ ≥ len ₄ then ⟨⊥, 0, ₀⟩
+   else if ₄[₀] ≠ ':' then ⟨⊥, 0, ₀⟩
+   else let p3 = pSkipWS ₄ (₀ + 1)
+   # ₀=p3 ₁=p2 ₂=keyStr ₃=keyRes ₄=pos ₅=chars
+   in let valRes = pValue ₅ ₀
+   # ₀=valRes ₁=p3 ₂=p2 ₃=keyStr
+   in if ¬(₀.0) then ⟨⊥, 0, ₀.2⟩
+   else ⟨⊤, ⟨₃, ₀.1⟩, ₀.2⟩
+
+# Parse object key-value pairs after '{'
+# ₂=chars ₁=pos ₀=acc (accumulated key-value pairs)
+╭─ pObjectEntries : [n]Char → ℤ → [m]α → ⟨Bool, α, ℤ⟩
+╰─ let p1 = pSkipWS ₂ ₁
+   # ₀=p1 ₁=acc ₂=pos ₃=chars
+   in if ₀ ≥ len ₃ then ⟨⊥, 0, ₀⟩
+   else if ₃[₀] ≠ '"' then ⟨⊥, 0, ₀⟩
+   else let entryRes = pOneEntry ₃ ₀
+   # ₀=entryRes ₁=p1 ₂=acc ₃=pos ₄=chars
+   in if ¬(₀.0) then ⟨⊥, 0, ₀.2⟩
+   else let newAcc = ₂ ⧺ [₀.1]
+   # ₀=newAcc ₁=entryRes ₂=p1 ₃=acc ₄=pos ₅=chars
+   in let p4 = pSkipWS ₅ ₁.2
+   # ₀=p4 ₁=newAcc ₂=entryRes ₃=p1 ₄=acc ₅=pos ₆=chars
+   in if ₀ ≥ len ₆ then ⟨⊥, 0, ₀⟩
+   else if ₆[₀] = '}' then ⟨⊤, jsonObj ₁, ₀ + 1⟩
+   else if ₆[₀] = ',' then pObjectEntries ₆ (₀ + 1) ₁
+   else ⟨⊥, 0, ₀⟩
+
+# Parse a JSON object
+╭─ pObject : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ let p1 = pSkipWS ₁ (₀ + 1)
+   # ₀=p1 ₁=startPos ₂=chars
+   in if ₀ ≥ len ₂ then ⟨⊥, 0, ₀⟩
+   else if ₂[₀] = '}' then ⟨⊤, jsonObj [], ₀ + 1⟩
+   else pObjectEntries ₂ ₀ []
+
+# Top-level value parser: skip ws, peek, dispatch
+╭─ pValue : [n]Char → ℤ → ⟨Bool, α, ℤ⟩
+╰─ let p = pSkipWS ₁ ₀
+   # ₀=p ₁=startPos ₂=chars
+   in if ₀ ≥ len ₂ then ⟨⊥, 0, ₀⟩
+   else if ₂[₀] = '"' then pString ₂ ₀
+   else if ₂[₀] = 't' then pTrue ₂ ₀
+   else if ₂[₀] = 'f' then pFalse ₂ ₀
+   else if ₂[₀] = 'n' then pNull ₂ ₀
+   else if ₂[₀] = '[' then pArray ₂ ₀
+   else if ₂[₀] = '{' then pObject ₂ ₀
+   else if (₂[₀] ≥ '0' ∧ ₂[₀] ≤ '9') ∨ ₂[₀] = '-'
+     then pNumber ₂ ₀
+   else ⟨⊥, 0, ₀⟩
+
+# ============ Public Parser API ============
+
+# Parse a JSON string → Result ⟨Bool, Json, String⟩
+# Success: ⟨⊤, jsonValue, ""⟩
+# Failure: ⟨⊥, 0, errorMessage⟩
+╭─ parseJson : String → ⟨Bool, α, String⟩
+╰─ let cs = chars ₀
+   in let result = pValue cs 0
+   # ₀=result ₁=cs ₂=input
+   in if ¬(₀.0) then ⟨⊥, 0, "parse error at position " ⧺ toString ₀.2⟩
+   else let finalPos = pSkipWS ₁ ₀.2
+   # ₀=finalPos ₁=result ₂=cs ₃=input
+   in if ₀ < len ₂ then ⟨⊥, 0, "trailing content at position " ⧺ toString ₀⟩
+   else ⟨⊤, ₁.1, ""⟩

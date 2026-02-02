@@ -1,5 +1,7 @@
 # Claude Skills: Working with Goth
 
+> **Version:** 2026-02-02T14:47:26Z
+
 This guide describes how Claude (or other LLMs) can effectively generate and modify Goth code using the AST-first workflow.
 
 ## Overview
@@ -642,6 +644,276 @@ use "stdlib/crypto.goth"
 - BLAKE3 is limited to single-chunk messages (≤ 64 bytes); SHA-256 and MD5 handle arbitrary length via multi-block processing
 - De Bruijn index tracking is critical in hash compression loops — annotate every `let` with a comment showing the current index state (e.g., `# ₀=ki ₁=roundIdx ₂=st ₃=schedule`)
 - Use `fold` over `iota N` for round-based processing; inside the fold lambda, `₁` = accumulator, `₀` = round index
+
+## Standard Library: JSON
+
+The `stdlib/json.goth` module provides a pure-Goth JSON parser and serializer. JSON values are represented as tagged 2-tuples `⟨tag, payload⟩` where the integer tag discriminates the type. Import with `use "stdlib/json.goth"`.
+
+**Key design pattern:** JSON values use integer-tagged tuples rather than algebraic data types (Goth's `enum` constructors are not yet wired into the evaluator). Use constructors to build values and predicates/extractors to inspect them. The parser returns a Result triple `⟨Bool, Json, String⟩` following the `result.goth` convention.
+
+**Value representation:**
+
+| Tag | JSON type | Constructor | Payload |
+|-----|-----------|-------------|---------|
+| 0 | null | `jsonNull ⟨⟩` | `0` (unused) |
+| 1 | boolean | `jsonBool ⊤` | `Bool` |
+| 2 | number | `jsonNum 3.14` | `F64` |
+| 3 | string | `jsonStr "hi"` | `String` |
+| 4 | array | `jsonArr [...]` | `[n]Json` |
+| 5 | object | `jsonObj [⟨"k", v⟩]` | `[n]⟨String, Json⟩` |
+
+**Parse and extract fields:**
+
+```goth
+use "stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let r = parseJson "{\"name\":\"Goth\",\"version\":1}"
+   in if ¬(r.0) then "error: " ⧺ r.2
+   else let json = r.1
+   in let name = jsonGet "name" json
+   in if name.0 then asStr name.1 else "unknown"
+```
+
+**Build and serialize:**
+
+```goth
+use "stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let obj = jsonObj [
+     ⟨"x", jsonNum 1.0⟩,
+     ⟨"y", jsonArr [jsonBool ⊤, jsonNull ⟨⟩]⟩
+   ]
+   in toJson obj
+# {"x":1,"y":[true,null]}
+```
+
+**Roundtrip (parse → serialize → re-parse → compare):**
+
+```goth
+use "stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let input = "{\"a\":1,\"b\":[2,3],\"c\":{\"d\":true}}"
+   in let r1 = parseJson input
+   in if ¬(r1.0) then "parse error"
+   else let s1 = toJson r1.1
+   in let r2 = parseJson s1
+   in if ¬(r2.0) then "re-parse error"
+   else if strEq s1 (toJson r2.1) then "PASS" else "FAIL"
+```
+
+**Public functions:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `jsonNull` | `() → Json` | Construct null |
+| `jsonBool` | `Bool → Json` | Construct boolean |
+| `jsonNum` | `F64 → Json` | Construct number |
+| `jsonStr` | `String → Json` | Construct string |
+| `jsonArr` | `[n]Json → Json` | Construct array |
+| `jsonObj` | `[n]⟨String, Json⟩ → Json` | Construct object |
+| `parseJson` | `String → ⟨Bool, Json, String⟩` | Parse JSON; `⟨⊤, val, ""⟩` or `⟨⊥, 0, errMsg⟩` |
+| `toJson` | `Json → String` | Serialize to compact JSON |
+| `showJson` | `Json → String` | Alias for `toJson` |
+| `jsonGet` | `String → Json → ⟨Bool, Json⟩` | Lookup key in object (Option) |
+| `jsonIndex` | `ℤ → Json → ⟨Bool, Json⟩` | Index into array (Option) |
+| `jsonKeys` | `Json → [n]String` | Object keys |
+| `jsonValues` | `Json → [n]Json` | Object values |
+| `jsonLen` | `Json → ℤ` | Array/object length |
+| `jsonType` | `Json → String` | `"null"`, `"bool"`, `"number"`, `"string"`, `"array"`, `"object"` |
+| `isNull` | `Json → Bool` | Tag = 0 |
+| `isBool` | `Json → Bool` | Tag = 1 |
+| `isNum` | `Json → Bool` | Tag = 2 |
+| `isStr` | `Json → Bool` | Tag = 3 |
+| `isArr` | `Json → Bool` | Tag = 4 |
+| `isObj` | `Json → Bool` | Tag = 5 |
+| `asBool` | `Json → Bool` | Extract boolean payload (unsafe) |
+| `asNum` | `Json → F64` | Extract number payload (unsafe) |
+| `asStr` | `Json → String` | Extract string payload (unsafe) |
+| `asArr` | `Json → [n]Json` | Extract array payload (unsafe) |
+| `asObj` | `Json → [n]⟨String, Json⟩` | Extract object entries (unsafe) |
+
+**Implementation notes for LLMs:**
+- JSON values are just `⟨Int, payload⟩` tuples — check tag with `.0`, extract with `.1`
+- `jsonGet` and `jsonIndex` return Option tuples `⟨Bool, Json⟩` — check `.0` before accessing `.1`
+- The parser uses recursive descent with position threading: each internal parser function takes `[n]Char → ℤ → ⟨Bool, value, ℤ⟩` (chars, position → ok?, value, new position)
+- De Bruijn indices in the parser go deep — the code annotates every `let` with an index comment (e.g., `# ₀=p1 ₁=acc ₂=pos ₃=chars`)
+- Chained field access like `x.1.1` does **not** work — the parser reads `.1.1` as the float literal `1.1`. Use a helper function or intermediate `let` to access nested tuple fields
+- The `fromChars` primitive is needed for building strings from char arrays (e.g., in the string parser and number parser)
+- `⧺` on arrays appends (snoc): `acc ⧺ [elem]` builds arrays element by element during parsing
+- `escapeJsonStr` handles `"`, `\`, `\n`, `\t`, `\r`; `\uXXXX` escapes are replaced with `?`
+- Number serialization uses Goth's `toString` — formatting may differ from strict JSON (e.g., `1.0` renders as `1`)
+
+## Complex Numbers
+
+Goth has first-class complex number support. Complex values are `Value::Complex(re, im)` internally, with type annotation `ℂ` or `Complex`.
+
+**Literal syntax:**
+
+```goth
+3 + 4𝕚              # Complex(3, 4) — Unicode imaginary unit U+1D55A
+3 + 4i              # Same — ASCII fallback
+𝕚                    # Complex(0, 1) — standalone imaginary unit
+5𝕚                   # Complex(0, 5)
+```
+
+**Auto-promotion chain:** `ℤ → F → ℂ → ℍ`. When one operand is Complex, the other is promoted automatically.
+
+**Arithmetic:** All standard operators work: `+`, `-`, `×`, `/`, `^`. Multiplication uses the standard formula `(a+bi)(c+di) = (ac-bd) + (ad+bc)i`.
+
+**Math functions extended to complex:**
+
+| Function | Complex behavior |
+|----------|-----------------|
+| `sqrt` | Polar-form square root; `√(0 - 4)` → `2𝕚` |
+| `exp` | `e^(a+bi) = e^a(cos b + i sin b)` — Euler's formula |
+| `ln` | `ln|z| + i·arg(z)` |
+| `sin` | `sin(a)cosh(b) + i·cos(a)sinh(b)` |
+| `cos` | `cos(a)cosh(b) - i·sin(a)sinh(b)` |
+| `abs` | Returns `F64`: modulus `√(re² + im²)` |
+
+> `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh` are **not** extended to complex — they accept real arguments only.
+
+**Decomposition primitives:**
+
+| Primitive | Signature | Description |
+|-----------|-----------|-------------|
+| `re` | `ℂ → F` | Real part (`re(3+4𝕚) = 3`) |
+| `im` | `ℂ → F` | Imaginary part (`im(3+4𝕚) = 4`) |
+| `conj` | `ℂ → ℂ` | Conjugate (`conj(3+4𝕚) = 3-4𝕚`) |
+| `arg` | `ℂ → F` | Argument in radians (`arg(𝕚) = π/2`) |
+
+For plain real numbers, `re` returns the value, `im` returns `0.0`, `conj` returns the value unchanged.
+
+**Examples:**
+
+```goth
+exp(π × 𝕚) + 1              # ≈ 0 (Euler's identity)
+√(0 - 4)                     # 2𝕚
+(3 + 4𝕚) × (1 + 2𝕚)         # -5+10𝕚
+abs(3 + 4𝕚)                  # 5.0
+```
+
+**Display format:** `3 + 4𝕚`, `3 - 4𝕚`, `5𝕚` (pure imaginary), `3` (pure real). Zero displays as `0`.
+
+## Quaternions
+
+Goth supports quaternion arithmetic with the Hamilton product. Quaternion values are `Value::Quaternion(w, i, j, k)` with type annotation `ℍ` or `Quaternion`.
+
+**Literal syntax:**
+
+```goth
+𝕚                    # Quaternion(0,1,0,0) — also Complex if no j/k context
+𝕛                    # Quaternion(0,0,1,0) — Unicode U+1D55B
+𝕜                    # Quaternion(0,0,0,1) — Unicode U+1D55C
+3𝕛                   # Quaternion(0,0,3,0)
+1 + 2𝕚 + 3𝕛 + 4𝕜    # Quaternion(1,2,3,4)
+```
+
+ASCII fallbacks: `j`, `k` (e.g., `3j`, `4k`).
+
+**Arithmetic:** `+`, `-`, `×`, `/`, negation. Multiplication is the **non-commutative** Hamilton product:
+
+| Rule | Result |
+|------|--------|
+| `𝕚 × 𝕛` | `𝕜` |
+| `𝕛 × 𝕜` | `𝕚` |
+| `𝕜 × 𝕚` | `𝕛` |
+| `𝕛 × 𝕚` | `-𝕜` |
+| `𝕚 × 𝕛 × 𝕜` | `-1` |
+
+Division: `a / b = a × conj(b) / |b|²`.
+
+**Decomposition:**
+
+| Primitive | Quaternion behavior |
+|-----------|-------------------|
+| `re` | Returns `F64`: the scalar (w) component |
+| `im` | Returns `⟨F, F, F⟩`: the (i, j, k) components as a 3-tuple |
+| `conj` | Returns `ℍ`: `(w, -i, -j, -k)` |
+| `abs` | Returns `F64`: norm `√(w² + i² + j² + k²)` |
+
+> Quaternion `exp`, `ln`, `sqrt`, `pow`, `sin`, `cos` are **not** implemented — only basic arithmetic, `abs`, `conj`, `re`, `im`.
+
+**Example:**
+
+```goth
+# Hamilton's identity
+╭─ main : I64 → ℍ
+│  ⊨ re(₀) = 0.0 - 1.0
+╰─ 𝕚 × 𝕛 × 𝕜
+```
+
+## Linear Algebra
+
+Goth provides built-in linear algebra primitives operating on rank-2 tensors (matrices) and rank-1 tensors (vectors).
+
+### Core Operations
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `·`, `dot` | `[n]F64 → [n]F64 → F64` | Dot product |
+| `norm` | `[n]F64 → F64` | Euclidean (L2) norm |
+| `matmul` | `[m n]F64 → [n p]F64 → [m p]F64` | Matrix multiplication (inner dims must match) |
+| `⍉`, `transpose` | `[m n]α → [n m]α` | Matrix transpose |
+
+### Matrix Utilities
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `trace`, `tr` | `[n n]F64 → F64` | Sum of diagonal elements |
+| `det` | `[n n]F64 → F64` | Determinant (LU decomposition) |
+| `inv` | `[n n]F64 → [n n]F64` | Matrix inverse (errors on singular) |
+| `diag` | `[n]F64 → [n n]F64` | Vector → diagonal matrix |
+| `diag` | `[n n]F64 → [n]F64` | Matrix → diagonal vector |
+| `eye` | `ℤ → [n n]F64` | Identity matrix of size n |
+
+`diag` is dual-mode: rank-1 input builds a diagonal matrix, rank-2 input extracts the diagonal.
+
+### Eigenvalue / Eigenvector
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `eig` | `[n n]F64 → [n]F64\|[n]ℂ` | Eigenvalues |
+| `eigvecs` | `[n n]F64 → ⟨[n]α, [n n]α⟩` | Eigenvalues + eigenvector matrix |
+
+**Algorithm:** Hessenberg reduction via Householder similarity transforms, then QR iteration with Wilkinson shifts and Givens rotations. Max iterations: `100 × n`.
+
+**Return type:** If all eigenvalues are real (imaginary part < 1e-12), returns Float tensors. If any are complex, returns tensors with Complex values. Eigenvalues sorted by real part descending.
+
+`eigvecs` returns `⟨eigenvalues, eigenvector_matrix⟩` where columns of the matrix are eigenvectors. Eigenvectors computed via inverse iteration (real eigenvalues) or 2n×2n real embedding for complex pairs.
+
+### Linear System Solvers
+
+| Name | Signature | Description |
+|------|-----------|-------------|
+| `solve` | `[n n]F64 → [n]F64 → [n]F64` | Solve Ax = b (LU, default) |
+| `solveWith` | `[n n]F64 → [n]F64 → String → [n]F64` | Solve with method choice |
+
+`solveWith` methods:
+- `"lu"` — Doolittle LU with partial pivoting (same as `solve`)
+- `"qr"` — Householder QR; handles overdetermined (least-squares) systems where m ≥ n
+
+**Examples:**
+
+```goth
+solve [[2,1],[5,3]] [4,7]                          # [5, -6]
+solveWith [[1,1],[1,2],[1,3]] [1,2,2] "qr"         # least-squares
+det [[6,1,1],[4,0-2,5],[2,8,7]]                    # -306
+eig [[2,1],[1,2]]                                   # [3, 1]
+eig [[0,0-1],[1,0]]                                 # [0+1𝕚, 0-1𝕚]
+eigvecs (diag [5,3])                                # ⟨[5, 3], [[1,0],[0,1]]⟩
+inv [[1,2],[3,4]]                                   # [[-2, 1], [1.5, -0.5]]
+```
+
+**Implementation notes for LLMs:**
+- All matrix operations require rank-2 tensors; pass `[[1,2],[3,4]]` not `[1,2,3,4]`
+- `outer` and `inner` are declared in the PrimFn enum but **not implemented** — they produce a runtime "not implemented" error
+- Singularity threshold is `1e-12` for inverse, `1e-15` for LU pivot
+- Negative literal syntax quirk: Goth parses `0-2` as subtraction; `-2` in a matrix literal may be parsed as unary negation depending on context, so `0-2` is safest in array literals
+- `diag` auto-detects rank: `diag [1,2,3]` builds a 3×3 diagonal matrix; `diag [[1,0],[0,2]]` extracts `[1,2]`
 
 ## Goth Syntax ↔ JSON
 
