@@ -556,6 +556,39 @@ use "stdlib/math.goth"
 | `canvas.goth` | Canvas/graphics operations |
 | `tui.goth` | Terminal UI operations |
 | `random.goth` | Seeded PRNG (xorshift64) with state-passing pattern |
+| `crypto.goth` | SHA-256, MD5, BLAKE3, Base64 encode/decode |
+| `json.goth` | JSON parser/serializer (`parseJson`, `toJson`, accessors) |
+
+### JSON
+
+The `json.goth` module provides a pure Goth JSON parser and serializer. JSON values are represented as tagged 2-tuples `⟨tag, payload⟩` where the tag discriminates the type:
+
+```goth
+use "stdlib/json.goth"
+
+╭─ main : () → String
+╰─ let r = parseJson "{\"name\":\"Goth\",\"version\":1}"
+   in if r.0 then toJson r.1 else "error: " ⧺ r.2
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `jsonNull` | `() → Json` | Construct null (tag 0) |
+| `jsonBool` | `Bool → Json` | Construct boolean (tag 1) |
+| `jsonNum` | `F64 → Json` | Construct number (tag 2) |
+| `jsonStr` | `String → Json` | Construct string (tag 3) |
+| `jsonArr` | `[n]Json → Json` | Construct array (tag 4) |
+| `jsonObj` | `[n]⟨String, Json⟩ → Json` | Construct object (tag 5) |
+| `parseJson` | `String → ⟨Bool, Json, String⟩` | Parse JSON string; `⟨⊤, val, ""⟩` or `⟨⊥, 0, errMsg⟩` |
+| `toJson` | `Json → String` | Serialize to compact JSON |
+| `jsonGet` | `String → Json → ⟨Bool, Json⟩` | Lookup key in object |
+| `jsonIndex` | `ℤ → Json → ⟨Bool, Json⟩` | Index into array |
+| `jsonKeys` | `Json → [n]String` | Object keys |
+| `jsonValues` | `Json → [n]Json` | Object values |
+| `jsonLen` | `Json → ℤ` | Array/object length |
+| `jsonType` | `Json → String` | Type name string |
+| `isNull`, `isBool`, `isNum`, `isStr`, `isArr`, `isObj` | `Json → Bool` | Type predicates |
+| `asBool`, `asNum`, `asStr`, `asArr`, `asObj` | `Json → α` | Payload extractors (unsafe) |
 
 ### Random Number Generation
 
