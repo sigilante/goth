@@ -1,0 +1,39 @@
+# Test suite for stdlib/result.goth
+
+use "../../stdlib/result.goth"
+
+╭─ main : () → ()
+╰─ # Constructors
+   let _ ← print (toString (ok 42)) in
+   let _ ← print (toString (err 1)) in
+   let _ ← print (toString (ok 10)) in
+   let _ ← print (toString (err "bad")) in
+
+   # Predicates
+   let _ ← print (toString (isOk (ok 42))) in
+   let _ ← print (toString (isOk (err 1))) in
+   let _ ← print (toString (isErr (err 1))) in
+   let _ ← print (toString (isErr (ok 42))) in
+
+   # Extractors
+   let _ ← print (toString (unwrapOr 0 (ok 42))) in
+   let _ ← print (toString (unwrapOr 0 (err 1))) in
+
+   # Transformations
+   let _ ← print (toString (mapRes (λ→ ₀ × 2) (ok 5))) in
+   let _ ← print (toString (mapRes (λ→ ₀ × 2) (err 1))) in
+
+   # Safe operations
+   let _ ← print (toString (safeDivRes 10 2)) in
+   let _ ← print (toString (safeDivRes 10 0)) in
+
+   # Boolean checks
+   let _ ← print (toString (containsRes 42 (ok 42))) in
+   let _ ← print (toString (containsRes 42 (ok 99))) in
+   let _ ← print (toString (containsRes 42 (err 1))) in
+
+   # Show
+   let _ ← print (showRes (ok 42)) in
+   let _ ← print (showRes (err 1)) in
+
+   ⟨⟩

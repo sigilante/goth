@@ -1,0 +1,39 @@
+# Test suite for stdlib/string.goth
+
+use "../../stdlib/string.goth"
+
+╭─ main : () → ()
+╰─ # Properties
+   let _ ← print (toString (strLen "hello")) in
+   let _ ← print (toString (strEmpty "")) in
+   let _ ← print (toString (strEmpty "hi")) in
+   let _ ← print (toString (strNonEmpty "hi")) in
+
+   # Comparison
+   let _ ← print (toString (strEqual "abc" "abc")) in
+   let _ ← print (toString (strEqual "abc" "xyz")) in
+   let _ ← print (toString (strNotEqual "abc" "xyz")) in
+   let _ ← print (toString (hasPrefix "hello world" "hello")) in
+   let _ ← print (toString (hasSuffix "hello world" "world")) in
+   let _ ← print (toString (hasSubstring "hello world" "lo wo")) in
+
+   # Char predicates
+   let _ ← print (toString (isDigit '5')) in
+   let _ ← print (toString (isDigit 'a')) in
+   let _ ← print (toString (isAlpha 'z')) in
+   let _ ← print (toString (isSpace ' ')) in
+
+   # Conversion
+   let _ ← print (intToStr 42) in
+   let _ ← print (boolToStr ⊤) in
+   let _ ← print (boolToStr ⊥) in
+
+   # Constants
+   let _ ← print (toString (strLen emptyStr)) in
+
+   # Word/line operations
+   let _ ← print (toString (wordCount "hello world foo")) in
+   let _ ← print (firstWord "hello world foo") in
+   let _ ← print (lastWord "hello world foo") in
+
+   ⟨⟩

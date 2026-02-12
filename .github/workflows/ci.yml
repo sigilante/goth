@@ -84,6 +84,12 @@ jobs:
         echo "Testing numeric/gamma_fact..."
         cargo run --quiet --package goth-cli -- "$(pwd)/../examples/numeric/gamma_fact.goth" 5.0
 
+    - name: Run stdlib tests
+      run: GOTH=./crates/target/release/goth bash tests/stdlib_test.sh
+
+    - name: Run CLI smoke tests
+      run: GOTH=./crates/target/release/goth bash tests/cli_test.sh
+
     - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
